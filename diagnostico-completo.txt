@@ -1,0 +1,260 @@
+====================================================
+DIAGNÓSTICO COMPLETO DO PROJETO MEU DIVÃ
+Data: 2026-03-20 17:01:20
+====================================================
+
+[1] ESTRUTURA COMPLETA DE PASTAS DO FRONTEND (ront\src\app)
+----------------------------------------------------
+C:\meu-diva\front\src\app\(app)
+C:\meu-diva\front\src\app\(auth)
+C:\meu-diva\front\src\app\(public)
+C:\meu-diva\front\src\app\admin
+C:\meu-diva\front\src\app\api
+C:\meu-diva\front\src\app\busca
+C:\meu-diva\front\src\app\checkout
+C:\meu-diva\front\src\app\dashboard-simple
+C:\meu-diva\front\src\app\isolado
+C:\meu-diva\front\src\app\lib
+C:\meu-diva\front\src\app\login
+C:\meu-diva\front\src\app\login-novo
+C:\meu-diva\front\src\app\patient
+C:\meu-diva\front\src\app\terapeuta
+C:\meu-diva\front\src\app\teste
+C:\meu-diva\front\src\app\teste-dashboard
+C:\meu-diva\front\src\app\teste-final
+C:\meu-diva\front\src\app\therapist
+C:\meu-diva\front\src\app\(app)\admin
+C:\meu-diva\front\src\app\(app)\appointments
+C:\meu-diva\front\src\app\(app)\calendar
+C:\meu-diva\front\src\app\(app)\patient
+C:\meu-diva\front\src\app\(app)\profile
+C:\meu-diva\front\src\app\(app)\therapist
+C:\meu-diva\front\src\app\(app)\wallet
+C:\meu-diva\front\src\app\(app)\admin\dashboard
+C:\meu-diva\front\src\app\(app)\admin\reports
+C:\meu-diva\front\src\app\(app)\admin\sessions
+C:\meu-diva\front\src\app\(app)\admin\users
+C:\meu-diva\front\src\app\(app)\patient\dashboard
+C:\meu-diva\front\src\app\(app)\patient\invites
+C:\meu-diva\front\src\app\(app)\patient\profile
+C:\meu-diva\front\src\app\(app)\patient\wallet
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components
+C:\meu-diva\front\src\app\(app)\patient\dashboard\hooks
+C:\meu-diva\front\src\app\(app)\patient\dashboard\types
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components\Calendar
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components\cards
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components\Modals
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components\QuickBooking
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components\QuickLinks
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components\SessionsList
+C:\meu-diva\front\src\app\(app)\patient\dashboard\components\StatsCards
+C:\meu-diva\front\src\app\(app)\patient\wallet\topup
+C:\meu-diva\front\src\app\(app)\therapist\availability
+C:\meu-diva\front\src\app\(app)\therapist\dashboard
+C:\meu-diva\front\src\app\(app)\therapist\invites
+C:\meu-diva\front\src\app\(app)\therapist\patients
+C:\meu-diva\front\src\app\(app)\therapist\profile
+C:\meu-diva\front\src\app\(app)\therapist\schedule
+C:\meu-diva\front\src\app\(app)\therapist\wallet
+C:\meu-diva\front\src\app\(app)\therapist\availability\types
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\hooks
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\types
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\Calendar
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\cards
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\InvitesCard
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\InvitesList
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\Modals
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\PatientsList
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\QuickActions
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\SessionsList
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\StatsCards
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\components\Modals\AppointmentModal
+C:\meu-diva\front\src\app\(app)\therapist\profile\components
+C:\meu-diva\front\src\app\(app)\therapist\profile\hooks
+C:\meu-diva\front\src\app\(public)\[locale]
+C:\meu-diva\front\src\app\(public)\[locale]\(unauth)
+C:\meu-diva\front\src\app\api\appointments
+C:\meu-diva\front\src\app\api\auth
+C:\meu-diva\front\src\app\api\busca
+C:\meu-diva\front\src\app\api\calendar
+C:\meu-diva\front\src\app\api\invites
+C:\meu-diva\front\src\app\api\me
+C:\meu-diva\front\src\app\api\patient
+C:\meu-diva\front\src\app\api\patients
+C:\meu-diva\front\src\app\api\payments
+C:\meu-diva\front\src\app\api\profile
+C:\meu-diva\front\src\app\api\public
+C:\meu-diva\front\src\app\api\publico
+C:\meu-diva\front\src\app\api\terapeuta
+C:\meu-diva\front\src\app\api\teste
+C:\meu-diva\front\src\app\api\therapist
+C:\meu-diva\front\src\app\api\therapists
+C:\meu-diva\front\src\app\api\users
+C:\meu-diva\front\src\app\api\wallet
+C:\meu-diva\front\src\app\api\appointments\create
+C:\meu-diva\front\src\app\api\appointments\me
+C:\meu-diva\front\src\app\api\appointments\[id]
+C:\meu-diva\front\src\app\api\appointments\me\details
+C:\meu-diva\front\src\app\api\appointments\[id]\reschedule
+C:\meu-diva\front\src\app\api\appointments\[id]\status
+C:\meu-diva\front\src\app\api\auth\login
+C:\meu-diva\front\src\app\api\auth\logout
+C:\meu-diva\front\src\app\api\auth\refresh
+C:\meu-diva\front\src\app\api\invites\me
+C:\meu-diva\front\src\app\api\patient\goals
+C:\meu-diva\front\src\app\api\patient\profile
+C:\meu-diva\front\src\app\api\patient\goals\types
+C:\meu-diva\front\src\app\api\patient\goals\[id]
+C:\meu-diva\front\src\app\api\patient\profile\address
+C:\meu-diva\front\src\app\api\patient\profile\photo
+C:\meu-diva\front\src\app\api\patient\profile\address\[id]
+C:\meu-diva\front\src\app\api\payments\create-checkout
+C:\meu-diva\front\src\app\api\public\terapeutas
+C:\meu-diva\front\src\app\api\public\terapeutas\me
+C:\meu-diva\front\src\app\api\public\terapeutas\me\foto
+C:\meu-diva\front\src\app\api\publico\terapeuta
+C:\meu-diva\front\src\app\api\publico\terapeuta\[id]
+C:\meu-diva\front\src\app\api\publico\terapeuta\[id]\slots
+C:\meu-diva\front\src\app\api\terapeuta\[id]
+C:\meu-diva\front\src\app\api\therapist\availability
+C:\meu-diva\front\src\app\api\therapist\profile
+C:\meu-diva\front\src\app\api\therapist\availability\periods
+C:\meu-diva\front\src\app\api\therapist\availability\[id]
+C:\meu-diva\front\src\app\api\therapist\availability\periods\[id]
+C:\meu-diva\front\src\app\api\therapist\profile\photo
+C:\meu-diva\front\src\app\api\therapists\me
+C:\meu-diva\front\src\app\api\therapists\me\profile
+C:\meu-diva\front\src\app\api\therapists\me\profile\photo
+C:\meu-diva\front\src\app\api\users\me
+C:\meu-diva\front\src\app\api\wallet\balance
+C:\meu-diva\front\src\app\api\wallet\full
+C:\meu-diva\front\src\app\api\wallet\transactions
+C:\meu-diva\front\src\app\terapeuta\[id]
+C:\meu-diva\front\src\app\terapeuta\[id]\components
+
+[2] TODOS OS ARQUIVOS page.tsx
+----------------------------------------------------
+C:\meu-diva\front\src\app\(app)\admin\dashboard\page.tsx
+C:\meu-diva\front\src\app\(app)\appointments\page.tsx
+C:\meu-diva\front\src\app\(app)\calendar\page.tsx
+C:\meu-diva\front\src\app\(app)\patient\dashboard\page.tsx
+C:\meu-diva\front\src\app\(app)\patient\invites\page.tsx
+C:\meu-diva\front\src\app\(app)\patient\profile\page.tsx
+C:\meu-diva\front\src\app\(app)\patient\wallet\topup\page.tsx
+C:\meu-diva\front\src\app\(app)\patient\wallet\page.tsx
+C:\meu-diva\front\src\app\(app)\profile\page.tsx
+C:\meu-diva\front\src\app\(app)\therapist\availability\page.tsx
+C:\meu-diva\front\src\app\(app)\therapist\dashboard\page.tsx
+C:\meu-diva\front\src\app\(app)\therapist\invites\page.tsx
+C:\meu-diva\front\src\app\(app)\therapist\patients\page.tsx
+C:\meu-diva\front\src\app\(app)\therapist\profile\page.tsx
+C:\meu-diva\front\src\app\(app)\therapist\schedule\page.tsx
+C:\meu-diva\front\src\app\(app)\therapist\wallet\page.tsx
+C:\meu-diva\front\src\app\(app)\wallet\page.tsx
+C:\meu-diva\front\src\app\admin\page.tsx
+C:\meu-diva\front\src\app\busca\page.tsx
+C:\meu-diva\front\src\app\checkout\page.tsx
+C:\meu-diva\front\src\app\dashboard-simple\page.tsx
+C:\meu-diva\front\src\app\isolado\page.tsx
+C:\meu-diva\front\src\app\login\page.tsx
+C:\meu-diva\front\src\app\login-novo\page.tsx
+C:\meu-diva\front\src\app\patient\page.tsx
+C:\meu-diva\front\src\app\terapeuta\[id]\page.tsx
+C:\meu-diva\front\src\app\teste\page.tsx
+C:\meu-diva\front\src\app\teste-dashboard\page.tsx
+C:\meu-diva\front\src\app\teste-final\page.tsx
+C:\meu-diva\front\src\app\therapist\page.tsx
+C:\meu-diva\front\src\app\page.tsx
+
+[3] TODOS OS ARQUIVOS layout.tsx
+----------------------------------------------------
+C:\meu-diva\front\src\app\(app)\layout.tsx
+C:\meu-diva\front\src\app\api\auth\layout.tsx
+C:\meu-diva\front\src\app\layout.tsx
+
+[4] ARQUIVOS CRÍTICOS DE AUTENTICAÇÃO
+----------------------------------------------------
+
+[5] DASHBOARDS
+----------------------------------------------------
+
+[6] VARIÁVEIS DE AMBIENTE
+----------------------------------------------------
+
+[7] COMANDOS EXECUTADOS NO TERMINAL (ÚLTIMOS LOGS)
+----------------------------------------------------
+Comando para subir o backend: python -m uvicorn app.main:app --reload
+Comando para subir o frontend: npm run dev
+Portas: Backend 8000, Frontend 3000
+
+[8] ARQUIVOS package.json
+----------------------------------------------------
+
+--- front\package.json ---
+{
+  "name": "front",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@fullcalendar/core": "^6.1.20",
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
+    "@fullcalendar/timegrid": "^6.1.20",
+    "@radix-ui/react-accordion": "^1.2.12",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@schedule-x/calendar": "^4.3.1",
+    "@schedule-x/react": "^4.1.0",
+    "@schedule-x/shared": "^4.3.1",
+    "@schedule-x/theme-default": "^4.3.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.577.0",
+    "moment": "^2.30.1",
+    "next": "^16.1.6",
+    "next-intl": "^4.8.3",
+    "react": "^19.2.3",
+    "react-big-calendar": "^1.19.4",
+    "react-dom": "^19.2.3",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/moment": "^2.11.29",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-big-calendar": "^1.16.3",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.27",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
+
+[9] VERIFICAÇÃO DE CONFLITOS DE ROTA
+----------------------------------------------------
+Pastas duplicadas detectadas:
+?? CONFLITO: C:\meu-diva\front\src\app\patient existe (junto com a pasta /(app))
+?? CONFLITO: C:\meu-diva\front\src\app\therapist existe (junto com a pasta /(app))
+?? CONFLITO: C:\meu-diva\front\src\app\admin existe (junto com a pasta /(app))
+
+[10] LINHAS CHAVE DO AuthContext.tsx (REDIRECIONAMENTO)
+----------------------------------------------------
+Linhas contendo 'redirectToDashboard' ou 'window.location' ou 'router.push':
+  174: // ?? USAR window.location.replace para garantir o redirecionamento
+  176: window.location.replace(dashboardPath)
+  201: window.location.replace("/login")
+
+====================================================
+DIAGNÓSTICO COMPLETO GERADO EM: C:\meu-diva\diagnostico-completo.txt
+====================================================
