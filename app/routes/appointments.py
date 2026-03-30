@@ -857,14 +857,17 @@ def update_appointment_status(
 
         old_status = appt.status
 
+        # 🔥 VALIDAÇÕES PARA PACIENTE
         if is_patient and not is_admin:
             if new_status == AppointmentStatus.cancelled_by_patient:
-                seconds_until = (_to_utc(appt.starts_at) - _utcnow()).total_seconds()
-                if seconds_until < 24 * 3600:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Cancelamento permitido somente com 24h de antecedência",
-                    )
+                # 🔥 CONVITES (status proposed) podem ser cancelados a qualquer momento
+                if appt.status != AppointmentStatus.proposed:
+                    seconds_until = (_to_utc(appt.starts_at) - _utcnow()).total_seconds()
+                    if seconds_until < 24 * 3600:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Cancelamento permitido somente com 24h de antecedência",
+                        )
             elif new_status == AppointmentStatus.confirmed:
                 if appt.status not in (AppointmentStatus.scheduled, AppointmentStatus.proposed):
                     raise HTTPException(
