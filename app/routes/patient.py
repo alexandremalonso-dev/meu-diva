@@ -141,6 +141,8 @@ def get_patient_profile(
             "email": profile.email,
             "phone": profile.phone,
             "cpf": profile.cpf,
+            "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
+            "education_level": profile.education_level,
             "foto_url": profile.foto_url,
             "timezone": profile.timezone,
             "preferred_language": profile.preferred_language,
@@ -215,6 +217,8 @@ def update_patient_profile(
             "email": profile.email,
             "phone": profile.phone,
             "cpf": profile.cpf,
+            "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
+            "education_level": profile.education_level,
             "foto_url": profile.foto_url,
             "timezone": profile.timezone,
             "preferred_language": profile.preferred_language,
@@ -320,15 +324,21 @@ def save_patient_complaint(
         ).scalar_one_or_none()
         
         if not medical_record:
-            # Criar prontuário com a queixa
+            # Criar prontuário com a queixa (usando patient_reasons)
             medical_record = MedicalRecord(
                 appointment_id=appointment_id,
-                patient_complaint=complaint
+                patient_reasons=[complaint]  # 🔥 array JSON
             )
             db.add(medical_record)
         else:
-            # Atualizar queixa existente
-            medical_record.patient_complaint = complaint
+            # Atualizar queixa existente (adicionar ao array)
+            if medical_record.patient_reasons:
+                if isinstance(medical_record.patient_reasons, list):
+                    medical_record.patient_reasons.append(complaint)
+                else:
+                    medical_record.patient_reasons = [medical_record.patient_reasons, complaint]
+            else:
+                medical_record.patient_reasons = [complaint]
             medical_record.updated_at = datetime.now()
         
         db.commit()
@@ -336,14 +346,8 @@ def save_patient_complaint(
         
         print(f"✅ Queixa salva para sessão {appointment_id}")
         
-        # Retornar apenas o necessário
-        return {
-            "id": medical_record.id,
-            "appointment_id": medical_record.appointment_id,
-            "patient_complaint": medical_record.patient_complaint,
-            "created_at": medical_record.created_at,
-            "updated_at": medical_record.updated_at
-        }
+        # 🔥 Retorna o objeto completo (será serializado pelo schema)
+        return medical_record
         
     except HTTPException:
         raise

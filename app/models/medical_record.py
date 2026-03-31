@@ -16,14 +16,14 @@ class MedicalRecord(Base):
     
     # Controle de ocorrência
     session_not_occurred = Column(Boolean, default=False)
-    not_occurred_reason = Column(String(50), nullable=True)  # PATIENT_NO_SHOW, TECH_ISSUE, OTHER
+    not_occurred_reason = Column(String(50), nullable=True)
     
     # Campos da sessão (se ocorreu)
-    evolution = Column(Text, nullable=True)  # Evolução do atendimento
-    outcome = Column(String(50), nullable=True)  # IN_PROGRESS, CLINICAL_DISCHARGE, etc.
-    patient_reasons = Column(JSON, nullable=True)  # Lista de motivos selecionados
-    activity_instructions = Column(Text, nullable=True)  # Orientações para o paciente
-    links = Column(JSON, nullable=True)  # Lista de links enviados
+    evolution = Column(Text, nullable=True)
+    outcome = Column(String(50), nullable=True)
+    patient_reasons = Column(JSON, nullable=True)  # Lista de motivos selecionados (queixas)
+    activity_instructions = Column(Text, nullable=True)
+    links = Column(JSON, nullable=True)
     
     # Notas privadas (apenas terapeuta)
     private_notes = Column(Text, nullable=True)

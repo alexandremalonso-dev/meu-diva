@@ -47,6 +47,31 @@ def _to_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _mask_cpf(cpf: str) -> str:
+    """Mascara CPF mostrando apenas os 2 primeiros e 2 últimos dígitos"""
+    if not cpf:
+        return None
+    numbers = ''.join(filter(str.isdigit, cpf))
+    if len(numbers) != 11:
+        return cpf
+    first_two = numbers[:2]
+    last_two = numbers[-2:]
+    return f"{first_two}***.***-{last_two}"
+
+
+def _calculate_age(birth_date) -> int:
+    """Calcula idade a partir da data de nascimento"""
+    if not birth_date:
+        return None
+    today = datetime.now().date()
+    if isinstance(birth_date, datetime):
+        birth_date = birth_date.date()
+    age = today.year - birth_date.year
+    if (today.month, today.day) < (birth_date.month, birth_date.day):
+        age -= 1
+    return age
+
+
 def _send_confirmation_emails_and_meet(appt: Appointment, db: Session):
     """Envia e-mails e gera link do Meet após confirmação da sessão"""
     try:
@@ -515,16 +540,22 @@ def list_my_appointments_with_details(
             if apt.patient_user_id:
                 patient = db.get(User, apt.patient_user_id)
                 if patient:
-                    from app.models.patient_profile import PatientProfile
                     patient_profile = db.execute(
                         select(PatientProfile).where(PatientProfile.user_id == patient.id)
                     ).scalar_one_or_none()
+                    
+                    masked_cpf = _mask_cpf(patient_profile.cpf) if patient_profile and patient_profile.cpf else None
+                    birth_date = patient_profile.birth_date if patient_profile and hasattr(patient_profile, 'birth_date') else None
+                    age = _calculate_age(birth_date) if birth_date else None
                     
                     patient_data = {
                         "id": patient.id,
                         "email": patient.email,
                         "full_name": patient_profile.full_name if patient_profile and patient_profile.full_name else patient.full_name,
-                        "foto_url": patient_profile.foto_url if patient_profile else None
+                        "foto_url": patient_profile.foto_url if patient_profile else None,
+                        "cpf": masked_cpf,
+                        "birth_date": birth_date.isoformat() if birth_date else None,
+                        "age": age
                     }
             
             therapist_data = None
@@ -572,7 +603,7 @@ def list_my_appointments_with_details(
 
 
 # ==========================
-# COMPLETE APPOINTMENT (MEDICAL RECORD)
+# COMPLETE APPOINTMENT (MEDICAL RECORD) - CORRIGIDO COM REGRA PARA AUSÊNCIA DO PACIENTE
 # ==========================
 @router.post("/{appointment_id}/complete", response_model=MedicalRecordOut)
 def complete_appointment(
@@ -583,7 +614,13 @@ def complete_appointment(
 ):
     """
     Finaliza uma sessão e registra o prontuário.
-    O registro é imutável após salvo.
+    REGRAS:
+    - Se session_not_occurred = False: exige evolution e outcome
+    - Se session_not_occurred = True e motivo = CLIENTE_NAO_COMPARECEU:
+        * NÃO exige evolution e outcome
+        * Registra apenas a ausência
+        * Sessão marcada como completed (para não ser cobrada novamente)
+    - Se session_not_occurred = True e outros motivos: exige motivo e pode abrir popup de reagendamento (frontend)
     """
     print(f"\n📋 Finalizando sessão ID: {appointment_id}")
     
@@ -601,27 +638,37 @@ def complete_appointment(
     if existing:
         raise HTTPException(status_code=400, detail="Prontuário já registrado. Não é possível alterar.")
     
-    # Validar dados
+    # 🔥 REGRA ESPECIAL: CLIENTE NÃO COMPARECEU
+    is_client_absence = (record_data.session_not_occurred and 
+                         record_data.not_occurred_reason == "CLIENTE_NAO_COMPARECEU")
+    
+    # Validar dados conforme a regra
     if record_data.session_not_occurred:
         if not record_data.not_occurred_reason:
             raise HTTPException(status_code=400, detail="Motivo da não ocorrência é obrigatório")
+        
+        # Se NÃO for ausência do cliente, exige evolution e outcome? 
+        # (Para outros motivos, o frontend deve abrir popup de reagendamento)
+        # Não exigimos evolution/outcome para nenhum motivo de não ocorrência
+        pass
     else:
+        # Sessão ocorreu: exige evolution e outcome
         if not record_data.evolution:
             raise HTTPException(status_code=400, detail="Evolução do atendimento é obrigatória")
         if not record_data.outcome:
             raise HTTPException(status_code=400, detail="Desfecho clínico é obrigatório")
     
-    # Criar prontuário - REMOVIDO O CAMPO patient_complaint
+    # Criar prontuário
     medical_record = MedicalRecord(
         appointment_id=appointment_id,
         session_not_occurred=record_data.session_not_occurred,
         not_occurred_reason=record_data.not_occurred_reason,
-        evolution=record_data.evolution,
-        outcome=record_data.outcome,
+        evolution=record_data.evolution if not record_data.session_not_occurred else None,
+        outcome=record_data.outcome if not record_data.session_not_occurred else None,
         patient_reasons=record_data.patient_reasons,
         private_notes=record_data.private_notes,
-        activity_instructions=record_data.activity_instructions,
-        links=record_data.links
+        activity_instructions=record_data.activity_instructions if not record_data.session_not_occurred else None,
+        links=record_data.links if not record_data.session_not_occurred else None
     )
     
     db.add(medical_record)
@@ -632,7 +679,10 @@ def complete_appointment(
     db.commit()
     db.refresh(medical_record)
     
-    print(f"✅ Prontuário registrado para sessão {appointment_id}")
+    if is_client_absence:
+        print(f"✅ Ausência do paciente registrada para sessão {appointment_id}")
+    else:
+        print(f"✅ Prontuário registrado para sessão {appointment_id}")
     
     return medical_record
 

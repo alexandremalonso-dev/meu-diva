@@ -130,7 +130,7 @@ def listar_terapeutas_publicos(
 
 
 # ==========================
-# GET PERFIL PÚBLICO
+# GET PERFIL PÚBLICO - COM INSTAGRAM E YOUTUBE
 # ==========================
 @router.get("/{terapeuta_id}", response_model=TherapistProfileOut)
 def get_terapeuta_publico(
@@ -160,12 +160,20 @@ def get_terapeuta_publico(
     if '_sa_instance_state' in profile_dict:
         del profile_dict['_sa_instance_state']
     
+    # 🔥 ADICIONAR CAMPOS DE REDES SOCIAIS
+    # Eles já existem no modelo, mas vamos garantir que estão presentes
+    profile_dict['instagram_url'] = profile.instagram_url
+    profile_dict['video_url'] = profile.video_url
+    
     # Adicionar objeto user apenas com email (opcional)
     profile_dict['user'] = {
         "email": user.email if user else None
     } if user else None
     
     print(f"✅ Perfil público retornado: {profile.id}, nome: {profile.full_name}")
+    print(f"   Instagram: {profile.instagram_url}")
+    print(f"   YouTube: {profile.video_url}")
+    
     return profile_dict
 
 

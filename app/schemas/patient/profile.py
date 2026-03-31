@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
 from app.schemas.patient.address import PatientAddressOut
 from app.schemas.patient.goal import PatientGoalOut
@@ -12,9 +12,11 @@ class PatientProfileBase(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
     cpf: Optional[str] = None
+    birth_date: Optional[date] = None  # 🔥 DATA DE NASCIMENTO
+    education_level: Optional[str] = None  # 🔥 NÍVEL DE ESCOLARIDADE
     timezone: str = "America/Sao_Paulo"
     preferred_language: str = "pt-BR"
-    therapy_goals: Optional[List[str]] = None  # 🔥 ADICIONADO - Objetivos terapêuticos
+    therapy_goals: Optional[List[str]] = None  # 🔥 Objetivos terapêuticos
 
 # ============================================
 # CREATE / UPDATE
@@ -26,9 +28,11 @@ class PatientProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     cpf: Optional[str] = None
+    birth_date: Optional[date] = None  # 🔥 DATA DE NASCIMENTO
+    education_level: Optional[str] = None  # 🔥 NÍVEL DE ESCOLARIDADE
     timezone: Optional[str] = None
     preferred_language: Optional[str] = None
-    therapy_goals: Optional[List[str]] = None  # 🔥 ADICIONADO - Para atualização
+    therapy_goals: Optional[List[str]] = None  # 🔥 Para atualização
 
 # ============================================
 # RESPONSE

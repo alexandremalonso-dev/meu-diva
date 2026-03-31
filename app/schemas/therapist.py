@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List, Dict
 from enum import Enum
 
@@ -20,9 +20,21 @@ class TherapistProfileBase(BaseModel):
     # 🔥 NOVO CAMPO - Nome do terapeuta
     full_name: Optional[str] = None
     
+    # 🔥 NOVOS CAMPOS - Dados pessoais
+    phone: Optional[str] = None
+    birth_date: Optional[date] = Field(None, description="Data de nascimento do terapeuta")
+    education_level: Optional[str] = Field(None, description="Nível de escolaridade do terapeuta")
+    show_phone_to_patients: bool = False
+    show_birth_date_to_patients: bool = False
+    
     # 🔥 NOVOS CAMPOS - Registro Profissional e Tratamento
     professional_registration: Optional[str] = Field(None, description="Registro profissional (CRP, CRM, etc.)")
     treatment: Optional[TreatmentType] = Field(None, description="Tratamento: Dr., Dra., Sr., Sra.")
+    
+    # 🔥 REDES SOCIAIS
+    instagram_url: Optional[str] = Field(None, description="Link do Instagram")
+    signature_url: Optional[str] = Field(None, description="URL da assinatura digital")
+    video_url: Optional[str] = Field(None, description="Link do vídeo de apresentação")
     
     # Campos existentes
     bio: Optional[str] = None
@@ -42,12 +54,24 @@ class TherapistProfileBase(BaseModel):
     idiomas: Optional[str] = None
     
     # ==========================
+    # 🔥 CAMPOS FINANCEIROS
+    # ==========================
+    cnpj: Optional[str] = None
+    cpf: Optional[str] = None
+    bank_agency: Optional[str] = None
+    bank_account: Optional[str] = None
+    bank_account_digit: Optional[str] = None
+    pix_key_type: Optional[str] = None
+    pix_key: Optional[str] = None
+    lgpd_consent: bool = False
+    
+    # ==========================
     # 🔥 NOVOS CAMPOS PARA BUSCA E FILTROS
     # ==========================
     gender: Optional[str] = None
     ethnicity: Optional[str] = None
     lgbtqia_ally: bool = False
-    lgbtqia_belonging: bool = False  # 🔥 NOVO - Pertencente à comunidade
+    lgbtqia_belonging: bool = False
     formation: Optional[str] = None
     approaches: Optional[List[str]] = None
     specialties_list: Optional[List[str]] = None
@@ -85,9 +109,21 @@ class TherapistProfileUpsert(BaseModel):
     # 🔥 NOVO CAMPO - Nome
     full_name: Optional[str] = None
     
+    # 🔥 NOVOS CAMPOS - Dados pessoais
+    phone: Optional[str] = None
+    birth_date: Optional[date] = None
+    education_level: Optional[str] = None
+    show_phone_to_patients: Optional[bool] = None
+    show_birth_date_to_patients: Optional[bool] = None
+    
     # 🔥 NOVOS CAMPOS - Registro Profissional e Tratamento
     professional_registration: Optional[str] = None
     treatment: Optional[TreatmentType] = None
+    
+    # 🔥 REDES SOCIAIS
+    instagram_url: Optional[str] = None
+    signature_url: Optional[str] = None
+    video_url: Optional[str] = None
     
     # Campos existentes
     bio: Optional[str] = None
@@ -107,12 +143,24 @@ class TherapistProfileUpsert(BaseModel):
     idiomas: Optional[str] = None
     
     # ==========================
+    # 🔥 CAMPOS FINANCEIROS
+    # ==========================
+    cnpj: Optional[str] = None
+    cpf: Optional[str] = None
+    bank_agency: Optional[str] = None
+    bank_account: Optional[str] = None
+    bank_account_digit: Optional[str] = None
+    pix_key_type: Optional[str] = None
+    pix_key: Optional[str] = None
+    lgpd_consent: Optional[bool] = None
+    
+    # ==========================
     # 🔥 NOVOS CAMPOS PARA BUSCA E FILTROS
     # ==========================
     gender: Optional[str] = None
     ethnicity: Optional[str] = None
     lgbtqia_ally: Optional[bool] = None
-    lgbtqia_belonging: Optional[bool] = None  # 🔥 NOVO
+    lgbtqia_belonging: Optional[bool] = None
     formation: Optional[str] = None
     approaches: Optional[List[str]] = None
     specialties_list: Optional[List[str]] = None
@@ -152,6 +200,21 @@ class TherapistProfileOut(TherapistProfileBase):
     professional_registration: Optional[str] = None
     treatment: Optional[TreatmentType] = None
     lgbtqia_belonging: bool = False
+    phone: Optional[str] = None
+    birth_date: Optional[date] = None
+    education_level: Optional[str] = None
+    instagram_url: Optional[str] = None
+    signature_url: Optional[str] = None
+    video_url: Optional[str] = None
+    cnpj: Optional[str] = None
+    cpf: Optional[str] = None
+    bank_agency: Optional[str] = None
+    bank_account: Optional[str] = None
+    bank_account_digit: Optional[str] = None
+    pix_key_type: Optional[str] = None
+    pix_key: Optional[str] = None
+    lgpd_consent: bool = False
+    cancellation_policy: Optional[str] = None
     
     class Config:
         from_attributes = True

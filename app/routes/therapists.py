@@ -20,6 +20,8 @@ from app.models.user import User
 from app.models.therapist_profile import TherapistProfile
 from app.models.therapist_availability import TherapistAvailability
 from app.models.appointment import Appointment
+from app.models.patient_profile import PatientProfile
+from app.models.patient_address import PatientAddress
 
 from app.schemas.therapist import (
     TherapistProfileUpsert,
@@ -68,6 +70,77 @@ def _parse_tz_offset(tz_offset: str) -> timezone:
 
 def _overlaps(s1: datetime, e1: datetime, s2: datetime, e2: datetime) -> bool:
     return s1 < e2 and e1 > s2
+
+
+# ==========================
+# 🔥 GET PATIENT DATA BY APPOINTMENT
+# ==========================
+
+@router.get("/appointment/{appointment_id}/patient-data", response_model=dict)
+def get_patient_data_by_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
+):
+    """
+    Retorna dados do paciente (nome, email, endereço, data de nascimento) a partir de uma sessão.
+    Apenas o terapeuta da sessão pode acessar.
+    """
+    print(f"\n📋 Buscando dados do paciente para sessão {appointment_id}")
+    
+    # Buscar a sessão
+    appointment = db.execute(
+        select(Appointment).where(Appointment.id == appointment_id)
+    ).scalar_one_or_none()
+    
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    
+    # Verificar se o terapeuta logado é o terapeuta da sessão
+    if appointment.therapist_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Acesso negado. Esta sessão não pertence a você.")
+    
+    # Buscar dados do paciente
+    patient = db.execute(
+        select(User).where(User.id == appointment.patient_user_id)
+    ).scalar_one_or_none()
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente não encontrado")
+    
+    # Buscar perfil do paciente
+    patient_profile = db.execute(
+        select(PatientProfile).where(PatientProfile.user_id == patient.id)
+    ).scalar_one_or_none()
+    
+    # Buscar endereço do paciente
+    address = db.execute(
+        select(PatientAddress)
+        .where(PatientAddress.patient_id == patient_profile.id if patient_profile else 0)
+        .order_by(PatientAddress.is_default.desc(), PatientAddress.id.asc())
+    ).scalar_one_or_none()
+    
+    response = {
+        "patient_id": patient.id,
+        "name": patient.full_name or patient.email.split("@")[0] if patient.email else "",
+        "email": patient.email,
+        "cpf": patient.cpf if hasattr(patient, 'cpf') else None,
+        "birth_date": patient.birth_date.isoformat() if hasattr(patient, 'birth_date') and patient.birth_date else None,
+        "phone": patient_profile.phone if patient_profile else None,
+        "address": {
+            "street": address.street if address else None,
+            "number": address.number if address else None,
+            "complement": address.complement if address else None,
+            "neighborhood": address.neighborhood if address else None,
+            "city": address.city if address else None,
+            "state": address.state if address else None,
+            "zipcode": address.zipcode if address else None,
+            "country": address.country if address else None,
+        } if address else None
+    }
+    
+    print(f"✅ Dados do paciente retornados: {response['name']}")
+    return response
 
 
 # ==========================
@@ -127,7 +200,7 @@ def get_my_profile(
 
 
 # ==========================
-# 🔥 POST PROFILE (UPSERT)
+# 🔥 POST PROFILE (UPSERT) - CORRIGIDO COM TODOS OS CAMPOS
 # ==========================
 @router.post("/me/profile", response_model=TherapistProfileOut)
 def upsert_profile(
@@ -136,7 +209,7 @@ def upsert_profile(
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
 ):
     """
-    Atualiza ou cria o perfil do terapeuta com todos os campos da busca avançada
+    Atualiza ou cria o perfil do terapeuta com todos os campos
     """
     try:
         print(f"\n📝 Upsert profile para usuario: {current_user.id}")
@@ -157,10 +230,39 @@ def upsert_profile(
             existing.foto_url = payload.foto_url
             existing.updated_at = datetime.now()
             
-            # 🔥 NOVOS CAMPOS PARA BUSCA
+            # 🔥 CAMPOS DE DADOS PESSOAIS
+            existing.phone = payload.phone
+            existing.birth_date = payload.birth_date
+            existing.education_level = payload.education_level
+            existing.show_phone_to_patients = payload.show_phone_to_patients if payload.show_phone_to_patients is not None else False
+            existing.show_birth_date_to_patients = payload.show_birth_date_to_patients if payload.show_birth_date_to_patients is not None else False
+            
+            # 🔥 CAMPOS DE REGISTRO PROFISSIONAL
+            existing.professional_registration = payload.professional_registration
+            existing.treatment = payload.treatment
+            
+            # 🔥 CAMPOS DE REDES SOCIAIS E MÍDIA
+            existing.instagram_url = payload.instagram_url
+            existing.signature_url = payload.signature_url
+            existing.video_url = payload.video_url
+            
+            # 🔥 CAMPOS FINANCEIROS
+            existing.cnpj = payload.cnpj
+            existing.cpf = payload.cpf
+            existing.bank_agency = payload.bank_agency
+            existing.bank_account = payload.bank_account
+            existing.bank_account_digit = payload.bank_account_digit
+            existing.pix_key_type = payload.pix_key_type
+            existing.pix_key = payload.pix_key
+            existing.lgpd_consent = payload.lgpd_consent if payload.lgpd_consent is not None else False
+            if payload.lgpd_consent and not existing.lgpd_consent_date:
+                existing.lgpd_consent_date = datetime.now()
+            
+            # 🔥 CAMPOS PARA BUSCA E FILTROS
             existing.gender = payload.gender
             existing.ethnicity = payload.ethnicity
             existing.lgbtqia_ally = payload.lgbtqia_ally if payload.lgbtqia_ally is not None else False
+            existing.lgbtqia_belonging = payload.lgbtqia_belonging if payload.lgbtqia_belonging is not None else False
             existing.formation = payload.formation
             existing.approaches = payload.approaches
             existing.specialties_list = payload.specialties_list
@@ -175,6 +277,9 @@ def upsert_profile(
             # 🔥 DURAÇÃO DAS SESSÕES
             existing.session_duration_30min = payload.session_duration_30min if payload.session_duration_30min is not None else True
             existing.session_duration_50min = payload.session_duration_50min if payload.session_duration_50min is not None else True
+            
+            # 🔥 POLÍTICA DE REMARCAÇÃO
+            existing.cancellation_policy = payload.cancellation_policy
             
             db.commit()
             db.refresh(existing)
@@ -195,10 +300,39 @@ def upsert_profile(
             rating=0.0,
             reviews_count=0,
             sessions_count=0,
-            # 🔥 NOVOS CAMPOS
+            
+            # 🔥 CAMPOS DE DADOS PESSOAIS
+            phone=payload.phone,
+            birth_date=payload.birth_date,
+            education_level=payload.education_level,
+            show_phone_to_patients=payload.show_phone_to_patients or False,
+            show_birth_date_to_patients=payload.show_birth_date_to_patients or False,
+            
+            # 🔥 CAMPOS DE REGISTRO PROFISSIONAL
+            professional_registration=payload.professional_registration,
+            treatment=payload.treatment,
+            
+            # 🔥 CAMPOS DE REDES SOCIAIS E MÍDIA
+            instagram_url=payload.instagram_url,
+            signature_url=payload.signature_url,
+            video_url=payload.video_url,
+            
+            # 🔥 CAMPOS FINANCEIROS
+            cnpj=payload.cnpj,
+            cpf=payload.cpf,
+            bank_agency=payload.bank_agency,
+            bank_account=payload.bank_account,
+            bank_account_digit=payload.bank_account_digit,
+            pix_key_type=payload.pix_key_type,
+            pix_key=payload.pix_key,
+            lgpd_consent=payload.lgpd_consent or False,
+            lgpd_consent_date=datetime.now() if payload.lgpd_consent else None,
+            
+            # 🔥 CAMPOS PARA BUSCA E FILTROS
             gender=payload.gender,
             ethnicity=payload.ethnicity,
             lgbtqia_ally=payload.lgbtqia_ally or False,
+            lgbtqia_belonging=payload.lgbtqia_belonging or False,
             formation=payload.formation,
             approaches=payload.approaches,
             specialties_list=payload.specialties_list,
@@ -209,9 +343,13 @@ def upsert_profile(
             total_sessions=payload.total_sessions or 0,
             verified=payload.verified or False,
             featured=payload.featured or False,
+            
             # 🔥 DURAÇÃO DAS SESSÕES
             session_duration_30min=payload.session_duration_30min if payload.session_duration_30min is not None else True,
             session_duration_50min=payload.session_duration_50min if payload.session_duration_50min is not None else True,
+            
+            # 🔥 POLÍTICA DE REMARCAÇÃO
+            cancellation_policy=payload.cancellation_policy,
         )
         db.add(profile)
         db.commit()

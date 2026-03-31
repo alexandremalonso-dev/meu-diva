@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON, Date
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.database import Base
@@ -14,6 +14,10 @@ class PatientProfile(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     phone = Column(String(50))
     cpf = Column(String(14), unique=True)
+    
+    # 🔥 DATA DE NASCIMENTO E ESCOLARIDADE
+    birth_date = Column(Date, nullable=True, comment="Data de nascimento do paciente")
+    education_level = Column(String(100), nullable=True, comment="Nível de escolaridade do paciente")
     
     # Foto
     foto_url = Column(String(500))

@@ -55,6 +55,11 @@ class TherapistProfile(Base):
         nullable=True,
         comment="Data de nascimento do terapeuta"
     )
+    education_level: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Nível de escolaridade do terapeuta"
+    )
     show_phone_to_patients: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -84,17 +89,18 @@ class TherapistProfile(Base):
     )
 
     # ==========================
-    # 🔥 NOVOS CAMPOS - ASSINATURA DIGITAL
+    # 🔥 NOVOS CAMPOS - REDES SOCIAIS
     # ==========================
+    instagram_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="URL do Instagram do terapeuta"
+    )
     signature_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="URL da imagem da assinatura (fundo transparente)"
     )
-
-    # ==========================
-    # 🔥 NOVOS CAMPOS - VÍDEO DE APRESENTAÇÃO
-    # ==========================
     video_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
