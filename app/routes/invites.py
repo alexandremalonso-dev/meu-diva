@@ -188,9 +188,6 @@ def list_my_invites(
                 select(PatientProfile).where(PatientProfile.user_id == inv.patient_user_id)
             ).scalar_one_or_none()
             
-            print(f"🔍 [TERAPEUTA] Paciente ID: {inv.patient_user_id}")
-            print(f"   - patient_profile.foto_url: {patient_profile.foto_url if patient_profile else 'None'}")
-            
             result.append({
                 "id": inv.id,
                 "patient_user_id": inv.patient_user_id,
@@ -212,12 +209,6 @@ def list_my_invites(
             therapist_profile = db.execute(
                 select(TherapistProfile).where(TherapistProfile.user_id == inv.therapist_user_id)
             ).scalar_one_or_none()
-            
-            print(f"🔍 [PACIENTE] Terapeuta ID: {inv.therapist_user_id}")
-            print(f"   - therapist.full_name: {therapist.full_name if therapist else 'None'}")
-            print(f"   - therapist_profile.full_name: {therapist_profile.full_name if therapist_profile else 'None'}")
-            print(f"   - therapist_profile.foto_url: {therapist_profile.foto_url if therapist_profile else 'None'}")
-            print(f"   - therapist_profile.session_price: {therapist_profile.session_price if therapist_profile else 'None'}")
             
             result.append({
                 "id": inv.id,
@@ -266,8 +257,18 @@ def update_invite_status(
     if current_user.role == UserRole.patient and appointment.status == AppointmentStatus.proposed:
         appointment.status = AppointmentStatus.confirmed
         print(f"✅ Convite {invite_id} aceito pelo paciente")
+        
+        # 🔥 AGORA SIM, GERAR MEET APÓS CONFIRMAÇÃO
+        from app.core.google_meet import google_meet_service
+        try:
+            meet_url = google_meet_service.create_meet_link(appointment)
+            if meet_url:
+                appointment.video_call_url = meet_url
+                print(f"✅ Meet gerado após confirmação: {meet_url}")
+        except Exception as e:
+            print(f"⚠️ Erro ao gerar Meet: {e}")
     
     db.commit()
     db.refresh(appointment)
     
-    return {"id": appointment.id, "status": appointment.status.value}
+    return {"id": appointment.id, "status": appointment.status.value, "video_call_url": appointment.video_call_url}

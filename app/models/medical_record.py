@@ -28,6 +28,9 @@ class MedicalRecord(Base):
     # Notas privadas (apenas terapeuta)
     private_notes = Column(Text, nullable=True)
     
+    # 🆕 Rascunho gerado por IA a partir da gravação da sessão
+    ai_draft = Column(Text, nullable=True)
+    
     # Metadados
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())

@@ -285,13 +285,18 @@ async def upload_patient_photo(
         raise HTTPException(status_code=500, detail=f"Erro interno ao fazer upload: {str(e)}")
 
 # ============================================
-# COMPLAINT ENDPOINT (QUEIXA DO PACIENTE)
+# COMPLAINT ENDPOINT (QUEIXA DO PACIENTE) - CORRIGIDO
 # ============================================
 
-@router.post("/sessions/{appointment_id}/complaint", response_model=MedicalRecordOut)
+from pydantic import BaseModel
+
+class ComplaintRequest(BaseModel):
+    complaint: str
+
+@router.post("/sessions/{appointment_id}/complaint")
 def save_patient_complaint(
     appointment_id: int,
-    complaint_data: dict,
+    complaint_data: ComplaintRequest,  # 🔥 USAR PYDANTIC MODEL
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.patient))
 ):
@@ -299,9 +304,12 @@ def save_patient_complaint(
     Salva a queixa do paciente para uma sessão
     """
     print(f"\n📝 POST /patient/sessions/{appointment_id}/complaint - Usuário: {current_user.id}")
+    print(f"📦 Dados recebidos: {complaint_data.complaint}")
     
-    complaint = complaint_data.get("complaint")
-    if not complaint:
+    complaint = complaint_data.complaint
+    
+    if not complaint or not complaint.strip():
+        print("❌ Nenhuma queixa fornecida no payload")
         raise HTTPException(status_code=400, detail="Queixa é obrigatória")
     
     try:
@@ -316,7 +324,10 @@ def save_patient_complaint(
         ).scalar_one_or_none()
         
         if not appointment:
+            print(f"❌ Sessão {appointment_id} não encontrada ou não pertence ao paciente {current_user.id}")
             raise HTTPException(status_code=404, detail="Sessão não encontrada")
+        
+        print(f"✅ Sessão encontrada: ID {appointment.id}, Terapeuta: {appointment.therapist_user_id}")
         
         # Buscar ou criar prontuário
         medical_record = db.execute(
@@ -324,30 +335,42 @@ def save_patient_complaint(
         ).scalar_one_or_none()
         
         if not medical_record:
-            # Criar prontuário com a queixa (usando patient_reasons)
+            # Criar prontuário com a queixa
             medical_record = MedicalRecord(
                 appointment_id=appointment_id,
-                patient_reasons=[complaint]  # 🔥 array JSON
+                patient_reasons=[complaint.strip()],
+                session_not_occurred=False
             )
             db.add(medical_record)
+            print(f"✅ Novo prontuário criado para sessão {appointment_id}")
         else:
-            # Atualizar queixa existente (adicionar ao array)
-            if medical_record.patient_reasons:
-                if isinstance(medical_record.patient_reasons, list):
-                    medical_record.patient_reasons.append(complaint)
-                else:
-                    medical_record.patient_reasons = [medical_record.patient_reasons, complaint]
-            else:
-                medical_record.patient_reasons = [complaint]
+            # Atualizar queixa existente
+            current_reasons = medical_record.patient_reasons or []
+            if isinstance(current_reasons, str):
+                current_reasons = [current_reasons]
+            elif not isinstance(current_reasons, list):
+                current_reasons = []
+            
+            # Adicionar nova queixa (evitar duplicatas exatas)
+            if complaint.strip() not in current_reasons:
+                current_reasons.append(complaint.strip())
+            
+            medical_record.patient_reasons = current_reasons
             medical_record.updated_at = datetime.now()
+            print(f"✅ Prontuário atualizado para sessão {appointment_id}")
         
         db.commit()
         db.refresh(medical_record)
         
-        print(f"✅ Queixa salva para sessão {appointment_id}")
+        print(f"✅ Queixa salva com sucesso! Total de queixas: {len(medical_record.patient_reasons)}")
         
-        # 🔥 Retorna o objeto completo (será serializado pelo schema)
-        return medical_record
+        # 🔥 Retornar resposta completa
+        return {
+            "success": True,
+            "message": "Queixa registrada com sucesso",
+            "appointment_id": appointment_id,
+            "complaints": medical_record.patient_reasons
+        }
         
     except HTTPException:
         raise
@@ -357,7 +380,7 @@ def save_patient_complaint(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno ao salvar queixa: {str(e)}")
-
+    
 # ============================================
 # GOALS ENDPOINTS
 # ============================================

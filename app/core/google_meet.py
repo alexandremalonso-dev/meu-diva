@@ -1,225 +1,156 @@
-"""
-Serviço de integração com Google Meet
-Estratégia 1: Conta central do sistema
-"""
-
+""" Serviço de integração com Google Meet """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Escopos necessários
+# ============================================
+# CONFIGURAÇÃO DE CAMINHOS ABSOLUTOS
+# ============================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TOKEN_FILE = os.path.join(BASE_DIR, 'token.json')
+CREDENTIALS_FILE = os.path.join(BASE_DIR, 'credentials.json')
+
+# 🔥 ESCOPOS CORRETOS - Apenas Calendar, que já cria Meet automaticamente
 SCOPES = [
-    'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/calendar.events'
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar'
 ]
 
+
 class GoogleMeetService:
-    """Serviço para criar sessões no Google Meet"""
+    """Serviço para criação de links do Google Meet"""
     
     def __init__(self):
-        self.creds = None
+        """Inicializa o serviço com autenticação"""
         self.service = None
         self._authenticate()
     
     def _authenticate(self):
-        """Autentica com Google Calendar API"""
-        token_file = 'token.json'
-        credentials_file = 'credentials.json'
-        
-        # Carrega credenciais do arquivo token.json se existir
-        if os.path.exists(token_file):
-            self.creds = Credentials.from_authorized_user_file(token_file, SCOPES)
-        
-        # Se não tem credenciais válidas, faz login
-        if not self.creds or not self.creds.valid:
-            if self.creds and self.creds.expired and self.creds.refresh_token:
-                self.creds.refresh(Request())
-            else:
-                if not os.path.exists(credentials_file):
-                    raise Exception(
-                        "Arquivo credentials.json não encontrado. "
-                        "Baixe em: https://console.cloud.google.com/apis/credentials"
-                    )
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    credentials_file, SCOPES)
-                self.creds = flow.run_local_server(port=0)
+        """Autentica com o Google usando credenciais"""
+        try:
+            creds = None
             
-            # Salva credenciais para próxima execução
-            with open(token_file, 'w') as token:
-                token.write(self.creds.to_json())
-        
-        self.service = build('calendar', 'v3', credentials=self.creds)
-        print("✅ Google Calendar autenticado com sucesso!")
+            # Verificar se existe token salvo
+            if os.path.exists(TOKEN_FILE):
+                print(f"📁 Token encontrado em: {TOKEN_FILE}")
+                creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+            
+            # Se não há credenciais válidas, fazer login
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    print("🔄 Atualizando token expirado...")
+                    creds.refresh(Request())
+                else:
+                    print("🔑 Solicitando nova autenticação...")
+                    if not os.path.exists(CREDENTIALS_FILE):
+                        raise FileNotFoundError(
+                            f"Arquivo de credenciais não encontrado em: {CREDENTIALS_FILE}\n"
+                            f"Por favor, coloque o arquivo credentials.json na pasta: {BASE_DIR}"
+                        )
+                    flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+                    creds = flow.run_local_server(port=0)
+                
+                # Salvar token para próxima execução
+                with open(TOKEN_FILE, 'w') as token:
+                    token.write(creds.to_json())
+                print(f"✅ Token salvo em: {TOKEN_FILE}")
+            
+            # Construir o serviço de calendar
+            self.service = build('calendar', 'v3', credentials=creds)
+            print("✅ Google Meet Service inicializado com sucesso!")
+            
+        except Exception as e:
+            print(f"❌ Erro ao autenticar Google Meet: {str(e)}")
+            print(f"   - Credentials procurado em: {CREDENTIALS_FILE}")
+            print(f"   - Token procurado em: {TOKEN_FILE}")
+            self.service = None
     
-    def create_meet_link(self, appointment):
+    def create_meet_link(self, appointment_data):
         """
-        Cria um evento no Google Calendar com link do Meet
+        Cria um link do Google Meet para uma sessão
         
         Args:
-            appointment: Objeto Appointment do banco
-            
+            appointment_data: Objeto Appointment ou dicionário com starts_at, ends_at
+        
         Returns:
-            str: URL do Google Meet
+            str: URL do Google Meet ou None se falhar
         """
+        if not self.service:
+            print("⚠️ Serviço Google Meet não disponível")
+            return None
+        
         try:
-            # Define título do evento
-            summary = f"Sessão Terapêutica - Meu Divã"
+            # Extrair dados
+            if hasattr(appointment_data, 'starts_at'):
+                start = appointment_data.starts_at
+                end = appointment_data.ends_at
+                title = f"Sessão de Terapia"
+                if hasattr(appointment_data, 'patient') and appointment_data.patient:
+                    patient_name = getattr(appointment_data.patient, 'full_name', 'Paciente')
+                    title = f"Sessão com {patient_name}"
+            else:
+                start = appointment_data.get('starts_at')
+                end = appointment_data.get('ends_at')
+                title = appointment_data.get('title', 'Sessão de Terapia')
             
-            # Define descrição
-            description = f"""
-Sessão terapêutica agendada no Meu Divã
-
-Paciente: {appointment.patient.full_name if appointment.patient and appointment.patient.full_name else 'Paciente'}
-Terapeuta: {appointment.therapist.full_name if appointment.therapist and appointment.therapist.full_name else 'Terapeuta'}
-ID da sessão: {appointment.id}
-
-Para acessar, clique no link abaixo no horário agendado.
-            """
+            # Converter para datetime se for string
+            if isinstance(start, str):
+                start = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            if isinstance(end, str):
+                end = datetime.fromisoformat(end.replace('Z', '+00:00'))
             
-            # Define horários
-            start_time = appointment.starts_at
-            end_time = appointment.ends_at
+            # Formatar para o Google Calendar
+            start_iso = start.isoformat()
+            end_iso = end.isoformat()
             
-            # Cria evento no Google Calendar
+            # Criar evento com Meet
             event = {
-                'summary': summary,
-                'description': description.strip(),
+                'summary': title,
+                'description': 'Sessão de terapia online - Link do Google Meet gerado automaticamente',
                 'start': {
-                    'dateTime': start_time.isoformat(),
+                    'dateTime': start_iso,
                     'timeZone': 'America/Sao_Paulo',
                 },
                 'end': {
-                    'dateTime': end_time.isoformat(),
+                    'dateTime': end_iso,
                     'timeZone': 'America/Sao_Paulo',
                 },
                 'conferenceData': {
                     'createRequest': {
-                        'requestId': f'appointment_{appointment.id}',
+                        'requestId': f"meet-{int(start.timestamp())}",
                         'conferenceSolutionKey': {'type': 'hangoutsMeet'}
                     }
-                },
-                'reminders': {
-                    'useDefault': False,
-                    'overrides': [
-                        {'method': 'email', 'minutes': 60},
-                        {'method': 'popup', 'minutes': 15},
-                    ],
-                },
+                }
             }
             
-            # Adiciona participantes se tiverem email
-            attendees = []
-            if appointment.patient and appointment.patient.email:
-                attendees.append({'email': appointment.patient.email})
-            if appointment.therapist and appointment.therapist.email:
-                attendees.append({'email': appointment.therapist.email})
-            if attendees:
-                event['attendees'] = attendees
-            
-            # Insere evento no calendário
-            calendar_id = 'primary'
-            event_result = self.service.events().insert(
-                calendarId=calendar_id,
+            # Criar evento com conferência
+            created_event = self.service.events().insert(
+                calendarId='primary',
                 body=event,
-                conferenceDataVersion=1,
-                sendUpdates='all'
+                conferenceDataVersion=1
             ).execute()
             
-            # Extrai o link do Meet
-            meet_link = None
-            if 'conferenceData' in event_result:
-                entry_points = event_result['conferenceData'].get('entryPoints', [])
-                for entry in entry_points:
-                    if entry.get('entryPointType') == 'video':
-                        meet_link = entry.get('uri')
-                        break
-            
-            # Salva o event_id para futuras atualizações
-            if event_result.get('id'):
-                appointment.google_event_id = event_result.get('id')
-            
-            print(f"✅ Meet criado para appointment {appointment.id}: {meet_link}")
-            return meet_link
-            
+            # Extrair link do Meet
+            meet_link = created_event.get('hangoutLink')
+            if meet_link:
+                print(f"✅ Meet criado: {meet_link}")
+                return meet_link
+            else:
+                print("⚠️ Evento criado mas sem link Meet")
+                return None
+                
         except Exception as e:
             print(f"❌ Erro ao criar Meet: {e}")
             return None
-    
-    def update_meet_link(self, appointment, new_start, new_end):
-        """
-        Atualiza um evento no Google Calendar quando reagendado
-        
-        Args:
-            appointment: Objeto Appointment
-            new_start: Nova data/hora de início
-            new_end: Nova data/hora de fim
-            
-        Returns:
-            str: URL do Meet (se ainda existir)
-        """
-        try:
-            # Busca o evento pelo ID
-            event_id = getattr(appointment, 'google_event_id', None)
-            if not event_id:
-                return self.create_meet_link(appointment)
-            
-            # Atualiza o evento existente
-            event = self.service.events().get(
-                calendarId='primary',
-                eventId=event_id
-            ).execute()
-            
-            event['start']['dateTime'] = new_start.isoformat()
-            event['end']['dateTime'] = new_end.isoformat()
-            
-            updated_event = self.service.events().update(
-                calendarId='primary',
-                eventId=event_id,
-                body=event,
-                sendUpdates='all'
-            ).execute()
-            
-            # Extrai o link do Meet
-            meet_link = None
-            if 'conferenceData' in updated_event:
-                entry_points = updated_event['conferenceData'].get('entryPoints', [])
-                for entry in entry_points:
-                    if entry.get('entryPointType') == 'video':
-                        meet_link = entry.get('uri')
-                        break
-            
-            return meet_link
-            
-        except Exception as e:
-            print(f"❌ Erro ao atualizar Meet: {e}")
-            return None
-    
-    def cancel_meet_event(self, appointment):
-        """
-        Cancela um evento no Google Calendar
-        
-        Args:
-            appointment: Objeto Appointment com google_event_id
-        """
-        try:
-            event_id = getattr(appointment, 'google_event_id', None)
-            if not event_id:
-                return
-            
-            self.service.events().delete(
-                calendarId='primary',
-                eventId=event_id,
-                sendUpdates='all'
-            ).execute()
-            
-            print(f"✅ Evento cancelado para appointment {appointment.id}")
-            
-        except Exception as e:
-            print(f"❌ Erro ao cancelar evento: {e}")
 
 
 # Instância global do serviço
-google_meet_service = GoogleMeetService()
+google_meet_service = None
+try:
+    google_meet_service = GoogleMeetService()
+except Exception as e:
+    print(f"❌ Falha ao inicializar GoogleMeetService: {e}")
+    google_meet_service = None

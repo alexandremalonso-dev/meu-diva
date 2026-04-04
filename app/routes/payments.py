@@ -26,6 +26,10 @@ from app.schemas.payment import (
     PaymentStatusResponse
 )
 
+# 🔥 IMPORTAR SERVIÇO DO GOOGLE MEET
+from app.core.google_meet import google_meet_service
+from app.services.email_service import email_service
+
 # ============================================
 # CONFIG STRIPE
 # ============================================
@@ -182,12 +186,14 @@ async def create_checkout(
 
 
 # ============================================
-# WEBHOOK (PROFISSIONAL)
+# WEBHOOK (PROFISSIONAL) - CORRIGIDO COM MEET
 # ============================================
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    print("\n🔔 WEBHOOK RECEBIDO")
+    print("\n" + "="*70)
+    print("🔔 WEBHOOK RECEBIDO")
+    print("="*70)
 
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
@@ -217,6 +223,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         payment_id = metadata.get("payment_id")
         appointment_id = metadata.get("appointment_id")
         appointment_status = metadata.get("appointment_status", "scheduled")
+
+        print(f"📋 payment_id: {payment_id}")
+        print(f"📋 appointment_id: {appointment_id}")
+        print(f"📋 appointment_status: {appointment_status}")
 
         if not payment_id:
             print("⚠️ payment_id ausente")
@@ -256,12 +266,15 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         payment.status = "paid"
         payment.paid_at = datetime.now()
 
-        # CONFIRMAR APPOINTMENT (se for pagamento de sessão)
+        # 🔥 CONFIRMAR APPOINTMENT E GERAR MEET
         if appointment_id:
             appointment = db.get(Appointment, int(appointment_id))
 
             if appointment:
-                # 🔥 CORREÇÃO: Se era um convite (proposed), confirmar
+                print(f"\n📋 Processando sessão {appointment.id}")
+                print(f"   Status atual: {appointment.status}")
+                
+                # 🔥 ATUALIZAR STATUS DA SESSÃO
                 if appointment.status == AppointmentStatus.proposed:
                     appointment.status = AppointmentStatus.confirmed
                     print(f"✅ Convite {appointment.id} confirmado após pagamento")
@@ -269,7 +282,26 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                     appointment.status = AppointmentStatus.confirmed
                     print(f"✅ Sessão {appointment.id} confirmada após pagamento")
 
-                # débito da sessão (já que o pagamento foi feito via Stripe)
+                # 🔥 GERAR LINK DO GOOGLE MEET AUTOMATICAMENTE
+                print(f"\n🔗 [WEBHOOK] Gerando Meet para sessão {appointment.id}...")
+                
+                meet_url = None
+                try:
+                    if google_meet_service:
+                        meet_url = google_meet_service.create_meet_link(appointment)
+                        if meet_url:
+                            appointment.video_call_url = meet_url
+                            print(f"✅ [WEBHOOK] Meet gerado com sucesso: {meet_url}")
+                        else:
+                            print(f"⚠️ [WEBHOOK] create_meet_link retornou None")
+                    else:
+                        print(f"⚠️ [WEBHOOK] google_meet_service não disponível")
+                except Exception as e:
+                    print(f"❌ [WEBHOOK] Erro ao gerar Meet: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+                # 🔥 DÉBITO DA SESSÃO
                 wallet.balance -= appointment.session_price
 
                 debit = Ledger(
@@ -282,11 +314,35 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 )
                 db.add(debit)
 
-                print(f"✅ Appointment {appointment.id} confirmado, saldo final: R$ {wallet.balance}")
+                print(f"💰 Débito realizado: R$ {appointment.session_price}")
+                print(f"💰 Saldo final: R$ {wallet.balance}")
+                
+                # 🔥 ENVIAR E-MAILS DE CONFIRMAÇÃO COM LINK DO MEET
+                try:
+                    patient = db.get(User, appointment.patient_user_id)
+                    therapist = db.get(User, appointment.therapist_user_id)
+                    
+                    if patient and therapist:
+                        email_service.send_appointment_confirmation(
+                            appointment,
+                            patient.email,
+                            therapist.email,
+                            meet_url
+                        )
+                        print(f"📧 [WEBHOOK] E-mails de confirmação enviados")
+                    else:
+                        print(f"⚠️ [WEBHOOK] Paciente ou terapeuta não encontrados")
+                except Exception as e:
+                    print(f"⚠️ [WEBHOOK] Erro ao enviar e-mails: {e}")
+                    import traceback
+                    traceback.print_exc()
 
         db.commit()
 
-        print(f"💰 Saldo: {old_balance} → {wallet.balance}")
+        print(f"\n💰 Webhook concluído com sucesso!")
+        print(f"   Saldo: R$ {old_balance} → R$ {wallet.balance}")
+        if meet_url:
+            print(f"   Meet: {meet_url}")
 
     return {"status": "success"}
 
