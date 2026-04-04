@@ -114,6 +114,14 @@ class Appointment(Base):
         cascade="all, delete-orphan"
     )
 
+    # 🔥 NOVO: Relacionamento com comissão
+    commission = relationship(
+        "app.models.commission.Commission",
+        back_populates="appointment",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
     # ==========================
     # INDEXES
     # ==========================

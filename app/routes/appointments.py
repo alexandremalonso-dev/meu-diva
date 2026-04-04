@@ -139,6 +139,87 @@ def _build_appointment_dict(apt: Appointment, db: Session) -> dict:
 
 
 # ==========================
+# 🔥 FUNÇÃO PARA CALCULAR COMISSÃO BASEADA NO PLANO DO TERAPEUTA
+# ==========================
+def get_therapist_commission_rate(therapist_user_id: int, db: Session) -> float:
+    """Retorna a taxa de comissão baseada no plano ativo do terapeuta"""
+    from app.models.subscription import Subscription
+    
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)
+    ).scalar_one_or_none()
+    
+    if not therapist_profile:
+        return 20.0  # padrão
+    
+    subscription = db.execute(
+        select(Subscription).where(
+            Subscription.therapist_id == therapist_profile.id,
+            Subscription.status == "active"
+        )
+    ).scalar_one_or_none()
+    
+    if not subscription or subscription.plan == "essencial":
+        return 20.0
+    if subscription.plan == "profissional":
+        return 10.0
+    if subscription.plan == "premium":
+        return 3.0
+    
+    return 20.0
+
+
+def register_commission(
+    appointment_id: int,
+    therapist_user_id: int,
+    patient_user_id: int,
+    session_price: float,
+    commission_rate: float,
+    db: Session,
+    is_refund: bool = False,
+    refunded_from_id: int = None
+):
+    """Registra uma comissão (ou estorno de comissão) no banco"""
+    from app.models.commission import Commission
+    from app.models.patient_profile import PatientProfile
+    from app.models.therapist_profile import TherapistProfile
+    
+    # Buscar profile_ids
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)
+    ).scalar_one_or_none()
+    
+    patient_profile = db.execute(
+        select(PatientProfile).where(PatientProfile.user_id == patient_user_id)
+    ).scalar_one_or_none()
+    
+    if not therapist_profile or not patient_profile:
+        print(f"⚠️ Perfis não encontrados para comissão: therapist={therapist_user_id}, patient={patient_user_id}")
+        return
+    
+    commission_amount = (session_price * commission_rate) / 100
+    net_amount = session_price - commission_amount
+    
+    if is_refund:
+        commission_amount = -commission_amount
+        net_amount = -net_amount
+    
+    commission = Commission(
+        appointment_id=appointment_id,
+        therapist_id=therapist_profile.id,
+        patient_id=patient_profile.id,
+        session_price=session_price,
+        commission_rate=commission_rate,
+        commission_amount=commission_amount,
+        net_amount=net_amount,
+        is_refund=is_refund,
+        refunded_from_id=refunded_from_id
+    )
+    db.add(commission)
+    print(f"✅ Comissão registrada: taxa={commission_rate}%, valor={commission_amount}, líquido={net_amount}")
+
+
+# ==========================
 # ✅ GROQ LLM — GERAR EVOLUÇÃO CLÍNICA
 # ==========================
 async def _generate_clinical_draft(transcription: str, groq_api_key: str) -> str:
@@ -742,7 +823,7 @@ def update_appointment_status(
             if _utcnow() < _to_utc(appt.starts_at):
                 raise HTTPException(status_code=400, detail="Não é possível completar antes do início")
 
-        # DÉBITO
+        # 🔥 DÉBITO COM SUPORTE A SALDO PARCIAL E REGISTRO DE COMISSÃO
         if new_status == AppointmentStatus.confirmed:
             patient_profile = db.execute(select(PatientProfile).where(PatientProfile.user_id == appt.patient_user_id)).scalar_one_or_none()
             if not patient_profile:
@@ -750,22 +831,63 @@ def update_appointment_status(
             wallet = db.execute(select(Wallet).where(Wallet.patient_id == patient_profile.id)).scalar_one_or_none()
             if not wallet:
                 raise HTTPException(status_code=404, detail="Carteira do paciente não encontrada")
+            
             already_debited = db.execute(select(Ledger).where(
                 Ledger.appointment_id == appt.id,
                 Ledger.transaction_type == "session_debit"
             )).scalars().first()
+            
             if not already_debited:
-                if wallet.balance < appt.session_price:
-                    raise HTTPException(status_code=402, detail=f"Saldo insuficiente. Necessário: R$ {appt.session_price}")
-                old_balance = wallet.balance
-                wallet.balance -= appt.session_price
-                db.add(Ledger(
-                    wallet_id=wallet.id, appointment_id=appt.id,
-                    transaction_type="session_debit", amount=appt.session_price,
-                    balance_after=wallet.balance,
-                    description=f"Sessão com terapeuta ID {appt.therapist_user_id}"
-                ))
-                get_audit_service(db, current_user, request).log_session_debit(appt, wallet, old_balance, wallet.balance, appt.session_price)
+                session_price = float(appt.session_price)
+                current_balance = float(wallet.balance)
+                
+                if current_balance >= session_price:
+                    # Saldo suficiente: debita tudo da wallet
+                    amount_to_debit = session_price
+                    amount_to_pay_stripe = 0
+                else:
+                    # Saldo insuficiente: debita TODO o saldo da wallet
+                    amount_to_debit = current_balance
+                    amount_to_pay_stripe = session_price - current_balance
+                
+                if amount_to_debit > 0:
+                    old_balance = wallet.balance
+                    wallet.balance -= amount_to_debit
+                    db.add(Ledger(
+                        wallet_id=wallet.id,
+                        appointment_id=appt.id,
+                        transaction_type="session_debit",
+                        amount=amount_to_debit,
+                        balance_after=wallet.balance,
+                        description=f"Sessão com terapeuta ID {appt.therapist_user_id} - Débito de R$ {amount_to_debit}"
+                    ))
+                    get_audit_service(db, current_user, request).log_session_debit(
+                        appt, wallet, old_balance, wallet.balance, amount_to_debit
+                    )
+                    print(f"💰 Débito de R$ {amount_to_debit} da wallet do paciente {appt.patient_user_id}")
+                
+                # 🔥 Registrar comissão baseada no plano do terapeuta
+                commission_rate = get_therapist_commission_rate(appt.therapist_user_id, db)
+                register_commission(
+                    appointment_id=appt.id,
+                    therapist_user_id=appt.therapist_user_id,
+                    patient_user_id=appt.patient_user_id,
+                    session_price=session_price,
+                    commission_rate=commission_rate,
+                    db=db
+                )
+                
+                # Se precisar pagar Stripe, retorna informação para o frontend
+                if amount_to_pay_stripe > 0:
+                    return {
+                        "id": appt.id,
+                        "needs_payment": True,
+                        "amount_to_pay": amount_to_pay_stripe,
+                        "already_debited": amount_to_debit,
+                        "wallet_balance": wallet.balance,
+                        "session_price": session_price,
+                        "status": appt.status.value
+                    }
 
         # ESTORNO
         is_patient_cancel = is_patient and new_status == AppointmentStatus.cancelled_by_patient
@@ -793,6 +915,20 @@ def update_appointment_status(
                         ))
                         reason = "Cancelamento com 24h+" if is_patient_cancel else "Cancelamento por terapeuta"
                         get_audit_service(db, current_user, request).log_session_refund(appt, w, old_bal, w.balance, debit_tx.amount, reason)
+                        
+                        # 🔥 Registrar estorno da comissão
+                        commission_rate = get_therapist_commission_rate(appt.therapist_user_id, db)
+                        register_commission(
+                            appointment_id=appt.id,
+                            therapist_user_id=appt.therapist_user_id,
+                            patient_user_id=appt.patient_user_id,
+                            session_price=float(appt.session_price),
+                            commission_rate=commission_rate,
+                            db=db,
+                            is_refund=True,
+                            refunded_from_id=appt.id
+                        )
+                        print(f"💰 Estorno de comissão registrado para sessão {appt.id}")
 
         appt.status = new_status
         db.add(AppointmentEvent(

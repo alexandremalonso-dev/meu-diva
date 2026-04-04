@@ -371,7 +371,23 @@ class TherapistProfile(Base):
     )
 
     # ==========================
-    # RELACIONAMENTOS
+    # 🔥 NOVOS RELACIONAMENTOS - ASSINATURA E COMISSÃO
+    # ==========================
+    subscription = relationship(
+        "app.models.subscription.Subscription",
+        back_populates="therapist",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+    
+    commissions = relationship(
+        "app.models.commission.Commission",
+        back_populates="therapist",
+        cascade="all, delete-orphan"
+    )
+
+    # ==========================
+    # RELACIONAMENTOS EXISTENTES
     # ==========================
     user = relationship(
         "app.models.user.User",

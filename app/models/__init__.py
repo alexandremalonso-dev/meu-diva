@@ -13,3 +13,7 @@ from app.models.patient_security import PatientSecurity
 from app.models.patient_billing import PatientBilling
 from app.models.patient_subscription import PatientSubscription
 from app.models.medical_record import MedicalRecord
+
+# 🔥 NOVOS MODELOS - ASSINATURA E COMISSÃO
+from app.models.subscription import Subscription
+from app.models.commission import Commission
