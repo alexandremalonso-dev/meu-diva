@@ -108,9 +108,13 @@ def get_patient_profile(
         # 🔥 SE NÃO EXISTIR, CRIAR AUTOMATICAMENTE
         if not profile:
             print("👤 Perfil não encontrado, criando perfil padrão...")
+            
+            # Buscar nome da tabela users
+            user_full_name = current_user.full_name
+            
             profile = PatientProfile(
                 user_id=current_user.id,
-                full_name=current_user.full_name or "",
+                full_name=user_full_name or "",
                 email=current_user.email,
                 timezone="America/Sao_Paulo",
                 preferred_language="pt-BR"
@@ -118,6 +122,17 @@ def get_patient_profile(
             db.add(profile)
             db.commit()
             db.refresh(profile)
+            
+            # 🔥 Sincronizar: se patient_profile tem nome e users não, atualizar users
+            if profile.full_name and not current_user.full_name:
+                db.execute(
+                    update(User)
+                    .where(User.id == current_user.id)
+                    .values(full_name=profile.full_name)
+                )
+                db.commit()
+                print(f"✅ Nome sincronizado de patient_profile para users: {profile.full_name}")
+            
             print(f"✅ Perfil padrão criado: ID {profile.id}")
         
         # Buscar endereços
@@ -186,9 +201,16 @@ def update_patient_profile(
         if 'cpf' in update_data and update_data['cpf'] == '':
             update_data['cpf'] = None
         
+        # Verificar se está atualizando o nome
+        name_updated = False
+        new_name = None
+        
         for field, value in update_data.items():
             if hasattr(profile, field):
                 setattr(profile, field, value)
+                if field == 'full_name' and value:
+                    name_updated = True
+                    new_name = value
             else:
                 print(f"⚠️ Campo ignorado: {field} não existe no modelo")
         
@@ -196,6 +218,16 @@ def update_patient_profile(
         
         db.commit()
         db.refresh(profile)
+        
+        # 🔥 Sincronizar nome com a tabela users se foi atualizado
+        if name_updated and new_name:
+            db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(full_name=new_name)
+            )
+            db.commit()
+            print(f"✅ Nome sincronizado com tabela users: {new_name}")
         
         # Buscar relacionamentos para retornar
         addresses = db.execute(
@@ -285,7 +317,7 @@ async def upload_patient_photo(
         raise HTTPException(status_code=500, detail=f"Erro interno ao fazer upload: {str(e)}")
 
 # ============================================
-# COMPLAINT ENDPOINT (QUEIXA DO PACIENTE) - CORRIGIDO
+# COMPLAINT ENDPOINT (QUEIXA DO PACIENTE)
 # ============================================
 
 from pydantic import BaseModel
@@ -296,7 +328,7 @@ class ComplaintRequest(BaseModel):
 @router.post("/sessions/{appointment_id}/complaint")
 def save_patient_complaint(
     appointment_id: int,
-    complaint_data: ComplaintRequest,  # 🔥 USAR PYDANTIC MODEL
+    complaint_data: ComplaintRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.patient))
 ):
@@ -364,7 +396,7 @@ def save_patient_complaint(
         
         print(f"✅ Queixa salva com sucesso! Total de queixas: {len(medical_record.patient_reasons)}")
         
-        # 🔥 Retornar resposta completa
+        # Retornar resposta completa
         return {
             "success": True,
             "message": "Queixa registrada com sucesso",

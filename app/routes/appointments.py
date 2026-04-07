@@ -26,8 +26,13 @@ from app.schemas.medical_record import MedicalRecordCreate, MedicalRecordOut
 import os
 
 from app.services.email_service import email_service
+from app.services.notification_service import NotificationService
 from app.core.google_meet import google_meet_service
 from app.services.receipt_service import receipt_service
+
+# 🔥 WebSocket events
+from app.core.events import EventType, create_event
+from app.routes.ws_events import emit_event
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -70,7 +75,7 @@ def _calculate_age(birth_date) -> int:
     return age
 
 
-def _send_confirmation_emails_and_meet(appt: Appointment, db: Session):
+def _send_confirmation_emails_and_meet_and_notifications(appt: Appointment, db: Session):
     try:
         patient = db.get(User, appt.patient_user_id)
         therapist = db.get(User, appt.therapist_user_id)
@@ -85,7 +90,14 @@ def _send_confirmation_emails_and_meet(appt: Appointment, db: Session):
                     db.commit()
         except Exception as e:
             print(f"⚠️ Erro ao gerar Meet: {e}")
+        
+        # Enviar e-mails
         email_service.send_appointment_confirmation(appt, patient.email, therapist.email, meet_url)
+        
+        # 🔥 Criar notificações no dashboard
+        notification_service = NotificationService(db)
+        notification_service.notify_appointment_confirmed(appt, patient, therapist, meet_url)
+        
     except Exception as e:
         print(f"⚠️ Erro ao processar confirmação da sessão {appt.id}: {e}")
 
@@ -139,95 +151,9 @@ def _build_appointment_dict(apt: Appointment, db: Session) -> dict:
 
 
 # ==========================
-# 🔥 FUNÇÃO PARA CALCULAR COMISSÃO BASEADA NO PLANO DO TERAPEUTA
-# ==========================
-def get_therapist_commission_rate(therapist_user_id: int, db: Session) -> float:
-    """Retorna a taxa de comissão baseada no plano ativo do terapeuta"""
-    from app.models.subscription import Subscription
-    
-    therapist_profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)
-    ).scalar_one_or_none()
-    
-    if not therapist_profile:
-        return 20.0  # padrão
-    
-    subscription = db.execute(
-        select(Subscription).where(
-            Subscription.therapist_id == therapist_profile.id,
-            Subscription.status == "active"
-        )
-    ).scalar_one_or_none()
-    
-    if not subscription or subscription.plan == "essencial":
-        return 20.0
-    if subscription.plan == "profissional":
-        return 10.0
-    if subscription.plan == "premium":
-        return 3.0
-    
-    return 20.0
-
-
-def register_commission(
-    appointment_id: int,
-    therapist_user_id: int,
-    patient_user_id: int,
-    session_price: float,
-    commission_rate: float,
-    db: Session,
-    is_refund: bool = False,
-    refunded_from_id: int = None
-):
-    """Registra uma comissão (ou estorno de comissão) no banco"""
-    from app.models.commission import Commission
-    from app.models.patient_profile import PatientProfile
-    from app.models.therapist_profile import TherapistProfile
-    
-    # Buscar profile_ids
-    therapist_profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)
-    ).scalar_one_or_none()
-    
-    patient_profile = db.execute(
-        select(PatientProfile).where(PatientProfile.user_id == patient_user_id)
-    ).scalar_one_or_none()
-    
-    if not therapist_profile or not patient_profile:
-        print(f"⚠️ Perfis não encontrados para comissão: therapist={therapist_user_id}, patient={patient_user_id}")
-        return
-    
-    commission_amount = (session_price * commission_rate) / 100
-    net_amount = session_price - commission_amount
-    
-    if is_refund:
-        commission_amount = -commission_amount
-        net_amount = -net_amount
-    
-    commission = Commission(
-        appointment_id=appointment_id,
-        therapist_id=therapist_profile.id,
-        patient_id=patient_profile.id,
-        session_price=session_price,
-        commission_rate=commission_rate,
-        commission_amount=commission_amount,
-        net_amount=net_amount,
-        is_refund=is_refund,
-        refunded_from_id=refunded_from_id
-    )
-    db.add(commission)
-    print(f"✅ Comissão registrada: taxa={commission_rate}%, valor={commission_amount}, líquido={net_amount}")
-
-
-# ==========================
 # ✅ GROQ LLM — GERAR EVOLUÇÃO CLÍNICA
 # ==========================
 async def _generate_clinical_draft(transcription: str, groq_api_key: str) -> str:
-    """
-    Usa Groq LLM (llama3-8b-8192) para transformar a transcrição bruta
-    em evolução clínica estruturada no formato SOAP simplificado.
-    Fallback para texto formatado se o LLM falhar.
-    """
     import httpx
 
     prompt = f"""Você é um assistente especializado em psicologia clínica.
@@ -257,16 +183,8 @@ Regras importantes:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {groq_api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "llama3-8b-8192",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 800,
-                    "temperature": 0.3,
-                }
+                headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
+                json={"model": "llama3-8b-8192", "messages": [{"role": "user", "content": prompt}], "max_tokens": 800, "temperature": 0.3}
             )
             if response.status_code == 200:
                 draft = response.json()["choices"][0]["message"]["content"]
@@ -277,14 +195,8 @@ Regras importantes:
     except Exception as e:
         print(f"⚠️ Groq LLM erro: {e}")
 
-    # Fallback — retorna transcrição formatada sem LLM
     print("⚠️ Usando fallback para draft clínico")
-    return f"""**Evolução da sessão:**
-
-{transcription}
-
----
-*📝 Rascunho gerado por transcrição direta — revise antes de finalizar.*"""
+    return f"""**Evolução da sessão:**\n\n{transcription}\n\n---\n*📝 Rascunho gerado por transcrição direta — revise antes de finalizar.*"""
 
 
 # ==========================
@@ -394,6 +306,44 @@ def create_appointment(
         ))
         db.commit()
         db.refresh(appt)
+
+        # 🔥 Emitir evento de WebSocket para criação de sessão
+        try:
+            patient = db.get(User, appt.patient_user_id)
+            therapist = db.get(User, appt.therapist_user_id)
+            
+            if therapist:
+                event = create_event(
+                    event_type=EventType.APPOINTMENT_CREATED,
+                    payload={
+                        "appointment_id": appt.id,
+                        "patient_id": appt.patient_user_id,
+                        "patient_name": patient.full_name if patient else None,
+                        "starts_at": appt.starts_at.isoformat(),
+                        "status": appt.status.value
+                    },
+                    target_user_ids=[appt.therapist_user_id]
+                )
+                emit_event(event)
+                print(f"🔔 Evento emitido: APPOINTMENT_CREATED para terapeuta {appt.therapist_user_id}")
+                
+            if patient and current_user.role == UserRole.therapist:
+                event = create_event(
+                    event_type=EventType.APPOINTMENT_CREATED,
+                    payload={
+                        "appointment_id": appt.id,
+                        "therapist_id": appt.therapist_user_id,
+                        "therapist_name": therapist.full_name if therapist else None,
+                        "starts_at": appt.starts_at.isoformat(),
+                        "status": appt.status.value
+                    },
+                    target_user_ids=[appt.patient_user_id]
+                )
+                emit_event(event)
+                print(f"🔔 Evento emitido: APPOINTMENT_CREATED para paciente {appt.patient_user_id}")
+                
+        except Exception as e:
+            print(f"⚠️ Erro ao emitir evento WebSocket: {e}")
 
         return {
             "id": appt.id, "patient_user_id": appt.patient_user_id, "therapist_user_id": appt.therapist_user_id,
@@ -521,7 +471,60 @@ def reschedule_appointment(
         ))
         db.commit()
         db.refresh(new_appt)
-        _send_confirmation_emails_and_meet(new_appt, db)
+        
+        # 🔥 Notificação de reagendamento
+        try:
+            patient = db.get(User, new_appt.patient_user_id)
+            therapist = db.get(User, new_appt.therapist_user_id)
+            if patient and therapist:
+                notification_service = NotificationService(db)
+                meet_url = new_appt.video_call_url
+                notification_service.notify_appointment_rescheduled(new_appt, patient, therapist, meet_url)
+                print(f"🔔 Notificação de reagendamento enviada")
+        except Exception as e:
+            print(f"⚠️ Erro ao enviar notificação de reagendamento: {e}")
+        
+        # 🔥 Emitir evento de WebSocket para reagendamento
+        try:
+            patient = db.get(User, new_appt.patient_user_id)
+            therapist = db.get(User, new_appt.therapist_user_id)
+            
+            if patient:
+                event = create_event(
+                    event_type=EventType.APPOINTMENT_RESCHEDULED,
+                    payload={
+                        "appointment_id": new_appt.id,
+                        "original_id": original.id,
+                        "therapist_id": new_appt.therapist_user_id,
+                        "therapist_name": therapist.full_name if therapist else None,
+                        "new_starts_at": new_appt.starts_at.isoformat(),
+                        "old_starts_at": original.starts_at.isoformat()
+                    },
+                    target_user_ids=[new_appt.patient_user_id]
+                )
+                emit_event(event)
+                print(f"🔔 Evento emitido: APPOINTMENT_RESCHEDULED para paciente {new_appt.patient_user_id}")
+                
+            if therapist:
+                event = create_event(
+                    event_type=EventType.APPOINTMENT_RESCHEDULED,
+                    payload={
+                        "appointment_id": new_appt.id,
+                        "original_id": original.id,
+                        "patient_id": new_appt.patient_user_id,
+                        "patient_name": patient.full_name if patient else None,
+                        "new_starts_at": new_appt.starts_at.isoformat(),
+                        "old_starts_at": original.starts_at.isoformat()
+                    },
+                    target_user_ids=[new_appt.therapist_user_id]
+                )
+                emit_event(event)
+                print(f"🔔 Evento emitido: APPOINTMENT_RESCHEDULED para terapeuta {new_appt.therapist_user_id}")
+                
+        except Exception as e:
+            print(f"⚠️ Erro ao emitir evento WebSocket: {e}")
+        
+        _send_confirmation_emails_and_meet_and_notifications(new_appt, db)
         return new_appt
 
     except HTTPException:
@@ -542,16 +545,13 @@ def list_my_appointments_with_details(
 ):
     try:
         print(f"\n📋 Listando appointments para usuário: {current_user.id}, role: {current_user.role}")
-
         query = select(Appointment).where(
             or_(Appointment.patient_user_id == current_user.id, Appointment.therapist_user_id == current_user.id)
         ).order_by(Appointment.starts_at.desc())
-
         rows = db.execute(query).scalars().all()
         result = [_build_appointment_dict(apt, db) for apt in rows]
         print(f"✅ Retornando {len(result)} appointments")
         return result
-
     except Exception as e:
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro ao listar sessões: {str(e)}")
@@ -619,6 +619,42 @@ def complete_appointment(
     appointment.status = AppointmentStatus.completed
     db.commit()
     db.refresh(medical_record)
+    
+    # 🔥 Emitir evento de WebSocket para atualizar prontuários pendentes
+    try:
+        therapist = db.get(User, appointment.therapist_user_id)
+        patient = db.get(User, appointment.patient_user_id)
+        
+        if therapist:
+            event = create_event(
+                event_type=EventType.MEDICAL_RECORD_CREATED,
+                payload={
+                    "appointment_id": appointment.id,
+                    "therapist_id": appointment.therapist_user_id,
+                    "patient_id": appointment.patient_user_id,
+                    "status": "completed"
+                },
+                target_user_ids=[appointment.therapist_user_id]
+            )
+            emit_event(event)
+            print(f"🔔 Evento emitido: MEDICAL_RECORD_CREATED para terapeuta {appointment.therapist_user_id}")
+            
+        if patient:
+            event = create_event(
+                event_type=EventType.APPOINTMENT_COMPLETED,
+                payload={
+                    "appointment_id": appointment.id,
+                    "therapist_id": appointment.therapist_user_id,
+                    "patient_id": appointment.patient_user_id
+                },
+                target_user_ids=[appointment.patient_user_id]
+            )
+            emit_event(event)
+            print(f"🔔 Evento emitido: APPOINTMENT_COMPLETED para paciente {appointment.patient_user_id}")
+            
+    except Exception as e:
+        print(f"⚠️ Erro ao emitir evento WebSocket: {e}")
+    
     return medical_record
 
 
@@ -720,6 +756,17 @@ def send_receipt_by_email(
         session_id=str(appointment.id),
         receipt_html=html_content
     )
+    
+    # 🔥 Notificação de recibo disponível
+    try:
+        notification_service = NotificationService(db)
+        notification_service.notify_receipt_available(
+            patient_user, appointment, therapist_profile.full_name or therapist_profile.user.full_name, float(appointment.session_price)
+        )
+        print(f"🔔 Notificação de recibo disponível enviada para paciente {patient_user.id}")
+    except Exception as e:
+        print(f"⚠️ Erro ao enviar notificação de recibo: {e}")
+    
     return {"message": "Recibo enviado por e-mail com sucesso"}
 
 
@@ -823,7 +870,7 @@ def update_appointment_status(
             if _utcnow() < _to_utc(appt.starts_at):
                 raise HTTPException(status_code=400, detail="Não é possível completar antes do início")
 
-        # 🔥 DÉBITO COM SUPORTE A SALDO PARCIAL E REGISTRO DE COMISSÃO
+        # DÉBITO
         if new_status == AppointmentStatus.confirmed:
             patient_profile = db.execute(select(PatientProfile).where(PatientProfile.user_id == appt.patient_user_id)).scalar_one_or_none()
             if not patient_profile:
@@ -831,63 +878,22 @@ def update_appointment_status(
             wallet = db.execute(select(Wallet).where(Wallet.patient_id == patient_profile.id)).scalar_one_or_none()
             if not wallet:
                 raise HTTPException(status_code=404, detail="Carteira do paciente não encontrada")
-            
             already_debited = db.execute(select(Ledger).where(
                 Ledger.appointment_id == appt.id,
                 Ledger.transaction_type == "session_debit"
             )).scalars().first()
-            
             if not already_debited:
-                session_price = float(appt.session_price)
-                current_balance = float(wallet.balance)
-                
-                if current_balance >= session_price:
-                    # Saldo suficiente: debita tudo da wallet
-                    amount_to_debit = session_price
-                    amount_to_pay_stripe = 0
-                else:
-                    # Saldo insuficiente: debita TODO o saldo da wallet
-                    amount_to_debit = current_balance
-                    amount_to_pay_stripe = session_price - current_balance
-                
-                if amount_to_debit > 0:
-                    old_balance = wallet.balance
-                    wallet.balance -= amount_to_debit
-                    db.add(Ledger(
-                        wallet_id=wallet.id,
-                        appointment_id=appt.id,
-                        transaction_type="session_debit",
-                        amount=amount_to_debit,
-                        balance_after=wallet.balance,
-                        description=f"Sessão com terapeuta ID {appt.therapist_user_id} - Débito de R$ {amount_to_debit}"
-                    ))
-                    get_audit_service(db, current_user, request).log_session_debit(
-                        appt, wallet, old_balance, wallet.balance, amount_to_debit
-                    )
-                    print(f"💰 Débito de R$ {amount_to_debit} da wallet do paciente {appt.patient_user_id}")
-                
-                # 🔥 Registrar comissão baseada no plano do terapeuta
-                commission_rate = get_therapist_commission_rate(appt.therapist_user_id, db)
-                register_commission(
-                    appointment_id=appt.id,
-                    therapist_user_id=appt.therapist_user_id,
-                    patient_user_id=appt.patient_user_id,
-                    session_price=session_price,
-                    commission_rate=commission_rate,
-                    db=db
-                )
-                
-                # Se precisar pagar Stripe, retorna informação para o frontend
-                if amount_to_pay_stripe > 0:
-                    return {
-                        "id": appt.id,
-                        "needs_payment": True,
-                        "amount_to_pay": amount_to_pay_stripe,
-                        "already_debited": amount_to_debit,
-                        "wallet_balance": wallet.balance,
-                        "session_price": session_price,
-                        "status": appt.status.value
-                    }
+                if wallet.balance < appt.session_price:
+                    raise HTTPException(status_code=402, detail=f"Saldo insuficiente. Necessário: R$ {appt.session_price}")
+                old_balance = wallet.balance
+                wallet.balance -= appt.session_price
+                db.add(Ledger(
+                    wallet_id=wallet.id, appointment_id=appt.id,
+                    transaction_type="session_debit", amount=appt.session_price,
+                    balance_after=wallet.balance,
+                    description=f"Sessão com terapeuta ID {appt.therapist_user_id}"
+                ))
+                get_audit_service(db, current_user, request).log_session_debit(appt, wallet, old_balance, wallet.balance, appt.session_price)
 
         # ESTORNO
         is_patient_cancel = is_patient and new_status == AppointmentStatus.cancelled_by_patient
@@ -915,20 +921,6 @@ def update_appointment_status(
                         ))
                         reason = "Cancelamento com 24h+" if is_patient_cancel else "Cancelamento por terapeuta"
                         get_audit_service(db, current_user, request).log_session_refund(appt, w, old_bal, w.balance, debit_tx.amount, reason)
-                        
-                        # 🔥 Registrar estorno da comissão
-                        commission_rate = get_therapist_commission_rate(appt.therapist_user_id, db)
-                        register_commission(
-                            appointment_id=appt.id,
-                            therapist_user_id=appt.therapist_user_id,
-                            patient_user_id=appt.patient_user_id,
-                            session_price=float(appt.session_price),
-                            commission_rate=commission_rate,
-                            db=db,
-                            is_refund=True,
-                            refunded_from_id=appt.id
-                        )
-                        print(f"💰 Estorno de comissão registrado para sessão {appt.id}")
 
         appt.status = new_status
         db.add(AppointmentEvent(
@@ -940,7 +932,7 @@ def update_appointment_status(
         db.commit()
         db.refresh(appt)
 
-        # MEET + EMAIL após confirmação
+        # ✅ MEET + EMAIL + NOTIFICAÇÕES após confirmação
         if new_status == AppointmentStatus.confirmed:
             if not appt.video_call_url:
                 try:
@@ -949,15 +941,139 @@ def update_appointment_status(
                         if meet_url:
                             appt.video_call_url = meet_url
                             db.commit()
+                            print(f"✅ Meet gerado: {meet_url}")
+                        else:
+                            print("⚠️ create_meet_link retornou None")
+                    else:
+                        print("⚠️ google_meet_service é None — verifique token.json e credentials.json")
                 except Exception as e:
                     print(f"⚠️ Erro ao gerar Meet: {e}")
+                    import traceback; traceback.print_exc()
             try:
                 patient = db.get(User, appt.patient_user_id)
                 therapist = db.get(User, appt.therapist_user_id)
                 if patient and therapist:
                     email_service.send_appointment_confirmation(appt, patient.email, therapist.email, appt.video_call_url)
+                    notification_service = NotificationService(db)
+                    notification_service.notify_appointment_confirmed(appt, patient, therapist, appt.video_call_url)
             except Exception as e:
-                print(f"⚠️ Erro ao enviar e-mails: {e}")
+                print(f"⚠️ Erro ao enviar e-mails/notificações: {e}")
+            
+            # 🔥 Emitir evento de confirmação de sessão
+            try:
+                patient = db.get(User, appt.patient_user_id)
+                therapist = db.get(User, appt.therapist_user_id)
+                
+                if patient:
+                    event = create_event(
+                        event_type=EventType.APPOINTMENT_CONFIRMED,
+                        payload={
+                            "appointment_id": appt.id,
+                            "therapist_id": appt.therapist_user_id,
+                            "therapist_name": therapist.full_name if therapist else None,
+                            "starts_at": appt.starts_at.isoformat(),
+                            "meet_url": appt.video_call_url
+                        },
+                        target_user_ids=[appt.patient_user_id]
+                    )
+                    emit_event(event)
+                    print(f"🔔 Evento emitido: APPOINTMENT_CONFIRMED para paciente {appt.patient_user_id}")
+                    
+                if therapist:
+                    event = create_event(
+                        event_type=EventType.APPOINTMENT_CONFIRMED,
+                        payload={
+                            "appointment_id": appt.id,
+                            "patient_id": appt.patient_user_id,
+                            "patient_name": patient.full_name if patient else None,
+                            "starts_at": appt.starts_at.isoformat()
+                        },
+                        target_user_ids=[appt.therapist_user_id]
+                    )
+                    emit_event(event)
+                    print(f"🔔 Evento emitido: APPOINTMENT_CONFIRMED para terapeuta {appt.therapist_user_id}")
+                    
+            except Exception as e:
+                print(f"⚠️ Erro ao emitir evento WebSocket: {e}")
+        
+        # 🔥 Notificação de cancelamento
+        if new_status in (AppointmentStatus.cancelled_by_patient, AppointmentStatus.cancelled_by_therapist):
+            try:
+                patient = db.get(User, appt.patient_user_id)
+                therapist = db.get(User, appt.therapist_user_id)
+                if patient and therapist:
+                    notification_service = NotificationService(db)
+                    cancelled_by = "paciente" if new_status == AppointmentStatus.cancelled_by_patient else "terapeuta"
+                    notification_service.notify_appointment_cancelled(appt, patient, therapist, cancelled_by)
+            except Exception as e:
+                print(f"⚠️ Erro ao enviar notificação de cancelamento: {e}")
+            
+            # 🔥 Emitir evento de cancelamento de sessão
+            try:
+                patient = db.get(User, appt.patient_user_id)
+                therapist = db.get(User, appt.therapist_user_id)
+                
+                if patient:
+                    event = create_event(
+                        event_type=EventType.APPOINTMENT_CANCELLED,
+                        payload={
+                            "appointment_id": appt.id,
+                            "therapist_id": appt.therapist_user_id,
+                            "therapist_name": therapist.full_name if therapist else None,
+                            "starts_at": appt.starts_at.isoformat(),
+                            "cancelled_by": "paciente" if new_status == AppointmentStatus.cancelled_by_patient else "terapeuta"
+                        },
+                        target_user_ids=[appt.patient_user_id]
+                    )
+                    emit_event(event)
+                    print(f"🔔 Evento emitido: APPOINTMENT_CANCELLED para paciente {appt.patient_user_id}")
+                    
+                if therapist:
+                    event = create_event(
+                        event_type=EventType.APPOINTMENT_CANCELLED,
+                        payload={
+                            "appointment_id": appt.id,
+                            "patient_id": appt.patient_user_id,
+                            "patient_name": patient.full_name if patient else None,
+                            "starts_at": appt.starts_at.isoformat(),
+                            "cancelled_by": "paciente" if new_status == AppointmentStatus.cancelled_by_patient else "terapeuta"
+                        },
+                        target_user_ids=[appt.therapist_user_id]
+                    )
+                    emit_event(event)
+                    print(f"🔔 Evento emitido: APPOINTMENT_CANCELLED para terapeuta {appt.therapist_user_id}")
+                    
+            except Exception as e:
+                print(f"⚠️ Erro ao emitir evento WebSocket: {e}")
+
+        # 🔥 Notificação de prontuário pendente (quando sessão é completada)
+        if new_status == AppointmentStatus.completed:
+            try:
+                patient = db.get(User, appt.patient_user_id)
+                therapist = db.get(User, appt.therapist_user_id)
+                if patient and therapist:
+                    notification_service = NotificationService(db)
+                    notification_service.notify_pending_medical_record(appt, therapist, patient)
+                    print(f"🔔 Notificação de prontuário pendente enviada para terapeuta {therapist.id}")
+            except Exception as e:
+                print(f"⚠️ Erro ao enviar notificação de prontuário pendente: {e}")
+
+        # ✅ Google Calendar sync — não bloqueia o response, falhas são silenciosas
+        try:
+            from app.routes.google_calendar import sync_appointment_to_calendar
+            import asyncio
+            if new_status == AppointmentStatus.confirmed:
+                asyncio.create_task(sync_appointment_to_calendar(appt, "upsert", db))
+            elif new_status in (
+                AppointmentStatus.cancelled_by_patient,
+                AppointmentStatus.cancelled_by_therapist,
+                AppointmentStatus.cancelled_by_admin,
+            ):
+                asyncio.create_task(sync_appointment_to_calendar(appt, "cancel", db))
+            elif new_status == AppointmentStatus.rescheduled:
+                asyncio.create_task(sync_appointment_to_calendar(appt, "upsert", db))
+        except Exception as _gcal_err:
+            print(f"⚠️ GCal task ignorada: {_gcal_err}")
 
         return appt
 
@@ -970,7 +1086,7 @@ def update_appointment_status(
 
 
 # ==========================
-# 🎙️ TRANSCREVER ÁUDIO COM GROQ WHISPER + LLM
+# 🎙️ TRANSCREVER ÁUDIO COM GROQ WHISPER
 # ==========================
 @router.post("/{appointment_id}/transcribe")
 async def transcribe_audio(
@@ -979,26 +1095,17 @@ async def transcribe_audio(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist])),
 ):
-    """
-    Recebe chunk de áudio (webm, ~12s), transcreve com Groq Whisper
-    e retorna o texto transcrito. O frontend acumula os chunks no textarea.
-
-    Para o último chunk, opcionalmente gera um rascunho clínico via LLM.
-    """
     import httpx
 
-    # 1. Validar sessão
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
     if appointment.therapist_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Apenas o terapeuta da sessão pode transcrever")
 
-    # 2. Ler e validar arquivo
     try:
         audio_bytes = await audio_file.read()
         if len(audio_bytes) < 500:
-            # Chunk muito pequeno (silêncio) — ignora sem erro
             return {"success": True, "transcription": "", "message": "Chunk ignorado (silêncio)"}
         if len(audio_bytes) > 25 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="Áudio muito grande. Máximo 25MB por chunk")
@@ -1007,12 +1114,10 @@ async def transcribe_audio(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao ler áudio: {str(e)}")
 
-    # 3. Chave da API
     GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
     if not GROQ_API_KEY:
         raise HTTPException(status_code=503, detail="GROQ_API_KEY não configurada")
 
-    # 4. Transcrever com Groq Whisper
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
@@ -1025,34 +1130,23 @@ async def transcribe_audio(
                     "language": (None, "pt"),
                 }
             )
-
             if response.status_code != 200:
                 print(f"❌ Groq Whisper erro {response.status_code}: {response.text[:300]}")
                 raise HTTPException(status_code=502, detail="Erro na transcrição — tente novamente")
-
-            result = response.json()
-            transcription = result.get("text", "").strip()
-            print(f"✅ Chunk transcrito: {len(transcription)} chars — '{transcription[:80]}...'")
-
+            transcription = response.json().get("text", "").strip()
+            print(f"✅ Chunk transcrito: {len(transcription)} chars")
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Timeout na transcrição — chunk muito longo")
+        raise HTTPException(status_code=504, detail="Timeout na transcrição")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Groq Whisper exceção: {e}")
         raise HTTPException(status_code=502, detail=f"Erro na IA: {str(e)}")
 
-    # 5. Retorna transcrição do chunk — frontend acumula no textarea
-    return {
-        "success": True,
-        "transcription": transcription,
-        "message": "Chunk transcrito com sucesso"
-    }
+    return {"success": True, "transcription": transcription, "message": "Chunk transcrito com sucesso"}
 
 
 # ==========================
 # 🤖 GERAR RASCUNHO CLÍNICO COM LLM
-# Endpoint separado — chamado pelo frontend ao clicar "Gerar rascunho com IA"
 # ==========================
 @router.post("/{appointment_id}/generate-draft")
 async def generate_clinical_draft(
@@ -1061,10 +1155,6 @@ async def generate_clinical_draft(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist])),
 ):
-    """
-    Recebe o texto acumulado (transcrição completa) e usa Groq LLM
-    para gerar uma evolução clínica estruturada.
-    """
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
@@ -1081,9 +1171,4 @@ async def generate_clinical_draft(
         raise HTTPException(status_code=503, detail="GROQ_API_KEY não configurada")
 
     draft = await _generate_clinical_draft(transcription, GROQ_API_KEY)
-
-    return {
-        "success": True,
-        "draft": draft,
-        "message": "Rascunho clínico gerado com sucesso"
-    }
+    return {"success": True, "draft": draft, "message": "Rascunho clínico gerado com sucesso"}

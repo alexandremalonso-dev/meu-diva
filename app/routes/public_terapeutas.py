@@ -96,6 +96,7 @@ def listar_terapeutas_publicos(
     if duracao_50min:
         query = query.where(TherapistProfile.session_duration_50min == True)
 
+    # Ordenação inicial (featured e rating)
     query = query.order_by(
         TherapistProfile.featured.desc(),
         TherapistProfile.rating.desc(),
@@ -105,8 +106,18 @@ def listar_terapeutas_publicos(
     offset = (page - 1) * limit
     terapeutas = db.execute(query.offset(offset).limit(limit)).scalars().all()
 
-    print(f"✅ Encontrados {len(terapeutas)} terapeutas")
-    return terapeutas
+    # 🔥 Ordenação por prioridade de plano (Premium > Profissional > Essencial)
+    from app.services.plan_priority import get_therapist_plan, PLAN_PRIORITY
+    
+    def get_plan_priority(therapist):
+        plan = get_therapist_plan(therapist.user_id, db)
+        return PLAN_PRIORITY.get(plan, 1)
+    
+    # Ordenar terapeutas por prioridade do plano (maior prioridade primeiro)
+    terapeutas_ordenados = sorted(terapeutas, key=get_plan_priority, reverse=True)
+
+    print(f"✅ Encontrados {len(terapeutas_ordenados)} terapeutas")
+    return terapeutas_ordenados
 
 
 # ==========================

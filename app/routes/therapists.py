@@ -22,6 +22,7 @@ from app.models.therapist_availability import TherapistAvailability
 from app.models.appointment import Appointment
 from app.models.patient_profile import PatientProfile
 from app.models.patient_address import PatientAddress
+from app.models.therapist_address import TherapistAddress
 
 from app.schemas.therapist import (
     TherapistProfileUpsert,
@@ -88,7 +89,6 @@ def get_patient_data_by_appointment(
     """
     print(f"\n📋 Buscando dados do paciente para sessão {appointment_id}")
     
-    # Buscar a sessão
     appointment = db.execute(
         select(Appointment).where(Appointment.id == appointment_id)
     ).scalar_one_or_none()
@@ -96,11 +96,9 @@ def get_patient_data_by_appointment(
     if not appointment:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
     
-    # Verificar se o terapeuta logado é o terapeuta da sessão
     if appointment.therapist_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Acesso negado. Esta sessão não pertence a você.")
     
-    # Buscar dados do paciente
     patient = db.execute(
         select(User).where(User.id == appointment.patient_user_id)
     ).scalar_one_or_none()
@@ -108,12 +106,10 @@ def get_patient_data_by_appointment(
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente não encontrado")
     
-    # Buscar perfil do paciente
     patient_profile = db.execute(
         select(PatientProfile).where(PatientProfile.user_id == patient.id)
     ).scalar_one_or_none()
     
-    # Buscar endereço do paciente
     address = db.execute(
         select(PatientAddress)
         .where(PatientAddress.patient_id == patient_profile.id if patient_profile else 0)
@@ -200,7 +196,7 @@ def get_my_profile(
 
 
 # ==========================
-# 🔥 POST PROFILE (UPSERT) - CORRIGIDO COM TODOS OS CAMPOS
+# 🔥 POST PROFILE (UPSERT)
 # ==========================
 @router.post("/me/profile", response_model=TherapistProfileOut)
 def upsert_profile(
@@ -208,19 +204,14 @@ def upsert_profile(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
 ):
-    """
-    Atualiza ou cria o perfil do terapeuta com todos os campos
-    """
     try:
         print(f"\n📝 Upsert profile para usuario: {current_user.id}")
-        print(f"Payload recebido: {payload}")
         
         existing = db.execute(
             select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
         ).scalar_one_or_none()
 
         if existing:
-            # Atualizar campos existentes
             existing.bio = payload.bio
             existing.specialties = payload.specialties
             existing.session_price = payload.session_price
@@ -229,24 +220,16 @@ def upsert_profile(
             existing.idiomas = payload.idiomas
             existing.foto_url = payload.foto_url
             existing.updated_at = datetime.now()
-            
-            # 🔥 CAMPOS DE DADOS PESSOAIS
             existing.phone = payload.phone
             existing.birth_date = payload.birth_date
             existing.education_level = payload.education_level
             existing.show_phone_to_patients = payload.show_phone_to_patients if payload.show_phone_to_patients is not None else False
             existing.show_birth_date_to_patients = payload.show_birth_date_to_patients if payload.show_birth_date_to_patients is not None else False
-            
-            # 🔥 CAMPOS DE REGISTRO PROFISSIONAL
             existing.professional_registration = payload.professional_registration
             existing.treatment = payload.treatment
-            
-            # 🔥 CAMPOS DE REDES SOCIAIS E MÍDIA
             existing.instagram_url = payload.instagram_url
             existing.signature_url = payload.signature_url
             existing.video_url = payload.video_url
-            
-            # 🔥 CAMPOS FINANCEIROS
             existing.cnpj = payload.cnpj
             existing.cpf = payload.cpf
             existing.bank_agency = payload.bank_agency
@@ -257,8 +240,6 @@ def upsert_profile(
             existing.lgpd_consent = payload.lgpd_consent if payload.lgpd_consent is not None else False
             if payload.lgpd_consent and not existing.lgpd_consent_date:
                 existing.lgpd_consent_date = datetime.now()
-            
-            # 🔥 CAMPOS PARA BUSCA E FILTROS
             existing.gender = payload.gender
             existing.ethnicity = payload.ethnicity
             existing.lgbtqia_ally = payload.lgbtqia_ally if payload.lgbtqia_ally is not None else False
@@ -273,12 +254,8 @@ def upsert_profile(
             existing.total_sessions = payload.total_sessions if payload.total_sessions is not None else 0
             existing.verified = payload.verified if payload.verified is not None else False
             existing.featured = payload.featured if payload.featured is not None else False
-            
-            # 🔥 DURAÇÃO DAS SESSÕES
             existing.session_duration_30min = payload.session_duration_30min if payload.session_duration_30min is not None else True
             existing.session_duration_50min = payload.session_duration_50min if payload.session_duration_50min is not None else True
-            
-            # 🔥 POLÍTICA DE REMARCAÇÃO
             existing.cancellation_policy = payload.cancellation_policy
             
             db.commit()
@@ -286,7 +263,6 @@ def upsert_profile(
             print(f"✅ Perfil atualizado: {existing.id}")
             return existing
 
-        # Criar com todos os campos
         profile = TherapistProfile(
             user_id=current_user.id,
             bio=payload.bio,
@@ -300,24 +276,16 @@ def upsert_profile(
             rating=0.0,
             reviews_count=0,
             sessions_count=0,
-            
-            # 🔥 CAMPOS DE DADOS PESSOAIS
             phone=payload.phone,
             birth_date=payload.birth_date,
             education_level=payload.education_level,
             show_phone_to_patients=payload.show_phone_to_patients or False,
             show_birth_date_to_patients=payload.show_birth_date_to_patients or False,
-            
-            # 🔥 CAMPOS DE REGISTRO PROFISSIONAL
             professional_registration=payload.professional_registration,
             treatment=payload.treatment,
-            
-            # 🔥 CAMPOS DE REDES SOCIAIS E MÍDIA
             instagram_url=payload.instagram_url,
             signature_url=payload.signature_url,
             video_url=payload.video_url,
-            
-            # 🔥 CAMPOS FINANCEIROS
             cnpj=payload.cnpj,
             cpf=payload.cpf,
             bank_agency=payload.bank_agency,
@@ -327,8 +295,6 @@ def upsert_profile(
             pix_key=payload.pix_key,
             lgpd_consent=payload.lgpd_consent or False,
             lgpd_consent_date=datetime.now() if payload.lgpd_consent else None,
-            
-            # 🔥 CAMPOS PARA BUSCA E FILTROS
             gender=payload.gender,
             ethnicity=payload.ethnicity,
             lgbtqia_ally=payload.lgbtqia_ally or False,
@@ -343,12 +309,8 @@ def upsert_profile(
             total_sessions=payload.total_sessions or 0,
             verified=payload.verified or False,
             featured=payload.featured or False,
-            
-            # 🔥 DURAÇÃO DAS SESSÕES
             session_duration_30min=payload.session_duration_30min if payload.session_duration_30min is not None else True,
             session_duration_50min=payload.session_duration_50min if payload.session_duration_50min is not None else True,
-            
-            # 🔥 POLÍTICA DE REMARCAÇÃO
             cancellation_policy=payload.cancellation_policy,
         )
         db.add(profile)
@@ -363,7 +325,7 @@ def upsert_profile(
 
 
 # ==========================
-# ATUALIZAR PREÇO DA SESSÃO (COM AUDITORIA)
+# ATUALIZAR PREÇO DA SESSÃO
 # ==========================
 
 @router.patch("/me/profile/price", response_model=dict)
@@ -373,9 +335,6 @@ def update_session_price(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist]))
 ):
-    """
-    Terapeuta define seu preço por sessão (endpoint dedicado)
-    """
     print(f"\n💰 Atualizando preço da sessão - Usuário: {current_user.id}")
     
     try:
@@ -420,7 +379,7 @@ def update_session_price(
 
 
 # ==========================
-# UPLOAD DE FOTO DO TERAPEUTA
+# UPLOAD DE FOTO
 # ==========================
 
 @router.post("/me/profile/photo", response_model=dict)
@@ -429,9 +388,6 @@ async def upload_therapist_photo(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
 ):
-    """
-    Faz upload da foto do terapeuta
-    """
     print(f"\n📸 POST /therapists/me/profile/photo - Usuário: {current_user.id}")
     
     try:
@@ -491,9 +447,6 @@ def list_therapists(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    """
-    Lista todos os terapeutas com todos os campos (incluindo os novos)
-    """
     try:
         print("\n📋 Listando todos os terapeutas")
         profiles = db.execute(
@@ -510,17 +463,14 @@ def list_therapists(
 
 
 # ==========================
-# BUSCA AVANÇADA DE TERAPEUTAS
+# BUSCA AVANÇADA
 # ==========================
 
 @router.get("/search", response_model=list[TherapistProfileOut])
 def search_therapists(
-    # Filtros básicos
     query: Optional[str] = Query(None, description="Busca por nome ou bio"),
     min_price: Optional[float] = Query(None, description="Preço mínimo"),
     max_price: Optional[float] = Query(None, description="Preço máximo"),
-    
-    # 🔥 NOVOS FILTROS
     gender: Optional[str] = Query(None, description="Gênero"),
     ethnicity: Optional[str] = Query(None, description="Etnia"),
     lgbtqia_ally: Optional[bool] = Query(None, description="Aliado LGBTQIAPN+"),
@@ -532,22 +482,15 @@ def search_therapists(
     language: Optional[str] = Query(None, description="Idioma"),
     verified: Optional[bool] = Query(None, description="Apenas verificados"),
     featured: Optional[bool] = Query(None, description="Apenas destaque"),
-    
-    # Paginação
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    """
-    Busca avançada de terapeutas com múltiplos filtros
-    """
     print(f"\n🔍 Buscando terapeutas com filtros...")
     
     query_builder = select(TherapistProfile).join(User).where(User.role == UserRole.therapist)
     
-    # TODO: Implementar filtros específicos
     results = db.execute(query_builder.offset(skip).limit(limit)).scalars().all()
     print(f"✅ Encontrados {len(results)} terapeutas")
     
@@ -555,7 +498,7 @@ def search_therapists(
 
 
 # ==========================
-# DISPONIBILIDADE - GET (LISTAR)
+# DISPONIBILIDADE - GET
 # ==========================
 
 @router.get("/me/availability", response_model=list[AvailabilityOut])
@@ -590,7 +533,7 @@ def list_my_availability(
 
 
 # ==========================
-# DISPONIBILIDADE - POST (CRIAR)
+# DISPONIBILIDADE - POST
 # ==========================
 
 @router.post("/me/availability", response_model=AvailabilityOut, status_code=201)
@@ -600,7 +543,6 @@ def create_availability(
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
 ):
     print(f"\n📝 Criando disponibilidade para usuario: {current_user.id}")
-    print(f"Payload: {payload}")
     
     try:
         therapist_profile = db.execute(
@@ -650,7 +592,7 @@ def create_availability(
 
 
 # ==========================
-# DISPONIBILIDADE - DELETE (REMOVER)
+# DISPONIBILIDADE - DELETE
 # ==========================
 
 @router.delete("/me/availability/{availability_id}", status_code=204)
@@ -692,7 +634,7 @@ def delete_availability(
 
 
 # ==========================
-# 🔥 SLOTS DISPONIVEIS (COM SUPORTE A MÚLTIPLAS DURAÇÕES)
+# SLOTS DISPONIVEIS
 # ==========================
 
 @router.get("/{therapist_user_id}/available-slots", response_model=AvailableSlotsResponse)
@@ -728,14 +670,12 @@ def available_slots(
         if not therapist_profile:
             raise HTTPException(status_code=404, detail="Perfil do terapeuta nao encontrado")
 
-        # 🔥 DETERMINAR QUAIS DURAÇÕES GERAR
         durations_to_generate = []
         if hasattr(therapist_profile, 'session_duration_30min') and therapist_profile.session_duration_30min:
             durations_to_generate.append(30)
         if hasattr(therapist_profile, 'session_duration_50min') and therapist_profile.session_duration_50min:
             durations_to_generate.append(50)
         
-        # Se nenhuma estiver marcada, usar 50min como padrão
         if not durations_to_generate:
             durations_to_generate = [50]
 
@@ -787,7 +727,6 @@ def available_slots(
 
         all_slots = []
 
-        # 🔥 GERAR SLOTS PARA CADA DURAÇÃO
         for duration in durations_to_generate:
             step = timedelta(minutes=duration)
             slots = []
@@ -912,3 +851,344 @@ def therapist_calendar(
         print(f"❌ Erro em therapist_calendar: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+# ==========================
+# 🔥 COMISSÕES DO TERAPEUTA
+# ==========================
+
+@router.get("/commissions", response_model=list)
+def get_therapist_commissions(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """
+    Retorna todas as comissões do terapeuta logado (recebimentos líquidos)
+    """
+    from app.models.commission import Commission
+    from app.models.therapist_profile import TherapistProfile
+    from app.models.appointment import Appointment
+    from app.models.user import User
+    
+    print(f"\n💰 Buscando comissões para terapeuta: {current_user.id}")
+    
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+    
+    if not therapist_profile:
+        print(f"⚠️ Perfil não encontrado")
+        return []
+    
+    commissions = db.execute(
+        select(Commission)
+        .where(Commission.therapist_id == therapist_profile.id)
+        .order_by(Commission.created_at.desc())
+    ).scalars().all()
+    
+    result = []
+    for commission in commissions:
+        appointment = db.get(Appointment, commission.appointment_id)
+        patient = db.get(User, appointment.patient_user_id) if appointment else None
+        
+        result.append({
+            "id": commission.id,
+            "appointment_id": commission.appointment_id,
+            "session_price": float(commission.session_price),
+            "commission_rate": float(commission.commission_rate),
+            "commission_amount": float(commission.commission_amount),
+            "net_amount": float(commission.net_amount),
+            "is_refund": commission.is_refund,
+            "created_at": commission.created_at.isoformat(),
+            "appointment": {
+                "id": appointment.id if appointment else None,
+                "starts_at": appointment.starts_at.isoformat() if appointment else None,
+                "patient_name": patient.full_name if patient else None,
+            } if appointment else None
+        })
+    
+    print(f"✅ {len(result)} comissões encontradas")
+    return result
+
+
+# ==========================
+# 🔥 ASSINATURA DO TERAPEUTA - GET
+# ==========================
+
+@router.get("/subscription", response_model=dict)
+def get_therapist_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """
+    Retorna a assinatura atual do terapeuta
+    """
+    from app.models.subscription import Subscription
+    from app.models.therapist_profile import TherapistProfile
+    
+    print(f"\n📋 Buscando assinatura para terapeuta: {current_user.id}")
+    
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+    
+    if not therapist_profile:
+        print(f"⚠️ Perfil não encontrado, retornando plano essencial")
+        return {
+            "id": None,
+            "plan": "essencial",
+            "status": "active",
+            "stripe_subscription_id": None,
+            "current_period_start": None,
+            "current_period_end": None,
+            "cancel_at_period_end": False
+        }
+    
+    subscription = db.execute(
+        select(Subscription).where(Subscription.therapist_id == therapist_profile.id)
+    ).scalar_one_or_none()
+    
+    if not subscription:
+        print(f"⚠️ Nenhuma assinatura encontrada, retornando plano essencial")
+        return {
+            "id": None,
+            "plan": "essencial",
+            "status": "active",
+            "stripe_subscription_id": None,
+            "current_period_start": None,
+            "current_period_end": None,
+            "cancel_at_period_end": False
+        }
+    
+    return {
+        "id": subscription.id,
+        "plan": subscription.plan,
+        "status": subscription.status,
+        "stripe_subscription_id": subscription.stripe_subscription_id,
+        "current_period_start": subscription.current_period_start.isoformat() if subscription.current_period_start else None,
+        "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
+        "cancel_at_period_end": subscription.cancel_at_period_end
+    }
+
+# ==========================
+# 🔥 ENDEREÇOS DO TERAPEUTA
+# ==========================
+
+@router.get("/me/address")
+def get_therapist_addresses(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.therapist]))
+):
+    """Retorna todos os endereços do terapeuta logado"""
+    
+    therapist = db.query(TherapistProfile).filter(TherapistProfile.user_id == current_user.id).first()
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil de terapeuta não encontrado")
+    
+    addresses = db.query(TherapistAddress).filter(TherapistAddress.therapist_id == therapist.id).all()
+    
+    result = []
+    for addr in addresses:
+        result.append({
+            "id": addr.id,
+            "cep": addr.cep,
+            "street": addr.street,
+            "number": addr.number,
+            "complement": addr.complement,
+            "neighborhood": addr.neighborhood,
+            "city": addr.city,
+            "state": addr.state,
+            "country": addr.country,
+            "is_default": addr.is_default,
+            "created_at": addr.created_at.isoformat() if addr.created_at else None,
+            "updated_at": addr.updated_at.isoformat() if addr.updated_at else None
+        })
+    
+    return result
+
+
+@router.post("/me/address")
+def create_therapist_address(
+    address_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.therapist]))
+):
+    """Cria um novo endereço para o terapeuta"""
+    
+    therapist = db.query(TherapistProfile).filter(TherapistProfile.user_id == current_user.id).first()
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil de terapeuta não encontrado")
+    
+    # Se for padrão, remover padrão dos outros
+    if address_data.get("is_default"):
+        db.query(TherapistAddress).filter(TherapistAddress.therapist_id == therapist.id).update({"is_default": False})
+    
+    new_address = TherapistAddress(
+        therapist_id=therapist.id,
+        cep=address_data.get("cep", ""),
+        street=address_data.get("street", ""),
+        number=address_data.get("number", ""),
+        complement=address_data.get("complement", ""),
+        neighborhood=address_data.get("neighborhood", ""),
+        city=address_data.get("city", ""),
+        state=address_data.get("state", ""),
+        country=address_data.get("country", "Brasil"),
+        is_default=address_data.get("is_default", False)
+    )
+    
+    db.add(new_address)
+    db.commit()
+    db.refresh(new_address)
+    
+    return {"success": True, "id": new_address.id}
+
+
+@router.put("/me/address/{address_id}")
+def update_therapist_address(
+    address_id: int,
+    address_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.therapist]))
+):
+    """Atualiza um endereço do terapeuta"""
+    
+    therapist = db.query(TherapistProfile).filter(TherapistProfile.user_id == current_user.id).first()
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil de terapeuta não encontrado")
+    
+    address = db.query(TherapistAddress).filter(
+        TherapistAddress.id == address_id,
+        TherapistAddress.therapist_id == therapist.id
+    ).first()
+    
+    if not address:
+        raise HTTPException(status_code=404, detail="Endereço não encontrado")
+    
+    # Se for padrão, remover padrão dos outros
+    if address_data.get("is_default"):
+        db.query(TherapistAddress).filter(TherapistAddress.therapist_id == therapist.id).update({"is_default": False})
+    
+    for field in ["cep", "street", "number", "complement", "neighborhood", "city", "state", "country", "is_default"]:
+        if field in address_data:
+            setattr(address, field, address_data[field])
+    
+    db.commit()
+    
+    return {"success": True}
+
+
+@router.delete("/me/address/{address_id}")
+def delete_therapist_address(
+    address_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.therapist]))
+):
+    """Remove um endereço do terapeuta"""
+    
+    therapist = db.query(TherapistProfile).filter(TherapistProfile.user_id == current_user.id).first()
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil de terapeuta não encontrado")
+    
+    address = db.query(TherapistAddress).filter(
+        TherapistAddress.id == address_id,
+        TherapistAddress.therapist_id == therapist.id
+    ).first()
+    
+    if not address:
+        raise HTTPException(status_code=404, detail="Endereço não encontrado")
+    
+    db.delete(address)
+    db.commit()
+    
+    return {"success": True}
+
+
+@router.put("/me/address/{address_id}/default")
+def set_default_therapist_address(
+    address_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.therapist]))
+):
+    """Define um endereço como padrão"""
+    
+    therapist = db.query(TherapistProfile).filter(TherapistProfile.user_id == current_user.id).first()
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil de terapeuta não encontrado")
+    
+    # Remover padrão de todos
+    db.query(TherapistAddress).filter(TherapistAddress.therapist_id == therapist.id).update({"is_default": False})
+    
+    # Definir o novo padrão
+    address = db.query(TherapistAddress).filter(
+        TherapistAddress.id == address_id,
+        TherapistAddress.therapist_id == therapist.id
+    ).first()
+    
+    if not address:
+        raise HTTPException(status_code=404, detail="Endereço não encontrado")
+    
+    address.is_default = True
+    db.commit()
+    
+    return {"success": True}
+
+
+# ==========================
+# 🔥 ASSINATURA DO TERAPEUTA - CANCELAR
+# ==========================
+
+@router.post("/subscription/cancel", response_model=dict)
+def cancel_therapist_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """
+    Cancela a assinatura do terapeuta no Stripe (cancelamento programado para fim do período)
+    """
+    from app.models.subscription import Subscription
+    from app.models.therapist_profile import TherapistProfile
+    
+    print(f"\n❌ Cancelando assinatura para terapeuta: {current_user.id}")
+    
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+    
+    if not therapist_profile:
+        raise HTTPException(status_code=404, detail="Perfil do terapeuta não encontrado")
+    
+    subscription = db.execute(
+        select(Subscription).where(Subscription.therapist_id == therapist_profile.id)
+    ).scalar_one_or_none()
+    
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Nenhuma assinatura ativa encontrada")
+    
+    if not subscription.stripe_subscription_id:
+        raise HTTPException(status_code=400, detail="Assinatura não integrada com Stripe")
+    
+    try:
+        import stripe
+        from app.core.config import settings
+        
+        stripe.api_key = settings.stripe_secret_key
+        
+        stripe.Subscription.modify(
+            subscription.stripe_subscription_id,
+            cancel_at_period_end=True
+        )
+        
+        subscription.cancel_at_period_end = True
+        db.commit()
+        
+        print(f"✅ Assinatura {subscription.stripe_subscription_id} será cancelada ao final do período")
+        
+        return {
+            "success": True,
+            "message": "Assinatura cancelada com sucesso. Você voltará ao plano Essencial no fim do período.",
+            "will_cancel_at_period_end": True
+        }
+        
+    except Exception as e:
+        print(f"❌ Erro ao cancelar assinatura no Stripe: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao cancelar assinatura: {str(e)}")

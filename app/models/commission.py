@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, ForeignKey, Numeric, String, DateTime, Boolean
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.database import Base
 
@@ -10,16 +11,17 @@ class Commission(Base):
     id = Column(Integer, primary_key=True, index=True)
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=False)
     therapist_id = Column(Integer, ForeignKey("therapist_profiles.id"), nullable=False)
-    patient_id = Column(Integer, ForeignKey("patient_profiles.id"), nullable=False)
     session_price = Column(Numeric(10, 2), nullable=False)
-    commission_rate = Column(Numeric(5, 2), nullable=False)  # 20, 10, 3
+    commission_rate = Column(Numeric(5, 2), nullable=False)
     commission_amount = Column(Numeric(10, 2), nullable=False)
-    net_amount = Column(Numeric(10, 2), nullable=False)  # session_price - commission
+    net_amount = Column(Numeric(10, 2), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
-    # 🔥 Para estornos (valores negativos)
+    # Para estornos (valores negativos)
     is_refund = Column(Boolean, default=False)
-    refunded_from_id = Column(Integer, nullable=True)  # commission_id original
+    # 🔥 REMOVIDO refunded_from_id - NÃO EXISTE NA TABELA
+    # refunded_from_id = Column(Integer, nullable=True)
 
     # Relacionamentos
     appointment = relationship(
@@ -31,8 +33,4 @@ class Commission(Base):
         "app.models.therapist_profile.TherapistProfile",
         back_populates="commissions",
         foreign_keys=[therapist_id]
-    )
-    patient = relationship(
-        "app.models.patient_profile.PatientProfile",
-        foreign_keys=[patient_id]
     )

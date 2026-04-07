@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, DateTime, func, Enum as SAEnum
+from sqlalchemy import String, Boolean, DateTime, func, Enum as SAEnum, JSON
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
@@ -47,6 +47,28 @@ class User(Base):
         nullable=False
     )
 
+    # 🔥 NOVOS CAMPOS PARA NOTIFICAÇÕES
+    email_notifications_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False
+    )
+    
+    email_preferences: Mapped[dict | None] = mapped_column(
+        JSON,
+        default=lambda: {
+            "appointment_created": True,
+            "appointment_confirmed": True,
+            "appointment_cancelled": True,
+            "appointment_rescheduled": True,
+            "payment_received": True,
+            "invite_received": True,
+            "email_changed": True,
+            "password_reset": True
+        },
+        nullable=True
+    )
+
     # 🔥 ID FORMATADO (ex: 2026000001)
     @hybrid_property
     def formatted_id(self) -> str:
@@ -82,5 +104,12 @@ class User(Base):
         "app.models.appointment.Appointment",
         foreign_keys="[Appointment.therapist_user_id]",
         back_populates="therapist",
+        cascade="all, delete-orphan"
+    )
+
+    # ✅ RELACIONAMENTO COM NOTIFICAÇÕES
+    notifications = relationship(
+        "app.models.notification.Notification",
+        back_populates="user",
         cascade="all, delete-orphan"
     )
