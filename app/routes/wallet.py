@@ -14,7 +14,8 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.patient_profile import PatientProfile
 from app.models.therapist_profile import TherapistProfile
-from app.models.wallet import Wallet, Ledger, Payment
+from app.models.wallet import Wallet, Ledger
+from app.models.payment import Payment
 
 from app.schemas.wallet import (
     WalletOut,

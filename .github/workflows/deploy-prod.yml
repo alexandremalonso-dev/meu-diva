@@ -1,0 +1,117 @@
+name: Deploy - Produção
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'front/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID_PROD }}
+  RUN_SERVICE: meudiva-api-prod
+  REGION: southamerica-east1
+
+jobs:
+  test:
+    name: Testes Automatizados
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar dependências
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Rodar testes
+        run: |
+          pytest tests/ -v --tb=short
+        env:
+          DATABASE_URL: ${{ secrets.DB_URL_PROD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
+  build-and-deploy:
+    name: Build e Deploy no Cloud Run
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_PROD }}
+
+      - name: Configurar Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configurar Docker para Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Build e Push da imagem Docker
+        run: |
+          IMAGE_NAME="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/meudiva-api/meudiva-api-prod:${{ github.sha }}"
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+
+      - name: Deploy no Cloud Run
+        run: |
+          gcloud run deploy ${{ env.RUN_SERVICE }} \
+            --image ${{ env.IMAGE_NAME }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 4Gi \
+            --cpu 2 \
+            --min-instances 1 \
+            --max-instances 10 \
+            --timeout 3600 \
+            --concurrency 80 \
+            --set-env-vars "DATABASE_URL=${{ secrets.DB_URL_PROD }}" \
+            --set-env-vars "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+            --set-env-vars "STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}" \
+            --set-env-vars "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
+            --set-env-vars "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+            --set-env-vars "MICROSOFT_CLIENT_ID=${{ secrets.MICROSOFT_CLIENT_ID }}" \
+            --set-env-vars "MICROSOFT_CLIENT_SECRET=${{ secrets.MICROSOFT_CLIENT_SECRET }}" \
+            --set-env-vars "SMTP_HOST=${{ secrets.SMTP_HOST }}" \
+            --set-env-vars "SMTP_USER=${{ secrets.SMTP_USER }}" \
+            --set-env-vars "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" \
+            --set-env-vars "FROM_EMAIL=${{ secrets.FROM_EMAIL }}" \
+            --set-env-vars "FRONTEND_URL=https://meudivaonline.com" \
+            --set-env-vars "BACKEND_URL=https://api.meudivaonline.com"
+
+      - name: Mostrar URL do serviço
+        run: |
+          URL=$(gcloud run services describe ${{ env.RUN_SERVICE }} --region ${{ env.REGION }} --format='value(status.url)')
+          echo "✅ Deploy concluído! URL: $URL"
+
+  notify:
+    name: Notificar Slack
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    if: always()
+    steps:
+      - name: Enviar notificação
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_TITLE: "🚀 Deploy em Produção"
+          SLACK_MESSAGE: "Status: ${{ job.status }}\nServiço: meudiva-api-prod"
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}

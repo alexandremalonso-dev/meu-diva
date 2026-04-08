@@ -226,3 +226,13 @@ class TherapistProfile(Base):
         uselist=False,
         cascade="all, delete-orphan"
     )
+
+    # ==========================
+    # 🔥 PAGAMENTOS (PAYMENTS) - DESCOMENTADO (modelo criado)
+    # ==========================
+    payments = relationship(
+        "app.models.therapist_payment.TherapistPayment",
+        back_populates="therapist",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )

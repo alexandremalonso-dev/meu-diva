@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # WORDPRESS COM LARAGON (PHP + APACHE)
+  # ============================================
+  wordpress:
+    image: wordpress:latest
+    container_name: meudiva-wordpress
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      WORDPRESS_DB_HOST: wordpress_db:3306
+      WORDPRESS_DB_USER: wordpress_user
+      WORDPRESS_DB_PASSWORD: wordpress_password
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: 1
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_DEBUG', true);
+        define('WP_DEBUG_LOG', true);
+        define('WP_DEBUG_DISPLAY', true);
+        define('WP_HOME', 'http://localhost:8081');
+        define('WP_SITEURL', 'http://localhost:8081');
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wordpress/wp-content:/var/www/html/wp-content
+      - ./wordpress/themes/meudiva-theme:/var/www/html/wp-content/themes/meudiva-theme
+      - ./wordpress/plugins/meudiva-integration:/var/www/html/wp-content/plugins/meudiva-integration
+    depends_on:
+      - wordpress_db
+    networks:
+      - wordpress_network
+
+  # ============================================
+  # MARIADB PARA WORDPRESS
+  # ============================================
+  wordpress_db:
+    image: mariadb:10.11
+    container_name: meudiva-wordpress-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress_user
+      MYSQL_PASSWORD: wordpress_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - wordpress_db_data:/var/lib/mysql
+    networks:
+      - wordpress_network
+
+  # ============================================
+  # PHPMyAdmin (GERENCIAR BANCO DO WORDPRESS)
+  # ============================================
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: meudiva-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    environment:
+      PMA_HOST: wordpress_db
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+      UPLOAD_LIMIT: 100M
+    depends_on:
+      - wordpress_db
+    networks:
+      - wordpress_network
+    profiles:
+      - tools
+
+networks:
+  wordpress_network:
+    driver: bridge
+
+volumes:
+  wordpress_data:
+  wordpress_db_data:

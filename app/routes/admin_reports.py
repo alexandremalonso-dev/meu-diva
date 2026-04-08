@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_, func, desc
+from sqlalchemy import select, and_, func, desc, extract  # 🔥 ADICIONADO extract
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
@@ -14,6 +14,7 @@ from app.models.patient_profile import PatientProfile
 from app.models.subscription import Subscription
 from app.models.commission import Commission
 from app.models.appointment import Appointment
+from app.models.therapist_invoice import TherapistInvoice, InvoiceStatus
 from app.core.appointment_status import AppointmentStatus
 
 router = APIRouter(prefix="/admin/reports", tags=["admin"])
@@ -155,7 +156,7 @@ def get_subscriptions_report(
         if sub.plan == "profissional":
             by_plan["profissional"]["count"] += 1
             by_plan["profissional"]["mrr"] += 79
-            total_mrr += 79
+            total_mrr += Giya
         elif sub.plan == "premium":
             by_plan["premium"]["count"] += 1
             by_plan["premium"]["mrr"] += 149
@@ -645,6 +646,7 @@ def get_relatorio_plataforma(
         }
     }
 
+
 # ==========================
 # 🔥 TODAS AS SESSÕES (TABELA)
 # ==========================
@@ -704,3 +706,313 @@ def get_all_sessions_for_admin(
             "patient_user_id": apt.patient_user_id
         })
     return {"total": len(total), "limit": limit, "offset": offset, "sessions": result}
+
+
+@router.get("/payments-summary")
+def get_payments_summary(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    status_filter: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.admin]))
+):
+    """
+    Retorna resumo de pagamentos para admin.
+    Agora também mostra períodos que têm invoice mesmo sem sessões.
+    """
+    print(f"\n📊 [ADMIN] Resumo de pagamentos aos terapeutas")
+    
+    therapists = db.query(TherapistProfile).all()
+    
+    payments_data = []
+    total_pending_all = 0
+    total_approved_all = 0
+    therapists_with_pending = 0
+    
+    for therapist in therapists:
+        # Buscar TODAS as notas fiscais do terapeuta
+        invoices = db.query(TherapistInvoice).filter(
+            TherapistInvoice.therapist_id == therapist.id
+        ).all()
+        
+        # Buscar comissões do terapeuta
+        commissions = db.query(Commission).filter(
+            Commission.therapist_id == therapist.id,
+            Commission.is_refund == False
+        ).all()
+        
+        print(f"🔍 Terapeuta {therapist.id}: {len(invoices)} invoices, {len(commissions)} comissões")
+        
+        # Mapa de invoices por período
+        invoices_by_period = {}
+        for inv in invoices:
+            period_key = f"{inv.year}-{inv.month}"
+            invoices_by_period[period_key] = inv
+            print(f"   Invoice: {period_key} -> status={inv.status.value}, valor={float(inv.amount)}")
+        
+        # Mapa de comissões por período
+        commissions_by_period = {}
+        for c in commissions:
+            year_key = c.created_at.year
+            month_key = c.created_at.month - 1
+            period_key = f"{year_key}-{month_key}"
+            
+            if period_key not in commissions_by_period:
+                commissions_by_period[period_key] = {
+                    "year": year_key,
+                    "month": month_key,
+                    "total_net_amount": 0,
+                    "total_commission": 0,
+                    "sessions_count": 0
+                }
+            commissions_by_period[period_key]["total_net_amount"] += float(c.net_amount)
+            commissions_by_period[period_key]["total_commission"] += float(c.commission_amount)
+            commissions_by_period[period_key]["sessions_count"] += 1
+        
+        # 🔥 NOVO: Combinar períodos de invoices E comissões
+        all_periods = set(commissions_by_period.keys()) | set(invoices_by_period.keys())
+        
+        periods_list = []
+        for period_key in all_periods:
+            period_data = commissions_by_period.get(period_key, {
+                "year": int(period_key.split('-')[0]),
+                "month": int(period_key.split('-')[1]),
+                "total_net_amount": 0,
+                "total_commission": 0,
+                "sessions_count": 0
+            })
+            
+            invoice = invoices_by_period.get(period_key)
+            
+            if invoice:
+                status = invoice.status.value
+                invoice_id = invoice.id
+                invoice_number = invoice.invoice_number
+                invoice_url = invoice.invoice_url
+                admin_notes = invoice.admin_notes
+                # Se tem invoice mas não tem comissões, usa o valor da invoice
+                if period_data["total_net_amount"] == 0:
+                    period_data["total_net_amount"] = float(invoice.amount)
+            else:
+                status = "not_sent"
+                invoice_id = None
+                invoice_number = None
+                invoice_url = None
+                admin_notes = None
+            
+            # Aplicar filtros
+            if year and period_data["year"] != year:
+                continue
+            if month is not None and period_data["month"] != (month - 1):
+                continue
+            if status_filter and status_filter != "all":
+                if status_filter == "not_sent" and status != "not_sent":
+                    continue
+                elif status_filter != "not_sent" and status != status_filter:
+                    continue
+            
+            periods_list.append({
+                "year": period_data["year"],
+                "month": period_data["month"],
+                "month_label": get_month_label(period_data["month"]),
+                "total_net_amount": period_data["total_net_amount"],
+                "total_commission": period_data["total_commission"],
+                "sessions_count": period_data["sessions_count"],
+                "invoice_status": status,
+                "invoice_id": invoice_id,
+                "invoice_number": invoice_number,
+                "invoice_url": invoice_url,
+                "admin_notes": admin_notes
+            })
+        
+        # Ordenar períodos por ano e mês
+        periods_list.sort(key=lambda x: (x["year"], x["month"]), reverse=True)
+        
+        pending_amount = sum(p["total_net_amount"] for p in periods_list if p["invoice_status"] in ["pending", "not_sent"])
+        approved_amount = sum(p["total_net_amount"] for p in periods_list if p["invoice_status"] == "approved")
+        
+        user = db.get(User, therapist.user_id)
+        
+        if periods_list:
+            payments_data.append({
+                "therapist_id": therapist.id,
+                "therapist_name": therapist.full_name or (user.full_name if user else "Terapeuta"),
+                "therapist_email": user.email if user else "",
+                "therapist_phone": therapist.phone,
+                "therapist_foto_url": therapist.foto_url,
+                "plan": therapist.subscription.plan if therapist.subscription else "essencial",
+                "pix_key_type": therapist.pix_key_type.value if therapist.pix_key_type else None,
+                "pix_key": therapist.pix_key,
+                "total_pending_amount": pending_amount,
+                "total_approved_amount": approved_amount,
+                "periods": periods_list
+            })
+            
+            total_pending_all += pending_amount
+            total_approved_all += approved_amount
+            if pending_amount > 0:
+                therapists_with_pending += 1
+    
+    return {
+        "summary": {
+            "total_pending_all": total_pending_all,
+            "total_approved_all": total_approved_all,
+            "total_therapists": len(payments_data),
+            "therapists_with_pending": therapists_with_pending
+        },
+        "payments": payments_data
+    }
+
+
+# ==========================
+# 🔥 DETALHAMENTO DE UM TERAPEUTA ESPECÍFICO
+# ==========================
+@router.get("/payments-summary/{therapist_id}")
+def get_therapist_payment_detail(
+    therapist_id: int,
+    year: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.admin]))
+):
+    """
+    Admin: Detalhamento completo de pagamentos de um terapeuta específico.
+    """
+    print(f"\n📊 [ADMIN] Detalhamento do terapeuta {therapist_id}")
+    
+    therapist = db.query(TherapistProfile).filter(
+        TherapistProfile.id == therapist_id
+    ).first()
+    
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Terapeuta não encontrado")
+    
+    user = db.query(User).filter(User.id == therapist.user_id).first()
+    
+    subscription = db.query(Subscription).filter(
+        Subscription.therapist_id == therapist.id,
+        Subscription.status == "active"
+    ).first()
+    
+    commissions_query = db.query(Commission).filter(
+        Commission.therapist_id == therapist.id,
+        Commission.is_refund == False
+    )
+    
+    if year:
+        commissions_query = commissions_query.filter(
+            func.extract('year', Commission.created_at) == year
+        )
+    
+    commissions = commissions_query.order_by(
+        Commission.created_at.desc()
+    ).all()
+    
+    periods_dict = {}
+    for commission in commissions:
+        period_key = f"{commission.created_at.year}-{commission.created_at.month}"
+        
+        if period_key not in periods_dict:
+            periods_dict[period_key] = {
+                "year": commission.created_at.year,
+                "month": commission.created_at.month - 1,
+                "total_net_amount": 0,
+                "total_commission": 0,
+                "sessions": []
+            }
+        
+        appointment = db.query(Appointment).filter(
+            Appointment.id == commission.appointment_id
+        ).first()
+        
+        patient = None
+        if appointment:
+            patient = db.query(User).filter(
+                User.id == appointment.patient_user_id
+            ).first()
+        
+        periods_dict[period_key]["total_net_amount"] += float(commission.net_amount)
+        periods_dict[period_key]["total_commission"] += float(commission.commission_amount)
+        periods_dict[period_key]["sessions"].append({
+            "appointment_id": commission.appointment_id,
+            "date": commission.created_at.strftime("%Y-%m-%d"),
+            "session_price": float(commission.session_price),
+            "commission_rate": float(commission.commission_rate),
+            "commission_amount": float(commission.commission_amount),
+            "net_amount": float(commission.net_amount),
+            "patient_name": patient.full_name if patient else "N/A",
+            "patient_email": patient.email if patient else "N/A"
+        })
+    
+    invoices = db.query(TherapistInvoice).filter(
+        TherapistInvoice.therapist_id == therapist.id
+    ).all()
+    
+    invoices_by_period = {}
+    for inv in invoices:
+        key = f"{inv.year}-{inv.month + 1}"
+        invoices_by_period[key] = inv
+    
+    periods = []
+    for period_key, data in periods_dict.items():
+        invoice = invoices_by_period.get(period_key)
+        periods.append({
+            "year": data["year"],
+            "month": data["month"],
+            "month_label": get_month_label(data["month"]),
+            "total_net_amount": data["total_net_amount"],
+            "total_commission": data["total_commission"],
+            "sessions_count": len(data["sessions"]),
+            "sessions": data["sessions"],
+            "invoice": {
+                "id": invoice.id if invoice else None,
+                "invoice_number": invoice.invoice_number if invoice else None,
+                "invoice_url": invoice.invoice_url if invoice else None,
+                "status": invoice.status.value if invoice else "not_sent",
+                "admin_notes": invoice.admin_notes if invoice else None,
+                "uploaded_at": invoice.created_at if invoice else None
+            } if invoice else None
+        })
+    
+    periods.sort(key=lambda x: (x["year"], x["month"]), reverse=True)
+    
+    total_net = sum(p["total_net_amount"] for p in periods)
+    total_commission = sum(p["total_commission"] for p in periods)
+    pending_amount = sum(p["total_net_amount"] for p in periods if not p["invoice"] or p["invoice"]["status"] == "pending")
+    approved_amount = sum(p["total_net_amount"] for p in periods if p["invoice"] and p["invoice"]["status"] == "approved")
+    
+    return {
+        "therapist": {
+            "id": therapist.id,
+            "name": user.full_name if user else "N/A",
+            "email": user.email if user else "N/A",
+            "phone": therapist.phone,
+            "plan": subscription.plan if subscription else "essencial",
+            "pix_key_type": therapist.pix_key_type.value if therapist.pix_key_type else None,
+            "pix_key": therapist.pix_key,
+            "bank_info": {
+                "agency": therapist.bank_agency,
+                "account": therapist.bank_account,
+                "account_digit": therapist.bank_account_digit
+            } if therapist.bank_agency else None
+        },
+        "summary": {
+            "total_net_revenue": total_net,
+            "total_commission": total_commission,
+            "pending_amount": pending_amount,
+            "approved_amount": approved_amount,
+            "total_periods": len(periods)
+        },
+        "periods": periods
+    }
+
+
+# ==========================
+# 🔥 FUNÇÃO AUXILIAR
+# ==========================
+def get_month_label(month: int) -> str:
+    """Retorna o nome do mês em português (month: 0-11)"""
+    months = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ]
+    return months[month] if 0 <= month < 12 else "Mês inválido"

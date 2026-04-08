@@ -1,0 +1,73 @@
+# Dependências
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Arquivos de desenvolvimento
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Testes
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# Logs e bancos de dados locais
+*.log
+*.sql
+*.sqlite
+*.db
+
+# Frontend (já será copiado como build estático)
+front/node_modules/
+front/.next/
+front/out/
+front/.env.local
+front/.env.development.local
+front/.env.test.local
+front/.env.production.local
+
+# Backend
+app/core/token.json
+app/core/credentials.json
+*.pem
+*.key
+*.crt
+
+# Uploads locais (não copiar para o container)
+uploads/
+!uploads/README.md
+
+# Documentação
+*.md
+!README.md
+docs/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+secrets/
+*.pem
+*.key

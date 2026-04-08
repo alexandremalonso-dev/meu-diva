@@ -16,7 +16,8 @@ from app.core.pricing_config import get_plan_price_cents, get_plan_name
 
 from app.models.user import User
 from app.models.patient_profile import PatientProfile
-from app.models.wallet import Wallet, Payment, Ledger
+from app.models.wallet import Wallet, Ledger
+from app.models.payment import Payment
 from app.models.appointment import Appointment
 from app.models.therapist_profile import TherapistProfile
 

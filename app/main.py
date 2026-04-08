@@ -43,6 +43,7 @@ app.add_middleware(
 os.makedirs("uploads/patients", exist_ok=True)
 os.makedirs("uploads/fotos", exist_ok=True)
 os.makedirs("uploads/admins", exist_ok=True)
+os.makedirs("uploads/invoices", exist_ok=True)
 
 # Servir arquivos estáticos
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -79,6 +80,17 @@ from app.routes import admin_therapists
 from app.routes import ws_chat
 from app.routes import ws_events
 from app.db.database import get_db
+from app.routes import admin_payments
+
+# 🔥 NOTAS FISCAIS (INVOICES) - USANDO SINGULAR
+try:
+    from app.routes import therapist_invoice
+    from app.routes import admin_invoice
+    print("✅ Invoices routers importados com sucesso")
+except Exception as e:
+    print(f"❌ Erro ao importar invoices routers: {e}")
+    therapist_invoice = None
+    admin_invoice = None
 
 # 🔥 NOTIFICAÇÕES
 try:
@@ -104,7 +116,7 @@ except Exception as e:
     print(f"❌ Erro ao importar google_calendar router: {e}")
     google_calendar_router = None
 
-# 🔥 WEBSOCKET ONLINE (nova aba)
+# 🔥 WEBSOCKET ONLINE
 try:
     from app.routes.ws_online import websocket_online_endpoint
     print("✅ WebSocket Online importado com sucesso")
@@ -145,8 +157,22 @@ app.include_router(therapist_documents.router, prefix="/api")
 app.include_router(admin_therapists.router, prefix="/api")
 app.include_router(ws_chat.router)
 app.include_router(ws_events.router)
+app.include_router(admin_payments.router, prefix="/api", tags=["admin-payments"])
 
-# 🔥 NOTIFICAÇÕES - CORRIGIDO: prefixo vazio pois o router já tem os paths
+# 🔥 NOTAS FISCAIS (INVOICES) - REGISTRAR ROTAS
+if therapist_invoice:
+    app.include_router(therapist_invoice.router, prefix="/api", tags=["therapist-invoices"])
+    print("✅ Therapist Invoice router registrado em /api/therapist/invoices")
+else:
+    print("❌ Therapist Invoice router NÃO foi registrado")
+
+if admin_invoice:
+    app.include_router(admin_invoice.router, prefix="/api", tags=["admin-invoices"])
+    print("✅ Admin Invoice router registrado em /api/admin/invoices")
+else:
+    print("❌ Admin Invoice router NÃO foi registrado")
+
+# 🔥 NOTIFICAÇÕES
 if notifications_router:
     app.include_router(notifications_router, prefix="/api")
     print("✅ Notifications router registrado em /api")
@@ -174,19 +200,16 @@ app.include_router(admin_profile_router.router, prefix="/api")
 # WEBSOCKETS
 # ==========================
 
-# 🔥 WebSocket para chat em tempo real
 @app.websocket("/ws/chat/{thread_id}")
 async def websocket_chat_endpoint(websocket: WebSocket, thread_id: int):
     from app.routes.ws_chat import websocket_endpoint
     await websocket_endpoint(websocket, thread_id)
 
-# 🔥 WebSocket para eventos gerais (notificações)
 @app.websocket("/ws/events")
 async def websocket_events_endpoint(websocket: WebSocket):
     from app.routes.ws_events import websocket_events_endpoint as ws_events_endpoint
     await ws_events_endpoint(websocket)
 
-# 🔥 WebSocket para aba ONLINE (usuários ativos em tempo real)
 @app.websocket("/ws/online")
 async def websocket_online_endpoint_route(websocket: WebSocket, db: Session = Depends(get_db)):
     if websocket_online_endpoint is None:
@@ -250,6 +273,16 @@ async def chat_status():
     if chat_router:
         return {"status": "ok", "message": "Chat router está disponível"}
     return {"status": "error", "message": "Chat router NÃO está disponível"}
+
+
+@app.get("/api/invoices/status")
+async def invoices_status():
+    """Verifica o status dos routers de notas fiscais"""
+    return {
+        "therapist_invoice_available": therapist_invoice is not None,
+        "admin_invoice_available": admin_invoice is not None,
+        "uploads_invoices_dir_exists": os.path.exists("uploads/invoices")
+    }
 
 
 # ==========================

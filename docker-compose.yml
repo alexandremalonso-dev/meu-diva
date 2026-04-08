@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # POSTGRESQL DATABASE
+  # ============================================
+  db:
+    image: postgres:15-alpine
+    container_name: meudiva-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: meudiva_user
+      POSTGRES_PASSWORD: meudiva_password
+      POSTGRES_DB: meudiva
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meudiva_user -d meudiva"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # REDIS (PARA WEBSOCKET)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: meudiva-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # BACKEND (FASTAPI)
+  # ============================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meudiva-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://meudiva_user:meudiva_password@db:5432/meudiva
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: b52xNm1yIkEQBLCqPnGfR6KXpav9Sh0WguDFUedJriHOT8o3zYtVMcZA4sw7lj
+      ENVIRONMENT: development
+      FRONTEND_URL: http://localhost:3000
+      BACKEND_URL: http://localhost:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./uploads:/app/uploads
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ============================================
+  # FRONTEND (NEXT.JS)
+  # ============================================
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile.dev
+    container_name: meudiva-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./front:/app
+      - /app/node_modules
+      - /app/.next
+
+  # ============================================
+  # ADMINER (GERENCIAMENTO DO BANCO - OPCIONAL)
+  # ============================================
+  adminer:
+    image: adminer:latest
+    container_name: meudiva-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
