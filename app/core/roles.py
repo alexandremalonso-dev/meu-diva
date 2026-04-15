@@ -5,3 +5,4 @@ class UserRole(str, Enum):
     therapist = "therapist"
     company_admin = "company_admin"
     admin = "admin"
+    empresa = "empresa"

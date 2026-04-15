@@ -29,8 +29,8 @@ from app.schemas.payment import (
     PaymentStatusResponse
 )
 
-# 🔥 IMPORTAR SERVIÇO DO GOOGLE MEET
-from app.core.google_meet import google_meet_service
+# 🔥 ALTERADO: Google Meet → Jitsi
+from app.services.jitsi_service import jitsi_service
 from app.services.email_service import email_service
 
 # ============================================
@@ -78,23 +78,32 @@ def get_patient_wallet(db: Session, patient_id: int) -> Wallet:
     return wallet
 
 
-# 🔥 FUNÇÃO PARA GERAR MEET, ENVIAR EMAILS E NOTIFICAÇÕES
+# 🔥 FUNÇÃO PARA GERAR JITSI MEET, ENVIAR EMAILS E NOTIFICAÇÕES
 def generate_meet_and_send_emails_and_notifications(appointment: Appointment, db: Session):
-    """Gera link do Google Meet, envia e-mails e cria notificações no dashboard"""
+    """Gera link do Jitsi Meet, envia e-mails e cria notificações no dashboard"""
     meet_url = None
     try:
-        if google_meet_service:
-            meet_url = google_meet_service.create_meet_link(appointment)
-            if meet_url:
-                appointment.video_call_url = meet_url
-                db.commit()
-                print(f"✅ [WEBHOOK] Meet gerado com sucesso: {meet_url}")
+        if jitsi_service:
+            therapist = db.get(User, appointment.therapist_user_id)
+            if therapist:
+                meet_url = jitsi_service.get_meet_url(
+                    appointment_id=appointment.id,
+                    user_id=therapist.id,
+                    user_name=therapist.full_name or therapist.email.split('@')[0],
+                    is_moderator=True
+                )
+                if meet_url:
+                    appointment.video_call_url = meet_url
+                    db.commit()
+                    print(f"✅ [WEBHOOK] Jitsi Meet gerado com sucesso: {meet_url}")
+                else:
+                    print(f"⚠️ [WEBHOOK] get_meet_url retornou None")
             else:
-                print(f"⚠️ [WEBHOOK] create_meet_link retornou None")
+                print(f"⚠️ [WEBHOOK] Terapeuta não encontrado para a sessão {appointment.id}")
         else:
-            print(f"⚠️ [WEBHOOK] google_meet_service não disponível")
+            print(f"⚠️ [WEBHOOK] jitsi_service não disponível")
     except Exception as e:
-        print(f"❌ [WEBHOOK] Erro ao gerar Meet: {e}")
+        print(f"❌ [WEBHOOK] Erro ao gerar Jitsi Meet: {e}")
         import traceback
         traceback.print_exc()
     
@@ -224,7 +233,6 @@ def handle_subscription_created(subscription_data: dict, db: Session):
     current_period_end = datetime.fromtimestamp(subscription_data.get("current_period_end", 0))
     status = subscription_data.get("status", "active")
     
-    # Mapear price_id para plano
     plan_map = {
         "price_essencial": "essencial",
         "price_profissional": "profissional", 
@@ -232,7 +240,6 @@ def handle_subscription_created(subscription_data: dict, db: Session):
     }
     plan = plan_map.get(plan_id, "essencial")
     
-    # Buscar terapeuta pelo customer_id
     therapist_profile = db.execute(
         select(TherapistProfile).where(TherapistProfile.stripe_customer_id == customer_id)
     ).scalar_one_or_none()
@@ -241,10 +248,8 @@ def handle_subscription_created(subscription_data: dict, db: Session):
         print(f"⚠️ Terapeuta não encontrado para customer {customer_id}")
         return
     
-    # Mapear plano para nome amigável
     plan_display_name = get_plan_name(plan)
     
-    # Verificar se já existe assinatura
     existing = db.execute(
         select(Subscription).where(Subscription.stripe_subscription_id == stripe_subscription_id)
     ).scalar_one_or_none()
@@ -270,7 +275,6 @@ def handle_subscription_created(subscription_data: dict, db: Session):
     db.commit()
     print(f"✅ Assinatura {stripe_subscription_id} - Plano: {plan} - Status: {status}")
     
-    # 🔥 Notificar terapeuta sobre ativação da assinatura
     try:
         therapist_user = db.get(User, therapist_profile.user_id)
         if therapist_user and status == "active":
@@ -314,7 +318,6 @@ def handle_subscription_updated(subscription_data: dict, db: Session):
     db.commit()
     print(f"✅ Assinatura atualizada: {stripe_subscription_id} - Status: {status} - Plano: {subscription.plan}")
     
-    # 🔥 Notificar terapeuta sobre cancelamento da assinatura
     if status in ["canceled", "expired", "incomplete_expired"]:
         try:
             therapist_user = db.get(User, subscription.therapist_profile.user_id)
@@ -346,7 +349,6 @@ def handle_subscription_deleted(subscription_data: dict, db: Session):
         db.commit()
         print(f"✅ Assinatura cancelada e downgrade para essencial: {stripe_subscription_id}")
         
-        # 🔥 Notificar terapeuta sobre cancelamento
         try:
             therapist_user = db.get(User, subscription.therapist_profile.user_id)
             if therapist_user:
@@ -368,7 +370,6 @@ def handle_invoice_payment_failed(invoice_data: dict, db: Session):
     print(f"⚠️ Falha no pagamento da assinatura: {subscription_id}")
     print(f"   Cliente: {customer_id}")
     
-    # 🔥 Notificar terapeuta sobre falha no pagamento
     try:
         therapist_profile = db.execute(
             select(TherapistProfile).where(TherapistProfile.stripe_customer_id == customer_id)
@@ -507,7 +508,6 @@ async def create_subscription_checkout(
     body = await request.json()
     plan = body.get("plan", "profissional")
     
-    # 🔥 Preços em centavos
     prices = {
         "profissional": 7900,
         "premium": 14900
@@ -565,159 +565,162 @@ async def create_subscription_checkout(
 
 
 # ============================================
-# WEBHOOK - CORRIGIDO (Meet gerado APÓS pagamento total)
+# WEBHOOK - COM TRATAMENTO DE ERRO
 # ============================================
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    print("\n" + "="*70)
-    print("🔔 WEBHOOK RECEBIDO")
-    print("="*70)
-
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
-
     try:
-        if STRIPE_WEBHOOK_SECRET:
-            event = stripe.Webhook.construct_event(
-                payload,
-                sig_header,
-                STRIPE_WEBHOOK_SECRET
-            )
-        else:
-            event = json.loads(payload)
+        print("\n" + "="*70)
+        print("🔔 WEBHOOK RECEBIDO")
+        print("="*70)
 
-    except Exception as e:
-        print("❌ Erro validação webhook:", e)
-        raise HTTPException(status_code=400, detail="Webhook inválido")
+        payload = await request.body()
+        sig_header = request.headers.get("stripe-signature")
 
-    event_type = event.get("type")
-    print(f"📦 Evento: {event_type}")
-
-    # ========================================
-    # PAGAMENTO DE SESSÃO
-    # ========================================
-    if event_type == "checkout.session.completed":
-        session = event["data"]["object"]
-        metadata = session.get("metadata", {}) or {}
-
-        if metadata.get("type") == "subscription":
-            print("📋 É assinatura - ignorado neste handler")
-            return {"status": "ignored"}
-        
-        payment_id = metadata.get("payment_id")
-        appointment_id = metadata.get("appointment_id")
-        already_debited = float(metadata.get("already_debited", 0))
-
-        print(f"📋 payment_id: {payment_id}")
-        print(f"📋 appointment_id: {appointment_id}")
-        print(f"📋 already_debited: R$ {already_debited}")
-
-        if not payment_id:
-            print("⚠️ payment_id ausente")
-            return {"status": "ignored"}
-
-        payment = db.get(Payment, int(payment_id))
-
-        if not payment:
-            print("⚠️ payment não encontrado")
-            return {"status": "ignored"}
-
-        if payment.status == "paid":
-            print("⚠️ pagamento já processado")
-            return {"status": "already_processed"}
-
-        wallet = db.get(Wallet, payment.wallet_id)
-
-        if not wallet:
-            raise Exception("Wallet não encontrada")
-
-        # CRÉDITO DO PAGAMENTO STRIPE
-        old_balance = wallet.balance
-        wallet.balance += payment.amount
-
-        credit = Ledger(
-            wallet_id=wallet.id,
-            transaction_type="credit_purchase",
-            amount=payment.amount,
-            balance_after=wallet.balance,
-            description="Recarga via Stripe",
-            meta_data={"payment_id": payment.id}
-        )
-        db.add(credit)
-
-        payment.status = "paid"
-        payment.paid_at = datetime.now()
-
-        # 🔥 CONFIRMAR APPOINTMENT
-        if appointment_id:
-            appointment = db.get(Appointment, int(appointment_id))
-
-            if appointment:
-                print(f"\n📋 Processando sessão {appointment.id}")
-                
-                # ATUALIZAR STATUS
-                old_status = appointment.status
-                if appointment.status == AppointmentStatus.proposed:
-                    appointment.status = AppointmentStatus.confirmed
-                elif appointment.status == AppointmentStatus.scheduled:
-                    appointment.status = AppointmentStatus.confirmed
-                print(f"✅ Status atualizado: {old_status} → {appointment.status}")
-
-                # 🔥 DÉBITO DA SESSÃO (valor total)
-                existing_debit = db.execute(
-                    select(Ledger).where(
-                        Ledger.appointment_id == appointment.id,
-                        Ledger.transaction_type == "session_debit"
-                    )
-                ).scalar_one_or_none()
-                
-                if not existing_debit:
-                    wallet.balance -= appointment.session_price
-                    debit = Ledger(
-                        wallet_id=wallet.id,
-                        appointment_id=appointment.id,
-                        transaction_type="session_debit",
-                        amount=appointment.session_price,
-                        balance_after=wallet.balance,
-                        description=f"Sessão {appointment.id} - Pagamento confirmado"
-                    )
-                    db.add(debit)
-                    print(f"💰 Débito realizado: R$ {appointment.session_price}")
-                
-                # 🔥 GERAR MEET, ENVIAR EMAILS E NOTIFICAÇÕES (SÓ DEPOIS DO PAGAMENTO TOTAL)
-                generate_meet_and_send_emails_and_notifications(appointment, db)
-                
-                # 🔥 REGISTRAR COMISSÃO
-                commission_rate = get_therapist_commission_rate(appointment.therapist_user_id, db)
-                register_commission(
-                    appointment_id=appointment.id,
-                    therapist_user_id=appointment.therapist_user_id,
-                    patient_user_id=appointment.patient_user_id,
-                    session_price=float(appointment.session_price),
-                    commission_rate=commission_rate,
-                    db=db
+        try:
+            if STRIPE_WEBHOOK_SECRET:
+                event = stripe.Webhook.construct_event(
+                    payload,
+                    sig_header,
+                    STRIPE_WEBHOOK_SECRET
                 )
+            else:
+                event = json.loads(payload)
+        except Exception as e:
+            print("❌ Erro validação webhook:", e)
+            raise HTTPException(status_code=400, detail="Webhook inválido")
 
-        db.commit()
-        print(f"💰 Webhook concluído! Saldo final: R$ {wallet.balance}")
+        event_type = event.get("type")
+        print(f"📦 Evento: {event_type}")
 
-    # ========================================
-    # ASSINATURAS (PLANOS)
-    # ========================================
-    elif event_type == "customer.subscription.created":
-        handle_subscription_created(event["data"]["object"], db)
-    
-    elif event_type == "customer.subscription.updated":
-        handle_subscription_updated(event["data"]["object"], db)
-    
-    elif event_type == "customer.subscription.deleted":
-        handle_subscription_deleted(event["data"]["object"], db)
-    
-    elif event_type == "invoice.payment_failed":
-        handle_invoice_payment_failed(event["data"]["object"], db)
+        if event_type == "checkout.session.completed":
+            try:
+                session = event["data"]["object"]
+                metadata = session.get("metadata", {}) or {}
 
-    return {"status": "success"}
+                if metadata.get("type") == "subscription":
+                    print("📋 É assinatura - ignorado neste handler")
+                    return {"status": "ignored"}
+                
+                payment_id = metadata.get("payment_id")
+                appointment_id = metadata.get("appointment_id")
+                already_debited = float(metadata.get("already_debited", 0))
+
+                print(f"📋 payment_id: {payment_id}")
+                print(f"📋 appointment_id: {appointment_id}")
+                print(f"📋 already_debited: R$ {already_debited}")
+
+                if not payment_id:
+                    print("⚠️ payment_id ausente")
+                    return {"status": "ignored"}
+
+                payment = db.get(Payment, int(payment_id))
+
+                if not payment:
+                    print("⚠️ payment não encontrado")
+                    return {"status": "ignored"}
+
+                if payment.status == "paid":
+                    print("⚠️ pagamento já processado")
+                    return {"status": "already_processed"}
+
+                wallet = db.get(Wallet, payment.wallet_id)
+
+                if not wallet:
+                    print("❌ Wallet não encontrada")
+                    return {"status": "error", "detail": "Wallet not found"}
+
+                # CRÉDITO DO PAGAMENTO STRIPE
+                old_balance = wallet.balance
+                wallet.balance += Decimal(str(payment.amount))
+
+                credit = Ledger(
+                    wallet_id=wallet.id,
+                    transaction_type="credit_purchase",
+                    amount=payment.amount,
+                    balance_after=wallet.balance,
+                    description="Recarga via Stripe",
+                    meta_data={"payment_id": payment.id}
+                )
+                db.add(credit)
+
+                payment.status = "paid"
+                payment.paid_at = datetime.now()
+
+                if appointment_id:
+                    appointment = db.get(Appointment, int(appointment_id))
+
+                    if appointment:
+                        print(f"\n📋 Processando sessão {appointment.id}")
+                        
+                        old_status = appointment.status
+                        if appointment.status == AppointmentStatus.proposed:
+                            appointment.status = AppointmentStatus.confirmed
+                        elif appointment.status == AppointmentStatus.scheduled:
+                            appointment.status = AppointmentStatus.confirmed
+                        print(f"✅ Status atualizado: {old_status} → {appointment.status}")
+
+                        existing_debit = db.execute(
+                            select(Ledger).where(
+                                Ledger.appointment_id == appointment.id,
+                                Ledger.transaction_type == "session_debit"
+                            )
+                        ).scalar_one_or_none()
+                        
+                        if not existing_debit:
+                            wallet.balance -= Decimal(str(appointment.session_price))
+                            debit = Ledger(
+                                wallet_id=wallet.id,
+                                appointment_id=appointment.id,
+                                transaction_type="session_debit",
+                                amount=appointment.session_price,
+                                balance_after=wallet.balance,
+                                description=f"Sessão {appointment.id} - Pagamento confirmado"
+                            )
+                            db.add(debit)
+                            print(f"💰 Débito realizado: R$ {appointment.session_price}")
+                        
+                        # 🔥 GERAR JITSI MEET
+                        generate_meet_and_send_emails_and_notifications(appointment, db)
+                        
+                        # 🔥 REGISTRAR COMISSÃO
+                        commission_rate = get_therapist_commission_rate(appointment.therapist_user_id, db)
+                        register_commission(
+                            appointment_id=appointment.id,
+                            therapist_user_id=appointment.therapist_user_id,
+                            patient_user_id=appointment.patient_user_id,
+                            session_price=float(appointment.session_price),
+                            commission_rate=commission_rate,
+                            db=db
+                        )
+
+                db.commit()
+                print(f"💰 Webhook concluído! Saldo final: R$ {wallet.balance}")
+                
+            except Exception as e:
+                print(f"❌ ERRO DENTRO DO checkout.session.completed: {e}")
+                import traceback
+                traceback.print_exc()
+                db.rollback()
+                return {"status": "error", "detail": str(e)}
+
+        elif event_type == "customer.subscription.created":
+            handle_subscription_created(event["data"]["object"], db)
+        elif event_type == "customer.subscription.updated":
+            handle_subscription_updated(event["data"]["object"], db)
+        elif event_type == "customer.subscription.deleted":
+            handle_subscription_deleted(event["data"]["object"], db)
+        elif event_type == "invoice.payment_failed":
+            handle_invoice_payment_failed(event["data"]["object"], db)
+
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"❌ ERRO GERAL NO WEBHOOK: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "detail": str(e)}
 
 
 # ============================================

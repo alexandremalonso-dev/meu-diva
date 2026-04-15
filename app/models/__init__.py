@@ -50,3 +50,11 @@ from app.models.notification import Notification
 from app.models.plan_price import PlanPrice
 from app.models.user_permissions import UserPermission
 from app.models.plan_features_config import PlanFeaturesConfig
+
+# ==========================
+# 🔥 MODELOS EMPRESARIAIS (EMPRESA, PLANOS, DOCUMENTOS, ENDEREÇOS)
+# ==========================
+from app.models.empresa_plano import EmpresaPlano
+from app.models.empresa_documento import EmpresaDocumento
+from app.models.empresa_endereco import EmpresaEndereco
+from app.models.empresa_profile import EmpresaProfile

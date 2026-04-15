@@ -47,7 +47,6 @@ class User(Base):
         nullable=False
     )
 
-    # 🔥 NOVOS CAMPOS PARA NOTIFICAÇÕES
     email_notifications_enabled: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
@@ -69,14 +68,11 @@ class User(Base):
         nullable=True
     )
 
-    # 🔥 ID FORMATADO (ex: 2026000001)
     @hybrid_property
     def formatted_id(self) -> str:
-        """Retorna ID formatado: ANO + SEQUENCIAL (ex: 2026000001)"""
         year = datetime.now().year
         return f"{year}{self.id:06d}"
 
-    # ✅ RELACIONAMENTO COM TERAPEUTA
     therapist_profile = relationship(
         "app.models.therapist_profile.TherapistProfile",
         back_populates="user",
@@ -84,7 +80,6 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
-    # 🔥 RELACIONAMENTO COM PACIENTE
     patient_profile = relationship(
         "app.models.patient_profile.PatientProfile",
         back_populates="user",
@@ -92,7 +87,20 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
-    # ✅ RELACIONAMENTO COM APPOINTMENTS
+    admin_profile = relationship(
+        "app.models.admin_profile.AdminProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+    empresa_profile = relationship(
+        "app.models.empresa_profile.EmpresaProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
     appointments_as_patient = relationship(
         "app.models.appointment.Appointment",
         foreign_keys="[Appointment.patient_user_id]",
@@ -107,7 +115,6 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
-    # ✅ RELACIONAMENTO COM NOTIFICAÇÕES
     notifications = relationship(
         "app.models.notification.Notification",
         back_populates="user",

@@ -23,9 +23,12 @@ router = APIRouter(prefix="/google-calendar", tags=["google-calendar"])
 # ── Credenciais OAuth (do client_secret JSON enviado) ──────────────────────
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CALENDAR_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CALENDAR_CLIENT_SECRET")
+
+# 🔥 CORRIGIDO: Usa BACKEND_URL do environment
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 REDIRECT_URI = os.environ.get(
     "GOOGLE_CALENDAR_REDIRECT_URI",
-    "http://localhost:8000/api/google-calendar/callback"
+    f"{BACKEND_URL}/api/google-calendar/callback"
 )
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
@@ -33,9 +36,7 @@ SCOPES = "https://www.googleapis.com/auth/calendar.events"
 
 # Validação para garantir que as chaves existem
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-    raise ValueError(
-        "GOOGLE_CALENDAR_CLIENT_ID e GOOGLE_CALENDAR_CLIENT_SECRET devem ser configurados no arquivo .env"
-    )
+    print("⚠️ Google Calendar: credenciais não configuradas")
 
 # ==========================
 # HELPERS
@@ -49,7 +50,7 @@ def _get_google_auth_url(state: str) -> str:
         "response_type": "code",
         "scope": SCOPES,
         "access_type": "offline",
-        "prompt": "consent",   # garante refresh_token sempre
+        "prompt": "consent",
         "state": state,
     }
     return "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
@@ -101,12 +102,10 @@ async def _get_valid_access_token(profile: TherapistProfile, db: Session) -> str
     if isinstance(token_data, str):
         token_data = json.loads(token_data)
 
-    # Verifica expiração (com margem de 60s)
     expires_at = token_data.get("expires_at", 0)
     now_ts = datetime.now(timezone.utc).timestamp()
 
     if now_ts >= expires_at - 60:
-        # Renova
         new_access = await _refresh_access_token(token_data["refresh_token"])
         import httpx
         async with httpx.AsyncClient() as client:
@@ -161,14 +160,12 @@ async def _upsert_calendar_event(
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         if calendar_event_id:
-            # Atualiza evento existente
             res = await client.put(
                 f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{calendar_event_id}",
                 headers=headers,
                 json=event_body,
             )
         else:
-            # Cria novo evento
             res = await client.post(
                 "https://www.googleapis.com/calendar/v3/calendars/primary/events",
                 headers=headers,
@@ -198,7 +195,7 @@ async def _delete_calendar_event(access_token: str, calendar_event_id: str):
 # ==========================
 async def sync_appointment_to_calendar(
     appointment: Appointment,
-    action: str,   # "upsert" | "cancel"
+    action: str,
     db: Session
 ):
     """
@@ -211,9 +208,8 @@ async def sync_appointment_to_calendar(
         ).scalar_one_or_none()
 
         if not profile or not profile.google_calendar_enabled or not profile.google_calendar_token:
-            return  # Integração não ativada — silencioso
+            return
 
-        # Dados do paciente
         patient_profile = db.execute(
             select(PatientProfile).where(PatientProfile.user_id == appointment.patient_user_id)
         ).scalar_one_or_none()
@@ -224,7 +220,6 @@ async def sync_appointment_to_calendar(
 
         access_token = await _get_valid_access_token(profile, db)
 
-        # calendar_event_id armazenado no appointment
         existing_event_id = getattr(appointment, "google_calendar_event_id", None)
 
         if action == "cancel":
@@ -234,7 +229,6 @@ async def sync_appointment_to_calendar(
                 db.commit()
             return
 
-        # upsert
         event_id = await _upsert_calendar_event(
             access_token, appointment, patient_name, therapist_name, meet_url, existing_event_id
         )
@@ -244,7 +238,6 @@ async def sync_appointment_to_calendar(
             print(f"✅ GCal sync: evento {event_id} para sessão {appointment.id}")
 
     except Exception as e:
-        # Nunca bloqueia o fluxo principal
         print(f"⚠️ GCal sync ignorado (não crítico): {e}")
 
 
@@ -303,7 +296,6 @@ async def oauth_callback(
 
     tokens = await _exchange_code_for_tokens(code)
 
-    # Busca email da conta conectada
     import httpx
     async with httpx.AsyncClient() as client:
         info_res = await client.get(
@@ -312,7 +304,6 @@ async def oauth_callback(
         )
     email = info_res.json().get("email", "") if info_res.status_code == 200 else ""
 
-    # Calcula expires_at
     expires_at = datetime.now(timezone.utc).timestamp() + tokens.get("expires_in", 3600)
 
     token_data = {
@@ -335,7 +326,6 @@ async def oauth_callback(
 
     print(f"✅ Google Calendar conectado para terapeuta {user_id} ({email})")
 
-    # Redireciona de volta para o dashboard do terapeuta
     return RedirectResponse(
         url=f"{FRONTEND_URL}/therapist/dashboard?gcal=connected",
         status_code=302

@@ -1,18 +1,35 @@
+# ==========================
+# CARREGAR VARIÁVEIS DE AMBIENTE
+# ==========================
+from app.core.env_loader import load_environment
+load_environment()
+
 from fastapi import FastAPI, Request, WebSocket, Depends
 from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 import traceback
 import os
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
+# 🔥 IMPORT DO SCHEDULER DE CRÉDITOS EMPRESA
+from apscheduler.schedulers.background import BackgroundScheduler
+
 load_dotenv()
 
 app = FastAPI(title="Meu Divã API", version="0.1.0")
 
+# ==========================
+# MIDDLEWARES (ORDEM IMPORTANTE)
+# ==========================
+
+# 🔥 Session middleware (necessário para OAuth) - DEVE SER O PRIMEIRO
+app.add_middleware(SessionMiddleware, secret_key="meudiva_oauth_secret_key_2024")
 
 @app.middleware("http")
 async def catch_exceptions_middleware(request: Request, call_next):
@@ -31,9 +48,16 @@ async def catch_exceptions_middleware(request: Request, call_next):
         )
 
 
+# 🔥 CORS CONFIGURADO PARA PRODUÇÃO
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://app.meudivaonline.com",
+        "https://homologacao.meudivaonline.com",
+        "https://meudiva-frontend-prod-592671373665.southamerica-east1.run.app",
+        "https://meudiva-frontend-non-prod-365415900882.southamerica-east1.run.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -81,6 +105,26 @@ from app.routes import ws_chat
 from app.routes import ws_events
 from app.db.database import get_db
 from app.routes import admin_payments
+from app.routes import therapist_availability
+from app.routes import empresa_routes
+from app.routes import empresa_analytics
+from app.routes import empresa_import
+from app.routes import empresa_colaboradores
+from app.routes import empresa_profile
+from app.routes import admin_empresa_planos
+from app.routes import admin_empresas_assinaturas
+from app.routes import empresa_reports
+from app.routes import admin_empresas
+from app.routes import empresa_sessions
+from app.routes import empresa_colaboradores_plano
+from app.routes import admin_empresas_cobranca
+from app.routes import empresa_colaboradores_assinaturas
+from app.routes import empresa_credits
+from app.routes import jitsi
+from app.routes import admin_reports_duracao
+
+# 🔥 NOVA ROTA PARA PLANO EMPRESA
+from app.routes import appointments_plano
 
 # 🔥 NOTAS FISCAIS (INVOICES) - USANDO SINGULAR
 try:
@@ -158,6 +202,26 @@ app.include_router(admin_therapists.router, prefix="/api")
 app.include_router(ws_chat.router)
 app.include_router(ws_events.router)
 app.include_router(admin_payments.router, prefix="/api", tags=["admin-payments"])
+app.include_router(therapist_availability.router)
+app.include_router(empresa_routes.router, prefix="/api")
+app.include_router(empresa_analytics.router, prefix="/api")
+app.include_router(empresa_import.router, prefix="/api")
+app.include_router(empresa_colaboradores.router, prefix="/api")
+app.include_router(empresa_profile.router, prefix="/api")
+app.include_router(admin_empresa_planos.router, prefix="/api")
+app.include_router(admin_empresas_assinaturas.router, prefix="/api")
+app.include_router(empresa_reports.router, prefix="/api")
+app.include_router(admin_empresas.router, prefix="/api")
+app.include_router(empresa_sessions.router, prefix="/api")
+app.include_router(empresa_colaboradores_plano.router, prefix="/api")
+app.include_router(admin_empresas_cobranca.router, prefix="/api")
+app.include_router(empresa_colaboradores_assinaturas.router, prefix="/api")
+app.include_router(empresa_credits.router, prefix="/api")
+app.include_router(jitsi.router, prefix="/api")
+app.include_router(admin_reports_duracao.router, prefix="/api")
+
+# 🔥 ROTA PARA PLANO EMPRESA
+app.include_router(appointments_plano.router, prefix="/api")
 
 # 🔥 NOTAS FISCAIS (INVOICES) - REGISTRAR ROTAS
 if therapist_invoice:
@@ -294,3 +358,35 @@ try:
     print("✅ Scheduler de notificações de assinaturas iniciado com sucesso")
 except Exception as e:
     print(f"⚠️ Erro ao iniciar scheduler: {e}")
+
+
+# ==========================
+# 🔥 SCHEDULER - RENOVAÇÃO DE CRÉDITOS EMPRESA
+# ==========================
+
+def start_empresa_credit_scheduler():
+    """Inicia o scheduler para renovação mensal de créditos de plano empresa"""
+    try:
+        from app.services.empresa_credit_scheduler import executar_rotina_mensal
+        
+        scheduler = BackgroundScheduler()
+        
+        # Executa no dia 1 de cada mês às 00:01
+        scheduler.add_job(
+            executar_rotina_mensal,
+            'cron',
+            day=1,
+            hour=0,
+            minute=1,
+            id='empresa_credit_renewal',
+            replace_existing=True
+        )
+        
+        scheduler.start()
+        print("✅ Scheduler de créditos empresa iniciado (executa dia 1 às 00:01)")
+    except Exception as e:
+        print(f"⚠️ Erro ao iniciar scheduler de créditos empresa: {e}")
+
+
+# Iniciar scheduler de créditos empresa
+start_empresa_credit_scheduler()

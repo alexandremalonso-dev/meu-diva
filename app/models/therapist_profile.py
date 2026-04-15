@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import datetime, date
-from sqlalchemy import ForeignKey, String, Text, Numeric, DateTime, Integer, Boolean, JSON, Enum as SQLEnum, Date
+from sqlalchemy import ForeignKey, String, Text, Numeric, DateTime, Integer, Boolean, JSON, Enum as SQLEnum, Date, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 import enum
@@ -152,6 +152,26 @@ class TherapistProfile(Base):
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # ==========================
+    # 🔥 CHAT E BLOQUEIOS
+    # ==========================
+    chat_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True,
+        comment="Se o chat está habilitado para este terapeuta"
+    )
+    blocked_patients: Mapped[list | None] = mapped_column(
+        ARRAY(Integer), nullable=True,
+        comment="Lista de IDs de pacientes bloqueados"
+    )
+
+    # ==========================
+    # 🔥 DISPONIBILIDADE IMEDIATA
+    # ==========================
+    is_available_now: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False,
+        comment="Se o terapeuta está disponível para atendimento imediato agora"
+    )
+
+    # ==========================
     # 🔥 GOOGLE CALENDAR INTEGRATION
     # ==========================
     google_calendar_token: Mapped[dict | None] = mapped_column(
@@ -167,7 +187,7 @@ class TherapistProfile(Base):
     )
 
     # ==========================
-    # 🔥 VALIDAÇÃO DE DOCUMENTOS (NOVO)
+    # 🔥 VALIDAÇÃO DE DOCUMENTOS
     # ==========================
     validation_status: Mapped[str] = mapped_column(
         String(50),
@@ -211,9 +231,9 @@ class TherapistProfile(Base):
         back_populates="therapist_profile",
         cascade="all, delete-orphan"
     )
-    
+
     # ==========================
-    # 🔥 NOVOS RELACIONAMENTOS PARA DOCUMENTOS E VALIDAÇÃO
+    # 🔥 DOCUMENTOS E VALIDAÇÃO
     # ==========================
     documents = relationship(
         "app.models.therapist_document.TherapistDocument",
@@ -228,7 +248,7 @@ class TherapistProfile(Base):
     )
 
     # ==========================
-    # 🔥 PAGAMENTOS (PAYMENTS) - DESCOMENTADO (modelo criado)
+    # 🔥 PAGAMENTOS
     # ==========================
     payments = relationship(
         "app.models.therapist_payment.TherapistPayment",

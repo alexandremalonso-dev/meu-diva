@@ -27,7 +27,7 @@ import os
 
 from app.services.email_service import email_service
 from app.services.notification_service import NotificationService
-from app.core.google_meet import google_meet_service
+from app.services.jitsi_service import jitsi_service
 from app.services.receipt_service import receipt_service
 
 # 🔥 WebSocket events
@@ -36,7 +36,7 @@ from app.routes.ws_events import emit_event
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
-print("✅ Serviços de e-mail e Meet carregados com sucesso")
+print("✅ Serviços de e-mail e Jitsi carregados com sucesso")
 
 BR_TZ = timezone(timedelta(hours=-3))
 
@@ -83,13 +83,21 @@ def _send_confirmation_emails_and_meet_and_notifications(appt: Appointment, db: 
             return
         meet_url = None
         try:
-            if google_meet_service:
-                meet_url = google_meet_service.create_meet_link(appt)
+            if jitsi_service:
+                meet_url = jitsi_service.get_meet_url(
+                    appointment_id=appt.id,
+                    user_id=therapist.id,
+                    user_name=therapist.full_name or therapist.email.split('@')[0],
+                    is_moderator=True
+                )
                 if meet_url:
                     appt.video_call_url = meet_url
                     db.commit()
+                    print(f"✅ Jitsi Meet gerado: {meet_url}")
+            else:
+                print("⚠️ jitsi_service não disponível")
         except Exception as e:
-            print(f"⚠️ Erro ao gerar Meet: {e}")
+            print(f"⚠️ Erro ao gerar Jitsi Meet: {e}")
         
         # Enviar e-mails
         email_service.send_appointment_confirmation(appt, patient.email, therapist.email, meet_url)
@@ -209,6 +217,21 @@ def create_appointment(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.patient, UserRole.therapist, UserRole.admin])),
 ):
+    # 🔥 VERIFICAÇÃO PARA PLANO EMPRESA
+    # Se for paciente, verificar se é colaborador de empresa
+    if current_user.role == UserRole.patient:
+        patient_profile = db.query(PatientProfile).filter(
+            PatientProfile.user_id == current_user.id
+        ).first()
+        
+        # Se for colaborador de empresa, redirecionar para fluxo específico
+        if patient_profile and patient_profile.empresa_id:
+            from app.routes import appointments_plano
+            return appointments_plano.create_empresa_appointment(payload, request, db, current_user)
+    
+    # ============================================
+    # FLUXO ORIGINAL (PACIENTE COMUM / PRÉ-PAGO)
+    # ============================================
     try:
         if current_user.role == UserRole.patient and payload.therapist_user_id == current_user.id:
             raise HTTPException(status_code=400, detail="Você não pode agendar com você mesmo")
@@ -363,7 +386,6 @@ def create_appointment(
         db.rollback()
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
-
 
 # ==========================
 # RESCHEDULE
@@ -771,7 +793,7 @@ def send_receipt_by_email(
 
 
 # ==========================
-# GERAR MEET
+# GERAR MEET (JITSI)
 # ==========================
 @router.post("/{appointment_id}/generate-meet")
 def generate_meet_link(
@@ -779,25 +801,43 @@ def generate_meet_link(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin]))
 ):
+    """
+    Gera link do Jitsi Meet para uma sessão
+    """
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    
     if appointment.therapist_user_id != current_user.id and current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Acesso negado")
+    
     if appointment.video_call_url:
-        return {"success": True, "message": "Sessão já possui link do Meet", "video_call_url": appointment.video_call_url}
-    if not google_meet_service:
-        raise HTTPException(status_code=503, detail="Google Meet Service não disponível")
+        return {"success": True, "message": "Sessão já possui link da videochamada", "video_call_url": appointment.video_call_url}
+    
+    if not jitsi_service:
+        raise HTTPException(status_code=503, detail="Jitsi Service não disponível")
+    
     try:
-        meet_url = google_meet_service.create_meet_link(appointment)
+        therapist = db.get(User, appointment.therapist_user_id)
+        if not therapist:
+            raise HTTPException(status_code=404, detail="Terapeuta não encontrado")
+        
+        meet_url = jitsi_service.get_meet_url(
+            appointment_id=appointment.id,
+            user_id=therapist.id,
+            user_name=therapist.full_name or therapist.email.split('@')[0],
+            is_moderator=True
+        )
+        
         if meet_url:
             appointment.video_call_url = meet_url
             db.commit()
-            return {"success": True, "message": "Meet gerado com sucesso", "video_call_url": meet_url}
-        raise HTTPException(status_code=500, detail="Falha ao gerar Meet")
+            return {"success": True, "message": "Link da videochamada gerado com sucesso", "video_call_url": meet_url}
+        
+        raise HTTPException(status_code=500, detail="Falha ao gerar link da videochamada")
     except Exception as e:
         import traceback; traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar Meet: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar link: {str(e)}")
 
 
 # ==========================
@@ -932,23 +972,33 @@ def update_appointment_status(
         db.commit()
         db.refresh(appt)
 
-        # ✅ MEET + EMAIL + NOTIFICAÇÕES após confirmação
+        # ✅ JITSI + EMAIL + NOTIFICAÇÕES após confirmação
         if new_status == AppointmentStatus.confirmed:
             if not appt.video_call_url:
                 try:
-                    if google_meet_service:
-                        meet_url = google_meet_service.create_meet_link(appt)
-                        if meet_url:
-                            appt.video_call_url = meet_url
-                            db.commit()
-                            print(f"✅ Meet gerado: {meet_url}")
+                    if jitsi_service:
+                        therapist = db.get(User, appt.therapist_user_id)
+                        if therapist:
+                            meet_url = jitsi_service.get_meet_url(
+                                appointment_id=appt.id,
+                                user_id=therapist.id,
+                                user_name=therapist.full_name or therapist.email.split('@')[0],
+                                is_moderator=True
+                            )
+                            if meet_url:
+                                appt.video_call_url = meet_url
+                                db.commit()
+                                print(f"✅ Jitsi Meet gerado: {meet_url}")
+                            else:
+                                print("⚠️ get_meet_url retornou None")
                         else:
-                            print("⚠️ create_meet_link retornou None")
+                            print("⚠️ Terapeuta não encontrado para a sessão {appt.id}")
                     else:
-                        print("⚠️ google_meet_service é None — verifique token.json e credentials.json")
+                        print("⚠️ jitsi_service não disponível")
                 except Exception as e:
-                    print(f"⚠️ Erro ao gerar Meet: {e}")
+                    print(f"⚠️ Erro ao gerar Jitsi Meet: {e}")
                     import traceback; traceback.print_exc()
+            
             try:
                 patient = db.get(User, appt.patient_user_id)
                 therapist = db.get(User, appt.therapist_user_id)

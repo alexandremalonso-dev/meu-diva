@@ -22,7 +22,8 @@ class Payment(Base):
     payment_method = Column(String(20), default="stripe")
     stripe_session_id = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # 🔥 CORRIGIDO: server_default para criação, onupdate para modificação
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Campos do wallet.py (unificados)
     patient_id = Column(Integer, ForeignKey("patient_profiles.id", ondelete="CASCADE"), nullable=True)

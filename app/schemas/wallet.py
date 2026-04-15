@@ -30,9 +30,8 @@ class LedgerEntryOut(LedgerEntryBase):
     id: int
     wallet_id: int
     appointment_id: Optional[int]
-    balance_after: Decimal
-    # 🔥 CORRIGIDO: 'metadata' -> 'meta_data' para alinhar com o modelo e a rota
-    meta_data: Optional[dict]  # 👈 ALTERADO DE 'metadata' PARA 'meta_data'
+    balance_after: Decimal    
+    meta_data: Optional[dict] = None
     created_at: datetime
 
     class Config:
