@@ -58,3 +58,8 @@ from app.models.empresa_plano import EmpresaPlano
 from app.models.empresa_documento import EmpresaDocumento
 from app.models.empresa_endereco import EmpresaEndereco
 from app.models.empresa_profile import EmpresaProfile
+
+# ==========================
+# 🔥 MODELO DE PARTICIPANTES DA SESSÃO (JITSI)
+# ==========================
+from app.models.session_participant import SessionParticipant
