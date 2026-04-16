@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "meudiva-non-prod",
+  "private_key_id": "80e48912556de4edb6b8922264897d5671e09ff5",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDLt2X3hbedR06F\nLtRYpSO7wFfFxPgqBXmzCmDo2atpT73J/4eoty0q22UW7bZbzS4Tfdit7tgQlwhb\nrTNeYJ0kQFw/37nfcI0bwFBYsYZZqJqIA16d6GuQEz4gtYQJQW18+WGQeI3ccggg\nlO4s8kriBi3XHiPkWkksEfBhkAdlUakvu9fdY0c9K0mY4co1fQYc2KYmIgTUKISx\nsedttZvu4LITj3KF1loDuYE9V5sWLZXHP3H5a+cisK8BIKkJbXabBRwtPFp+tl3m\n71lIgityGkZcdUWUaYrLu2h18oP9TWS9DpfFZmF32mE0oPdPzq+T1WbY5MHLKsD+\nxtr8gcZ7AgMBAAECggEAJhJoZBIBdstUyV8vIEH8o6IWxUdCedf8HpHZ+qpzdoMI\nnS+8UrOpJVFLWzWh1xZJfisOy7LPfoo7baa46vJza8r7cpSFUFTgikcuvOSwjyEL\ngE/g5vIA6DQwcDx8KJ6pr6mLqkxdds14513uBUhi5krxVjqzyoF1G19e5VzdhPmg\nJEORWvh8nyXYK/uJup0qEHdBqrRc32hybqm33y66ZXpq5JlZCRBgdSdd068ORhDw\nqxyB7GLdUkRWrWSCgBwa78aTZ3CEiblCT0oPCZutL22v1Vq2zkcgyHrzXlkoZVLH\n+7T0qrnCFz44s5Kr5Gck/Vtt/ERs3kPoiOK1IbWeAQKBgQD+HDGGkNDR3+o+1e0K\nN60ha01kLfadapi8VXRt22aI7uPefQLizJM12ZK90kzJu/b35l6Wz17YSFN/nDCA\nedAhblwreHDa4ar8e5za83VUNZSnK2W5AIPlaodGDJtlDbcV4/ttUk42qB9FVOWv\nooWIlgOXSLkgLNB+OquhV9TZGwKBgQDNO0JMpdMCqklqs9Rb3ua0Faz9XzZy3v/x\nWHmIxNX7ADiuJ0PfxG+Wa953RfyQXhNclNs7oFYX8Ty5+dtCYdPycFlICCa2aWwc\nhFAFMeEOhLJzJs7AZHPLgxHGleQbHy0FeVOzkboYEBnAXz43pNyacK9Lo9nXZ328\nD54xW4v+IQKBgClcF2eKrKJsaqkdkr5l/4T//RHANXK7xe5pjlDPNCo3j9lHya92\nksNiDXNeBmeTc4g3889iI1LautR7bJ2Mtiaq2s+sg9nsfzMnP4mXtNInAnIPKzho\ncA9oPmpVZPmWuOUUPXk2u0pEJQrY3aWvs0JfAGigSpmFEc5p6EOTky5fAoGBAJiz\n/fm/7IhwId5V3a1Z5fiapDOGM6I3EOMHvK4qHzj6ijHyn0sRAyI+MrI2jdzxUqCx\nVYpBG64G3fNW2HDFD4m1VIkHH57cRAfX3x5uZZGC5LBPcMiwNYR4irJi9u3DPaF0\nC/ZxeLDM0gxUEZwfe9EiBRxX1w+yPli+misJfdlhAoGBAOwW2payOKoc3padcRQf\nYulz3zFXrp9XnecKxrMKNSLp19TGsQIFr3TiLEISwwtjGFKkK4h+ebxpMkq1WF7B\nDLl06dxeF7stGrviDOWTWo+BQXuQim4cTLXLnWilhUCe7YCoprzBWpjH93lJLlVT\n+RcRM6Muzli2xClhLnd4/gxo\n-----END PRIVATE KEY-----\n",
+  "client_email": "meudiva-github-actions@meudiva-non-prod.iam.gserviceaccount.com",
+  "client_id": "101470834236654285189",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/meudiva-github-actions%40meudiva-non-prod.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
