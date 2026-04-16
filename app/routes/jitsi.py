@@ -1,17 +1,24 @@
 """
 Rotas para integração com Jitsi Meet
 """
-
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.orm import Session
+<<<<<<< HEAD
 from datetime import datetime, timezone
 
+=======
+>>>>>>> parent of 9315e57 (feat: adicionadas novas dependências e correções no modelo Payment)
 from app.db.database import get_db
 from app.core.permissions import require_roles
 from app.core.roles import UserRole
 from app.models.user import User
 from app.models.appointment import Appointment
+<<<<<<< HEAD
 from app.models.session_participant import SessionParticipant
+=======
+from app.models.patient_profile import PatientProfile
+from app.models.therapist_profile import TherapistProfile
+>>>>>>> parent of 9315e57 (feat: adicionadas novas dependências e correções no modelo Payment)
 from app.services.jitsi_service import jitsi_service
 
 router = APIRouter(prefix="/jitsi", tags=["jitsi"])
@@ -25,6 +32,7 @@ router = APIRouter(prefix="/jitsi", tags=["jitsi"])
 async def generate_meet_link(
     appointment_id: int,
     db: Session = Depends(get_db),
+<<<<<<< HEAD
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin]))
 ):
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
@@ -78,11 +86,28 @@ async def get_meet_link(
     if not appointment:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
 
+=======
+    current_user: User = Security(require_roles([UserRole.patient, UserRole.therapist, UserRole.admin]))    
+
+    """
+    Retorna a URL do Jitsi Meet para uma sessão.
+    - Paciente: visualiza apenas
+    - Terapeuta/Admin: moderador da sala
+    """
+    # Buscar sessão
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    
+    # Verificar permissão
+>>>>>>> parent of 9315e57 (feat: adicionadas novas dependências e correções no modelo Payment)
     is_patient = appointment.patient_user_id == current_user.id
     is_therapist = appointment.therapist_user_id == current_user.id
     is_admin = current_user.role == UserRole.admin
-
+    
     if not (is_patient or is_therapist or is_admin):
+<<<<<<< HEAD
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     if not appointment.video_call_url:
@@ -117,11 +142,29 @@ async def register_participant_join(
 
     # 🔥 SEMPRE cria novo registro (não sobrescreve)
     participant_log = SessionParticipant(
+=======
+        raise HTTPException(status_code=403, detail="Acesso negado a esta sessão")
+    
+    # Buscar nome do usuário para exibição
+    user_name = current_user.full_name or current_user.email.split('@')[0]
+    
+    # Se for terapeuta ou admin, é moderador
+    is_moderator = is_therapist or is_admin
+    
+    # Buscar também o nome do outro participante para log (opcional)
+    other_user_id = appointment.therapist_user_id if is_patient else appointment.patient_user_id
+    other_user = db.query(User).filter(User.id == other_user_id).first()
+    other_name = other_user.full_name if other_user else "Participante"
+    
+    # Gerar URL da sala
+    meet_url = jitsi_service.get_meet_url(
+>>>>>>> parent of 9315e57 (feat: adicionadas novas dependências e correções no modelo Payment)
         appointment_id=appointment_id,
         user_id=current_user.id,
         user_role=user_role,
         joined_at=datetime.now(timezone.utc)
     )
+<<<<<<< HEAD
 
     db.add(participant_log)
     db.commit()
@@ -218,4 +261,14 @@ async def get_session_duration(
         "appointment_id": appointment_id,
         "duracao_efetiva_segundos": duracao,
         "duracao_efetiva_minutos": round(duracao / 60, 1)
+=======
+    
+    return {
+        "meet_url": meet_url,
+        "room_name": jitsi_service.generate_room_name(appointment_id),
+        "is_moderator": is_moderator,
+        "appointment_id": appointment_id,
+        "therapist_name": other_name if is_patient else user_name,
+        "patient_name": user_name if is_patient else other_name
+>>>>>>> parent of 9315e57 (feat: adicionadas novas dependências e correções no modelo Payment)
     }

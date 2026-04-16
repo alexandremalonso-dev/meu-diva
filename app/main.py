@@ -48,13 +48,11 @@ async def catch_exceptions_middleware(request: Request, call_next):
         )
 
 
-# 🔥 CORS CONFIGURADO PARA PRODUÇÃO (CORRIGIDO)
+# 🔥 CORS CONFIGURADO PARA PRODUÇÃO
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
         "https://app.meudivaonline.com",
         "https://homologacao.meudivaonline.com",
         "https://meudiva-frontend-prod-592671373665.southamerica-east1.run.app",
