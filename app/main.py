@@ -122,6 +122,7 @@ from app.routes import empresa_colaboradores_assinaturas
 from app.routes import empresa_credits
 from app.routes import jitsi
 from app.routes import admin_reports_duracao
+from app.routes import empresa_planos_public
 
 # 🔥 NOVA ROTA PARA PLANO EMPRESA
 from app.routes import appointments_plano
@@ -219,6 +220,7 @@ app.include_router(empresa_colaboradores_assinaturas.router, prefix="/api")
 app.include_router(empresa_credits.router, prefix="/api")
 app.include_router(jitsi.router, prefix="/api")
 app.include_router(admin_reports_duracao.router, prefix="/api")
+app.include_router(empresa_planos_public.router)
 
 # 🔥 ROTA PARA PLANO EMPRESA
 app.include_router(appointments_plano.router, prefix="/api")
