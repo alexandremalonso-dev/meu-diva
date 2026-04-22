@@ -13,12 +13,12 @@ from app.models.plan_price import PlanPrice
 router = APIRouter(prefix="/plans", tags=["plans"])
 
 
+# 🔥 CORRIGIDO: Endpoint público (não requer autenticação)
 @router.get("/")
 async def get_all_plans(
     db: Session = Depends(get_db),
-    current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin]))
 ):
-    """Retorna todos os planos disponíveis com preços e features"""
+    """Retorna todos os planos disponíveis com preços e features (PÚBLICO)"""
     
     # Buscar preços do banco
     plan_prices = db.query(PlanPrice).all()
