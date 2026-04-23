@@ -24,6 +24,7 @@ from app.schemas.appointment import (
 from app.schemas.medical_record import MedicalRecordCreate, MedicalRecordOut
 
 import os
+import asyncio
 
 from app.services.email_service import email_service
 from app.services.notification_service import NotificationService
@@ -39,6 +40,9 @@ router = APIRouter(prefix="/appointments", tags=["appointments"])
 print("✅ Serviços de e-mail e Jitsi carregados com sucesso")
 
 BR_TZ = timezone(timedelta(hours=-3))
+
+# 🔥 Dicionário para armazenar tarefas de cancelamento agendado
+_cancel_tasks = {}
 
 
 # ==========================
@@ -158,6 +162,86 @@ def _build_appointment_dict(apt: Appointment, db: Session) -> dict:
     }
 
 
+# 🔥 Função para cancelar appointment não pago após timeout
+async def _cancel_unpaid_appointment_async(appointment_id: int):
+    """Cancela appointment não pago após 2 minutos (executado em background)"""
+    from app.db.database import SessionLocal
+    
+    db = SessionLocal()
+    try:
+        appt = db.get(Appointment, appointment_id)
+        if not appt:
+            print(f"⚠️ Appointment {appointment_id} não encontrado para cancelamento automático")
+            return
+        
+        # Verifica se ainda está scheduled (não foi confirmado/alterado)
+        if appt.status == AppointmentStatus.scheduled:
+            appt.status = AppointmentStatus.cancelled_by_patient
+            appt.cancelled_at = datetime.now()
+            appt.cancel_reason = "Pagamento não confirmado em 2 minutos"
+            db.commit()
+            
+            # 🔥 Emitir evento de cancelamento
+            try:
+                patient = db.get(User, appt.patient_user_id)
+                therapist = db.get(User, appt.therapist_user_id)
+                
+                if patient:
+                    event = create_event(
+                        event_type=EventType.APPOINTMENT_CANCELLED,
+                        payload={
+                            "appointment_id": appt.id,
+                            "therapist_id": appt.therapist_user_id,
+                            "therapist_name": therapist.full_name if therapist else None,
+                            "starts_at": appt.starts_at.isoformat(),
+                            "cancelled_by": "paciente",
+                            "reason": "Pagamento não confirmado"
+                        },
+                        target_user_ids=[appt.patient_user_id]
+                    )
+                    emit_event(event)
+                    
+                if therapist:
+                    event = create_event(
+                        event_type=EventType.APPOINTMENT_CANCELLED,
+                        payload={
+                            "appointment_id": appt.id,
+                            "patient_id": appt.patient_user_id,
+                            "patient_name": patient.full_name if patient else None,
+                            "starts_at": appt.starts_at.isoformat(),
+                            "cancelled_by": "paciente",
+                            "reason": "Pagamento não confirmado"
+                        },
+                        target_user_ids=[appt.therapist_user_id]
+                    )
+                    emit_event(event)
+            except Exception as e:
+                print(f"⚠️ Erro ao emitir evento de cancelamento automático: {e}")
+            
+            print(f"✅ Appointment {appointment_id} cancelado automaticamente - pagamento não confirmado")
+            
+    except Exception as e:
+        print(f"❌ Erro ao cancelar appointment {appointment_id} automaticamente: {e}")
+    finally:
+        db.close()
+        # Remove da lista de tarefas
+        if appointment_id in _cancel_tasks:
+            del _cancel_tasks[appointment_id]
+
+
+def _schedule_auto_cancel(appointment_id: int, delay_minutes: int = 2):
+    """Agenda cancelamento automático após X minutos"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(asyncio.sleep(delay_minutes * 60))
+        loop.run_until_complete(_cancel_unpaid_appointment_async(appointment_id))
+    except Exception as e:
+        print(f"⚠️ Erro no scheduler de cancelamento: {e}")
+    finally:
+        loop.close()
+
+
 # ==========================
 # ✅ GROQ LLM — GERAR EVOLUÇÃO CLÍNICA
 # ==========================
@@ -218,13 +302,11 @@ def create_appointment(
     current_user: User = Security(require_roles([UserRole.patient, UserRole.therapist, UserRole.admin])),
 ):
     # 🔥 VERIFICAÇÃO PARA PLANO EMPRESA
-    # Se for paciente, verificar se é colaborador de empresa
     if current_user.role == UserRole.patient:
         patient_profile = db.query(PatientProfile).filter(
             PatientProfile.user_id == current_user.id
         ).first()
         
-        # Se for colaborador de empresa, redirecionar para fluxo específico
         if patient_profile and patient_profile.empresa_id:
             from app.routes import appointments_plano
             return appointments_plano.create_empresa_appointment(payload, request, db, current_user)
@@ -278,7 +360,7 @@ def create_appointment(
 
         overlap_conflict = db.execute(select(Appointment).where(and_(
             Appointment.therapist_user_id == payload.therapist_user_id,
-            Appointment.status.in_([AppointmentStatus.scheduled, AppointmentStatus.confirmed, AppointmentStatus.proposed]),
+            Appointment.status.in_([AppointmentStatus.scheduled, AppointmentStatus.confirmed, AppointmentStatus.proposed, AppointmentStatus.pending_payment]),
             starts_at < Appointment.ends_at,
             ends_at > Appointment.starts_at,
         ))).scalars().first()
@@ -314,7 +396,7 @@ def create_appointment(
             therapist_user_id=therapist_profile.user_id,
             starts_at=starts_at,
             ends_at=ends_at,
-            status=AppointmentStatus.scheduled,
+            status=AppointmentStatus.scheduled,  # 🔥 NUNCA confirmado sem pagamento
             session_price=therapist_profile.session_price or 0,
             duration_minutes=payload.duration_minutes or 50,
         )
@@ -329,6 +411,14 @@ def create_appointment(
         ))
         db.commit()
         db.refresh(appt)
+
+        # 🔥 SE NÃO TEM SALDO, AGENDAR CANCELAMENTO AUTOMÁTICO APÓS 2 MINUTOS
+        if saldo_insuficiente:
+            import threading
+            thread = threading.Thread(target=_schedule_auto_cancel, args=(appt.id, 2))
+            thread.daemon = True
+            thread.start()
+            print(f"⏰ Cancelamento automático agendado para appointment {appt.id} em 2 minutos")
 
         # 🔥 Emitir evento de WebSocket para criação de sessão
         try:
@@ -386,6 +476,7 @@ def create_appointment(
         db.rollback()
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
 
 # ==========================
 # RESCHEDULE
@@ -462,7 +553,7 @@ def reschedule_appointment(
         conflict = db.execute(select(Appointment).where(and_(
             Appointment.therapist_user_id == original.therapist_user_id,
             Appointment.id != original.id,
-            Appointment.status.in_([AppointmentStatus.scheduled, AppointmentStatus.confirmed, AppointmentStatus.proposed]),
+            Appointment.status.in_([AppointmentStatus.scheduled, AppointmentStatus.confirmed, AppointmentStatus.proposed, AppointmentStatus.pending_payment]),
             starts_at < Appointment.ends_at,
             ends_at > Appointment.starts_at
         ))).scalars().first()
@@ -474,7 +565,7 @@ def reschedule_appointment(
             therapist_user_id=therapist_profile.user_id,
             starts_at=starts_at,
             ends_at=ends_at,
-            status=AppointmentStatus.confirmed,
+            status=AppointmentStatus.scheduled,  # 🔥 NUNCA confirmado sem pagamento
             rescheduled_from_id=original.id,
             session_price=original.session_price,
             duration_minutes=payload.duration_minutes or original.duration_minutes or 50
@@ -493,6 +584,20 @@ def reschedule_appointment(
         ))
         db.commit()
         db.refresh(new_appt)
+        
+        # 🔥 Agendar cancelamento automático para o novo appointment se não pago
+        if current_user.role == UserRole.patient:
+            # Verificar saldo do paciente
+            patient_profile = db.execute(select(PatientProfile).where(PatientProfile.user_id == current_user.id)).scalar_one_or_none()
+            if patient_profile:
+                from app.models.wallet import Wallet
+                wallet = db.execute(select(Wallet).where(Wallet.patient_id == patient_profile.id)).scalar_one_or_none()
+                if not wallet or wallet.balance < new_appt.session_price:
+                    import threading
+                    thread = threading.Thread(target=_schedule_auto_cancel, args=(new_appt.id, 2))
+                    thread.daemon = True
+                    thread.start()
+                    print(f"⏰ Cancelamento automático agendado para reagendamento {new_appt.id} em 2 minutos")
         
         # 🔥 Notificação de reagendamento
         try:
@@ -546,7 +651,6 @@ def reschedule_appointment(
         except Exception as e:
             print(f"⚠️ Erro ao emitir evento WebSocket: {e}")
         
-        _send_confirmation_emails_and_meet_and_notifications(new_appt, db)
         return new_appt
 
     except HTTPException:
@@ -613,6 +717,8 @@ def complete_appointment(
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
     if appointment.therapist_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Apenas o terapeuta da sessão pode finalizar")
+    if appointment.status != AppointmentStatus.confirmed:
+        raise HTTPException(status_code=400, detail="Apenas sessões confirmadas podem ser completadas")
     existing = db.query(MedicalRecord).filter(MedicalRecord.appointment_id == appointment_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Prontuário já registrado. Não é possível alterar.")
@@ -641,6 +747,17 @@ def complete_appointment(
     appointment.status = AppointmentStatus.completed
     db.commit()
     db.refresh(medical_record)
+    
+    # 🔥 Atualizar total_sessions do terapeuta (sessão realizada com sucesso)
+    if not record_data.session_not_occurred:
+        therapist_profile = db.query(TherapistProfile).filter(
+            TherapistProfile.user_id == appointment.therapist_user_id
+        ).first()
+        if therapist_profile:
+            therapist_profile.total_sessions = (therapist_profile.total_sessions or 0) + 1
+            db.add(therapist_profile)
+            db.commit()
+            print(f"✅ total_sessions do terapeuta {therapist_profile.user_id} atualizado para {therapist_profile.total_sessions}")
     
     # 🔥 Emitir evento de WebSocket para atualizar prontuários pendentes
     try:
@@ -703,10 +820,26 @@ def get_medical_record(
             raise HTTPException(status_code=403, detail="Acesso negado")
 
     medical_record = db.query(MedicalRecord).filter(MedicalRecord.appointment_id == appointment_id).first()
+    
     if not medical_record:
-        raise HTTPException(status_code=404, detail="Prontuário não encontrado")
+        return MedicalRecordOut(
+            id=0,
+            appointment_id=appointment_id,
+            session_not_occurred=False,
+            not_occurred_reason=None,
+            evolution=None,
+            outcome=None,
+            patient_reasons=[],
+            private_notes=None,
+            activity_instructions=None,
+            links=None,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+    
     if current_user.role == UserRole.patient:
         medical_record.private_notes = None
+        
     return medical_record
 
 
@@ -779,7 +912,6 @@ def send_receipt_by_email(
         receipt_html=html_content
     )
     
-    # 🔥 Notificação de recibo disponível
     try:
         notification_service = NotificationService(db)
         notification_service.notify_receipt_available(
@@ -905,6 +1037,24 @@ def update_appointment_status(
         if new_status == AppointmentStatus.confirmed:
             if appt.status not in (AppointmentStatus.scheduled, AppointmentStatus.proposed):
                 raise HTTPException(status_code=400, detail="Só é possível confirmar quando está scheduled ou proposed")
+            
+            # 🔥 VERIFICAR SE O PAGAMENTO FOI REALIZADO (via Stripe ou Wallet)
+            # Verificar se já foi debitado
+            already_debited = db.execute(select(Ledger).where(
+                Ledger.appointment_id == appt.id,
+                Ledger.transaction_type == "session_debit"
+            )).scalars().first()
+            
+            # Se não foi debitado, verificar pagamento via Stripe
+            if not already_debited:
+                from app.models.payment import Payment
+                payment = db.execute(select(Payment).where(
+                    Payment.appointment_id == appt.id,
+                    Payment.status.in_(["paid"])
+                )).scalars().first()
+                
+                if not payment:
+                    raise HTTPException(status_code=402, detail="Pagamento não confirmado. Realize o pagamento primeiro.")
 
         if new_status == AppointmentStatus.completed:
             if _utcnow() < _to_utc(appt.starts_at):
@@ -992,7 +1142,7 @@ def update_appointment_status(
                             else:
                                 print("⚠️ get_meet_url retornou None")
                         else:
-                            print("⚠️ Terapeuta não encontrado para a sessão {appt.id}")
+                            print(f"⚠️ Terapeuta não encontrado para a sessão {appt.id}")
                     else:
                         print("⚠️ jitsi_service não disponível")
                 except Exception as e:
@@ -1108,7 +1258,7 @@ def update_appointment_status(
             except Exception as e:
                 print(f"⚠️ Erro ao enviar notificação de prontuário pendente: {e}")
 
-        # ✅ Google Calendar sync — não bloqueia o response, falhas são silenciosas
+        # ✅ Google Calendar sync
         try:
             from app.routes.google_calendar import sync_appointment_to_calendar
             import asyncio
