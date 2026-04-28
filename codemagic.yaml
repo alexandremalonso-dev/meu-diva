@@ -6,13 +6,16 @@ workflows:
     integrations:
       app_store_connect: Apple Developer Portal
     environment:
+      groups:
+        - ios-credentials
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.meudiva.app
       vars:
-        XCODE_PROJECT: "App.xcodeproj"
+        XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
       node: 20.9.0
+      xcode: latest
     scripts:
       - name: Install dependencies
         script: |
@@ -22,7 +25,7 @@ workflows:
         script: |
           cd front
           npm run build
-      - name: Sync Capacitor
+      - name: Sync Capacitor iOS
         script: |
           cd front
           npx cap sync ios
@@ -35,7 +38,7 @@ workflows:
           xcodebuild -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -archivePath build/App.xcarchive \
+            -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive \
             CODE_SIGN_STYLE=AUTOMATIC \
             DEVELOPMENT_TEAM=$APPLE_TEAM_ID
@@ -51,3 +54,4 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        submit_to_app_store: false
