@@ -1,0 +1,53 @@
+workflows:
+  ios-release:
+    name: iOS Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Apple Developer Portal
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.meudiva.app
+      vars:
+        XCODE_PROJECT: "App.xcodeproj"
+        XCODE_SCHEME: "App"
+      node: 20.9.0
+    scripts:
+      - name: Install dependencies
+        script: |
+          cd front
+          npm install
+      - name: Build Next.js
+        script: |
+          cd front
+          npm run build
+      - name: Sync Capacitor
+        script: |
+          cd front
+          npx cap sync ios
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+      - name: Build iOS
+        script: |
+          cd front/ios/App
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath build/App.xcarchive \
+            archive \
+            CODE_SIGN_STYLE=AUTOMATIC \
+            DEVELOPMENT_TEAM=$APPLE_TEAM_ID
+      - name: Export IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace front/ios/App/App.xcworkspace \
+            --scheme App
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
