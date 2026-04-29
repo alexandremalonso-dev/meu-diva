@@ -7,7 +7,7 @@ workflows:
       app_store_connect: Codemagic
     environment:
       groups:
-        - ios-credentials
+        - APPLE_TEAM_ID
       vars:
         XCODE_WORKSPACE: "front/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
