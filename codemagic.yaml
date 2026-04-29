@@ -10,7 +10,6 @@ workflows:
         - APPLE_TEAM_ID
       vars:
         XCODE_PROJECT: "$CM_BUILD_DIR/front/ios/App/App.xcodeproj"
-        XCODE_WORKSPACE: "$CM_BUILD_DIR/front/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.meudiva.app"
       node: 22.14.0
@@ -45,12 +44,10 @@ workflows:
           xcodebuild -resolvePackageDependencies \
             -project App.xcodeproj \
             -scheme App
-          echo "Verificando workspace:"
-          ls -la
       - name: Build iOS
         script: |
           xcode-project build-ipa \
-            --workspace $XCODE_WORKSPACE \
+            --project $XCODE_PROJECT \
             --scheme $XCODE_SCHEME
     artifacts:
       - build/ios/ipa/*.ipa
