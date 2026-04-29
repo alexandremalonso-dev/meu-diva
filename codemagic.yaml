@@ -29,18 +29,12 @@ workflows:
       - name: Set up code signing settings
         script: |
           xcode-project use-profiles
-      - name: Install dependencies
+      - name: Install and build
         script: |
-          cd front
-          npm install
-      - name: Build Next.js
-        script: |
-          cd front
-          npm run build
+          cd front && npm install && npm run build
       - name: Sync Capacitor iOS
         script: |
-          cd front
-          npx cap sync ios
+          cd front && npx cap sync ios
       - name: Build iOS
         script: |
           xcode-project build-ipa \
