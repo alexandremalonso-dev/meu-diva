@@ -12,7 +12,6 @@ workflows:
         XCODE_WORKSPACE: "$CM_BUILD_DIR/front/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.meudiva.app"
-        FRONT_DIR: "$CM_BUILD_DIR/front"
       node: 20.9.0
       xcode: latest
     scripts:
@@ -32,9 +31,9 @@ workflows:
           xcode-project use-profiles
       - name: Install and build
         script: |
-          echo "Build dir: $CM_BUILD_DIR"
-          ls $CM_BUILD_DIR
           cd $CM_BUILD_DIR/front
+          echo "Pasta atual: $(pwd)"
+          cat package.json | grep -A5 '"scripts"'
           npm install
           npm run build
       - name: Sync Capacitor iOS

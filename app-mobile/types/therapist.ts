@@ -1,0 +1,45 @@
+export type TherapistProfile = {
+  id: number;
+  user_id: number;
+  full_name?: string;
+  email?: string;
+  foto_url?: string;
+  bio?: string;
+  specialties?: string;
+  session_price?: number;
+  gender?: string;
+  ethnicity?: string;
+  formation?: string;
+  approaches?: string[];
+  specialties_list?: string[];
+  reasons?: string[];
+  service_types?: string[];
+  languages_list?: string[];
+  total_sessions?: number;
+  verified?: boolean;
+  featured?: boolean;
+  rating?: number;
+  reviews_count?: number;
+  created_at?: string;
+  updated_at?: string;
+  // 🔥 NOVAS PROPRIEDADES ADICIONADAS
+  phone?: string;
+  experience?: string;
+  approach?: string;
+  idiomas?: string;
+  video_url?: string;
+  instagram_url?: string;
+  cpf?: string;
+  rg?: string;
+  crp?: string;
+  payment_change_deadline_message?: string;
+  lgpd_consent?: boolean;
+  lgpd_consent_date?: string;
+  pix_key?: string;
+  bank_account?: {
+    bank: string;
+    agency: string;
+    account: string;
+    account_type: string;
+  };
+};
