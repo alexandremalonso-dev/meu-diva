@@ -1,0 +1,33 @@
+steps:
+- name: gcr.io/cloud-builders/docker
+  args:
+  - build
+  - --build-arg
+  - NEXT_PUBLIC_API_URL=${_API_URL}
+  - --build-arg
+  - NEXT_PUBLIC_JITSI_DOMAIN=${_JITSI_DOMAIN}
+  - --build-arg
+  - NEXT_PUBLIC_BACKEND_URL=${_BACKEND_URL}
+  - -t
+  - gcr.io/meu-diva/meudiva-frontend-prod:latest
+  - .
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args:
+  - run
+  - deploy
+  - meudiva-frontend-prod
+  - --image=gcr.io/meu-diva/meudiva-frontend-prod:latest
+  - --region=southamerica-east1
+  - --platform=managed
+  - --allow-unauthenticated
+  - --port=3000
+  - --min-instances=0
+  - --max-instances=1
+  - --set-env-vars=NEXT_PUBLIC_API_URL=${_API_URL}
+  - --set-env-vars=NEXT_PUBLIC_JITSI_DOMAIN=${_JITSI_DOMAIN}
+  - --set-env-vars=NEXT_PUBLIC_BACKEND_URL=${_BACKEND_URL}
+images:
+- gcr.io/meu-diva/meudiva-frontend-prod:latest
+options:
+  logging: CLOUD_LOGGING_ONLY

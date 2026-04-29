@@ -1,0 +1,175 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* =========================
+       🎨 BASE
+    ========================= */
+    --background: 0 0% 100%;
+    --foreground: 222 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 15%;
+
+    /* =========================
+       🔵 BRAND (AZUL)
+       #2F80D3
+    ========================= */
+    --primary: 210 65% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    /* =========================
+       💗 EMOTION (ROSA)
+       #E03673
+    ========================= */
+    --secondary: 335 75% 55%;
+    --secondary-foreground: 0 0% 100%;
+
+    /* =========================
+       🌊 CALMA (CIANO)
+       #49CCD4
+    ========================= */
+    --accent: 185 60% 55%;
+    --accent-foreground: 222 20% 15%;
+
+    /* =========================
+       🟡 DESTAQUE (LARANJA)
+       #FB8811
+    ========================= */
+    --destructive: 30 95% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* =========================
+       🧱 SUPORTE
+    ========================= */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --border: 210 30% 90%;
+    --input: 210 30% 90%;
+
+    /* ring segue brand */
+    --ring: 210 65% 50%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* =========================
+       🌑 BASE DARK
+    ========================= */
+    --background: 222 30% 10%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 30% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 30% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    /* =========================
+       🔵 BRAND DARK
+    ========================= */
+    --primary: 210 70% 60%;
+    --primary-foreground: 222 30% 10%;
+
+    /* =========================
+       💗 EMOTION DARK
+    ========================= */
+    --secondary: 335 70% 60%;
+    --secondary-foreground: 222 30% 10%;
+
+    /* =========================
+       🌊 CALMA DARK
+    ========================= */
+    --accent: 185 60% 60%;
+    --accent-foreground: 222 30% 10%;
+
+    /* =========================
+       🟡 DESTAQUE DARK
+    ========================= */
+    --destructive: 30 90% 60%;
+    --destructive-foreground: 222 30% 10%;
+
+    /* =========================
+       SUPORTE
+    ========================= */
+    --muted: 217 20% 20%;
+    --muted-foreground: 215 20% 65%;
+
+    --border: 217 20% 20%;
+    --input: 217 20% 20%;
+
+    --ring: 210 70% 60%;
+  }
+}
+
+/* 🔥 GARANTIR LARGURA TOTAL DA TELA */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground;
+}
+
+/* 🔥 GARANTIR QUE O CONTAINER PRINCIPAL OCUPE 100% */
+#__next {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 🔥 REMOVER QUALQUER RESTRIÇÃO DE LARGURA */
+.container {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 🔥 FORÇAR CABEÇALHO E RODAPÉ OCUPAREM 100% DA LARGURA */
+header,
+footer {
+  width: 100vw !important;
+  position: relative !important;
+  left: 50% !important;
+  right: 50% !important;
+  margin-left: -50vw !important;
+  margin-right: -50vw !important;
+}
+
+/* 🔥 GARANTIR QUE O CONTEÚDO DENTRO FIQUE CENTRALIZADO */
+header > div,
+footer > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+/* 🔥 NO BREAKPOINTS, AJUSTAR PADDING */
+@media (min-width: 640px) {
+  header > div,
+  footer > div {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  header > div,
+  footer > div {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+  }
+}

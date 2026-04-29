@@ -1,0 +1,41 @@
+﻿steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_API_URL=https://api.meudivaonline.com'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_BACKEND_URL=https://api.meudivaonline.com'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_JITSI_DOMAIN=meet.meudivaonline.com'
+      - '-t'
+      - 'gcr.io/meu-diva/meudiva-frontend-prod:latest'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/meu-diva/meudiva-frontend-prod:latest'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'meudiva-frontend-prod'
+      - '--image=gcr.io/meu-diva/meudiva-frontend-prod:latest'
+      - '--region=southamerica-east1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=3000'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--set-env-vars=NEXT_PUBLIC_API_URL=https://api.meudivaonline.com'
+      - '--set-env-vars=NEXT_PUBLIC_BACKEND_URL=https://api.meudivaonline.com'
+      - '--set-env-vars=NEXT_PUBLIC_JITSI_DOMAIN=meet.meudivaonline.com'
+      - '--set-env-vars=API_URL=https://api.meudivaonline.com'
+
+images:
+  - 'gcr.io/meu-diva/meudiva-frontend-prod:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY

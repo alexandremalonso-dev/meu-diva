@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">meudiva-frontend-prod-fobtlq5wja-rj.a.run.app</domain>
+        <domain includeSubdomains="true">meudiva-api-backend-592671373665.southamerica-east1.run.app</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
