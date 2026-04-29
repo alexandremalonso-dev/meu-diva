@@ -15,12 +15,6 @@ workflows:
       node: 22.14.0
       xcode: latest
     scripts:
-      - name: Initialize submodules
-        script: |
-          cd $CM_BUILD_DIR
-          git submodule update --init --recursive
-          echo "Conteúdo de front:"
-          ls $CM_BUILD_DIR/front
       - name: Set up keychain
         script: |
           keychain initialize
@@ -38,13 +32,18 @@ workflows:
       - name: Install and build
         script: |
           cd $CM_BUILD_DIR/front
-          echo "Pasta atual: $(pwd)"
           npm install
           npm run build
       - name: Sync Capacitor iOS
         script: |
           cd $CM_BUILD_DIR/front
           npx cap sync ios
+      - name: Install CocoaPods
+        script: |
+          cd $CM_BUILD_DIR/front/ios/App
+          pod install --repo-update
+          echo "Workspace gerado:"
+          ls -la
       - name: Build iOS
         script: |
           xcode-project build-ipa \
