@@ -15,6 +15,12 @@ workflows:
       node: 20.9.0
       xcode: latest
     scripts:
+      - name: Initialize submodules
+        script: |
+          cd $CM_BUILD_DIR
+          git submodule update --init --recursive
+          echo "Conteúdo de front:"
+          ls $CM_BUILD_DIR/front
       - name: Set up keychain
         script: |
           keychain initialize
@@ -33,7 +39,6 @@ workflows:
         script: |
           cd $CM_BUILD_DIR/front
           echo "Pasta atual: $(pwd)"
-          cat package.json | grep -A5 '"scripts"'
           npm install
           npm run build
       - name: Sync Capacitor iOS
