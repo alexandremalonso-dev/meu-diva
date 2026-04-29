@@ -12,7 +12,7 @@ workflows:
         XCODE_WORKSPACE: "$CM_BUILD_DIR/front/ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.meudiva.app"
-      node: 20.9.0
+      node: 22.14.0
       xcode: latest
     scripts:
       - name: Initialize submodules
