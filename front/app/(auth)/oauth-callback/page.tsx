@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-// 🔥 COMPONENTE PRINCIPAL ENVOLTO EM SUSPENSE
 export default function OAuthCallbackPage() {
   return (
     <Suspense fallback={
@@ -21,7 +20,6 @@ export default function OAuthCallbackPage() {
   );
 }
 
-// 🔥 CONTEÚDO REAL DA PÁGINA
 function OAuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -45,12 +43,33 @@ function OAuthCallbackContent() {
     if (accessToken && refreshToken) {
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
-      
-      setStatus('success');
-      
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 2000);
+
+      // Detecta se é mobile/Capacitor
+      const isNative = !!(window as any).Capacitor?.isNativePlatform?.();
+      if (isNative) {
+        setStatus('success');
+        setTimeout(() => router.push('/mobile/dashboard'), 2000);
+        return;
+      }
+
+      // Busca role do usuário para redirecionar corretamente
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((res) => res.json())
+        .then((user) => {
+          setStatus('success');
+          setTimeout(() => {
+            if (user.role === 'therapist') router.push('/therapist/dashboard');
+            else if (user.role === 'admin') router.push('/admin/dashboard');
+            else if (user.role === 'empresa') router.push('/empresa/dashboard');
+            else router.push('/patient/dashboard');
+          }, 2000);
+        })
+        .catch(() => {
+          setStatus('success');
+          setTimeout(() => router.push('/patient/dashboard'), 2000);
+        });
     } else {
       setStatus('error');
       setErrorMessage('Tokens não recebidos');

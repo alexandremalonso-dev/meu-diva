@@ -25,25 +25,80 @@ export default function RequiredDocumentsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [hasDocuments, setHasDocuments] = useState(false);
+
+  // Obter a URL do backend das variáveis de ambiente
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://meudiva-api-backend-592671373665.southamerica-east1.run.app";
 
   // Verificar se já tem documentos enviados
   useEffect(() => {
     const checkDocuments = async () => {
+      if (!user) return;
+      
+      setLoading(true);
       try {
         const data = await apiCall({
           url: "/api/therapist/documents/status",
           requireAuth: true
         });
-        // Se já tem os dois documentos, redirecionar para dashboard
-        if (data.documents?.length >= 2) {
-          router.push("/therapist/dashboard");
+        
+        console.log("📄 Status dos documentos:", data);
+        
+        // Verificar se já tem os dois documentos APROVADOS ou PENDENTES
+        const hasDiploma = data.documents?.some((doc: any) => doc.type === "diploma");
+        const hasRegistration = data.documents?.some((doc: any) => doc.type === "registration");
+        
+        // Se já tem ambos documentos (mesmo pendentes), redirecionar
+        if (hasDiploma && hasRegistration) {
+          setHasDocuments(true);
+          // Redirecionar após 2 segundos
+          setTimeout(() => {
+            router.push("/therapist/dashboard");
+          }, 2000);
         }
       } catch (err) {
         console.error("Erro ao verificar documentos:", err);
+        // Se erro de autorização, provavelmente o perfil não existe ainda - ok continuar
+        if (err instanceof Error && err.message.includes("401")) {
+          console.log("Perfil não encontrado, continuando para upload");
+        }
+      } finally {
+        setLoading(false);
       }
     };
-    if (user) checkDocuments();
-  }, [user]);
+    
+    checkDocuments();
+  }, [user, router, apiCall]);
+
+  // Se já tem documentos, mostrar mensagem
+  if (hasDocuments) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#2F80D3]/10 to-[#E03673]/10 py-12 px-4 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md mx-auto">
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Documentos já enviados!</h2>
+          <p className="text-gray-600 mb-4">
+            Seus documentos já foram enviados e estão aguardando validação.
+          </p>
+          <button
+            onClick={() => router.push("/therapist/dashboard")}
+            className="px-6 py-2 bg-[#E03673] text-white rounded-lg hover:bg-[#c02c5e]"
+          >
+            Ir para o Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#2F80D3]/10 to-[#E03673]/10 py-12 px-4 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#E03673] animate-spin" />
+      </div>
+    );
+  }
 
   const handleFileChange = (type: "diploma" | "registration", file: File | null) => {
     if (!file) return;
@@ -66,7 +121,7 @@ export default function RequiredDocumentsPage() {
     
     if (diplomaFile && registrationFile) {
       setStep(3);
-    } else if ((type === "diploma" && diplomaFile) || (type === "registration" && registrationFile)) {
+    } else if ((type === "diploma" && diplomanFile) || (type === "registration" && registrationFile)) {
       setStep(2);
     }
   };
@@ -77,7 +132,9 @@ export default function RequiredDocumentsPage() {
     formData.append("document_type", type);
 
     const token = localStorage.getItem("access_token");
-    const response = await fetch("/api/therapist/documents/upload", {
+    
+    // 🔥 USAR URL COMPLETA DO BACKEND
+    const response = await fetch(`${BACKEND_URL}/api/therapist/documents/upload`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`

@@ -621,7 +621,26 @@ add_action('wp_footer', function() {
 
             </div>
         </div>
-
+    </div>
+    <!-- Apps row -->
+    <div style="border-top:1px solid rgba(255,255,255,0.15);padding:20px 32px;max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:flex-end;gap:32px;padding-right:32px;flex-wrap:wrap;">
+        <p style="color:white;font-size:0.85rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;opacity:0.7;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">Baixe o app Meu Divã</p>
+        <!-- Apple App Store -->
+        <a href="https://apps.apple.com/app/meu-diva" target="_blank" rel="noopener" style="text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <div style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                <div><div style="font-size:0.6rem;color:rgba(255,255,255,0.6);line-height:1;">Disponível na</div><div style="font-size:0.8rem;font-weight:700;color:white;line-height:1.3;">App Store</div></div>
+            </div>
+            <img src="<?php echo esc_url(home_url('/wp-content/uploads/qr-apple.png')); ?>" alt="QR App Store" style="width:72px;height:72px;border-radius:8px;background:white;padding:3px;">
+        </a>
+        <!-- Google Play -->
+        <a href="https://play.google.com/store/apps/details?id=com.meudiva" target="_blank" rel="noopener" style="text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <div style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M3.18 23.76c.3.17.63.24.97.21l12.93-7.47-2.79-2.79-11.11 10.05zM.5 1.9C.19 2.28 0 2.82 0 3.5v17c0 .68.19 1.22.5 1.6l.08.08 9.53-9.53v-.22L.58 1.82.5 1.9zM20.32 10.19L17.08 8.3 14 11.38l3.08 3.08 3.24-1.88c.93-.54.93-1.42 0-1.96zM4.15.24L17.08 7.7l-3.08 3.08L3.18.24c.3-.17.64-.25.97-.22.33.03.64.14.89.29z"/></svg>
+                <div><div style="font-size:0.6rem;color:rgba(255,255,255,0.6);line-height:1;">Disponível no</div><div style="font-size:0.8rem;font-weight:700;color:white;line-height:1.3;">Google Play</div></div>
+            </div>
+            <img src="<?php echo esc_url(home_url('/wp-content/uploads/qr-google.png')); ?>" alt="QR Google Play" style="width:72px;height:72px;border-radius:8px;background:white;padding:3px;">
+        </a>
     </div>
     <div id="meudiva-footer-bottom">
         <span>&copy; <?php echo $year; ?> Meu Div&#227;. Todos os direitos reservados.</span>

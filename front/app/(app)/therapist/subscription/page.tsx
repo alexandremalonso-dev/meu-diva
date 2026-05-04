@@ -3,13 +3,26 @@
 import { useEffect, useState } from "react";
 import { useApi } from "@/lib/useApi";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
-  CheckCircle, Crown, Star, ArrowRight, Loader2, 
-  AlertCircle, CreditCard, Calendar, Shield, Sparkles, Zap
+  CheckCircle, 
+  Crown, 
+  Star, 
+  ArrowRight, 
+  Loader2, 
+  AlertCircle, 
+  CreditCard, 
+  Calendar, 
+  Shield, 
+  Sparkles,
+  TrendingUp,
+  Bot,
+  RefreshCw,
+  Zap
 } from "lucide-react";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://meudiva-api-backend-592671373665.southamerica-east1.run.app";
 
 interface Subscription {
   id: number;
@@ -93,6 +106,7 @@ const PLANS: Plan[] = [
 export default function TherapistSubscriptionPage() {
   const { user } = useAuth();
   const { execute: apiCall } = useApi();
+  const router = useRouter();
   
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,9 +134,15 @@ export default function TherapistSubscriptionPage() {
 
   async function handleUpgrade(planId: string) {
     if (planId === "essencial") {
-      // Não pode fazer downgrade para essencial aqui (será automático por cancelamento)
       setError("Para voltar ao plano Essencial, cancele sua assinatura atual.");
       setTimeout(() => setError(""), 3000);
+      return;
+    }
+    
+    // Verificar se o token é válido antes de tentar
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/auth/login');
       return;
     }
     
@@ -130,20 +150,40 @@ export default function TherapistSubscriptionPage() {
     setError("");
     
     try {
-      const response = await apiCall<{ checkout_url: string }>({
+      console.log("📡 Chamando API para criar checkout...");
+      
+      // 🔥 SEM TIPO GENÉRICO - IGUAL AO DASHBOARD
+      const response = await apiCall({
         url: "/api/payments/create-subscription-checkout",
         method: "POST",
         body: { plan: planId },
         requireAuth: true
       });
       
-      // Redirecionar para o Stripe Checkout
-      window.location.href = response.checkout_url;
+      console.log("✅ Resposta recebida:", response);
+      
+      // 🔥 ACESSAR checkout_url DA MESMA FORMA QUE O DASHBOARD
+      if (response?.checkout_url) {
+        console.log("🔗 Redirecionando para Stripe:", response.checkout_url);
+        // 🔥 USAR window.location.href - IGUAL AO DASHBOARD
+        window.location.href = response.checkout_url;
+      } else {
+        throw new Error("URL de checkout não recebida");
+      }
       
     } catch (err: any) {
-      console.error("Erro ao criar checkout:", err);
+      console.error("❌ Erro detalhado:", err);
+      
+      // Se for erro de autenticação, limpar tokens e redirecionar
+      if (err.message?.includes("401") || err.message?.includes("Token") || err.message?.includes("token")) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        router.push('/auth/login');
+        return;
+      }
+      
       setError(err.message || "Erro ao processar assinatura");
-      setTimeout(() => setError(""), 3000);
+      setTimeout(() => setError(""), 5000);
     } finally {
       setUpgrading(null);
     }
@@ -176,8 +216,6 @@ export default function TherapistSubscriptionPage() {
   };
 
   const currentPlan = getCurrentPlan();
-  const isPremiumActive = subscription?.plan === "premium" && subscription?.status === "active";
-  const isProfessionalActive = subscription?.plan === "profissional" && subscription?.status === "active";
 
   if (loading) {
     return (
@@ -278,7 +316,6 @@ export default function TherapistSubscriptionPage() {
           {PLANS.map((plan) => {
             const isCurrent = subscription?.plan === plan.id;
             const isUpgrading = upgrading === plan.id;
-            const isDisabled = plan.id !== "essencial" && isCurrent;
             
             return (
               <div
@@ -371,25 +408,37 @@ export default function TherapistSubscriptionPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-800 mb-1">💰 Aumente seus ganhos</p>
+              <p className="text-sm font-medium text-gray-800 mb-1 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-green-600" />
+                Aumente seus ganhos
+              </p>
               <p className="text-xs text-gray-500">
                 Comissão reduzida significa mais dinheiro no seu bolso. Em 20 sessões de R$200, a diferença entre 20% e 3% é de R$680!
               </p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-800 mb-1">📈 Mais visibilidade</p>
+              <p className="text-sm font-medium text-gray-800 mb-1 flex items-center gap-2">
+                <Star className="w-4 h-4 text-[#2F80D3]" />
+                Mais visibilidade
+              </p>
               <p className="text-xs text-gray-500">
                 Planos Profissional e Premium garantem melhor posicionamento na busca e mais pacientes para você.
               </p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-800 mb-1">🤖 Ferramentas exclusivas</p>
+              <p className="text-sm font-medium text-gray-800 mb-1 flex items-center gap-2">
+                <Bot className="w-4 h-4 text-purple-600" />
+                Ferramentas exclusivas
+              </p>
               <p className="text-xs text-gray-500">
                 Acesso a relatórios avançados e futuramente IA para apoio clínico e organização.
               </p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-800 mb-1">🔄 Cancelamento flexível</p>
+              <p className="text-sm font-medium text-gray-800 mb-1 flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-orange-600" />
+                Cancelamento flexível
+              </p>
               <p className="text-xs text-gray-500">
                 Cancele quando quiser. Você volta ao plano Essencial e continua usando a plataforma normalmente.
               </p>

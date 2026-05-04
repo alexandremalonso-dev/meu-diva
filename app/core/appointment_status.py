@@ -11,3 +11,4 @@ class AppointmentStatus(str, Enum):
     no_show = "no_show"
     rescheduled = "rescheduled"
     declined = "declined"  # 🔥 NOVO: convite recusado pelo paciente
+    pending_payment = "pending_payment"

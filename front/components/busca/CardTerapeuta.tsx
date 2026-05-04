@@ -245,7 +245,7 @@ useEffect(() => { carregarSlots(); }, [carregarSlots]);
 
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", marginBottom: "12px", flexDirection: "column" }}>
             {renderStars()}
-            <span style={{ fontSize: "11px", color: CORES.cinzaTexto }}>{reviewsCount} avaliação{reviewsCount !== 1 ? 'ões' : ''}</span>
+            <span style={{ fontSize: "11px", color: CORES.cinzaTexto }}>{reviewsCount} {reviewsCount === 1 ? 'avaliação' : 'avaliações'}</span>
           </div>
 
           {terapeuta.accepts_corporate_sessions === true && (

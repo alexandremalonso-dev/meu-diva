@@ -68,6 +68,35 @@ class User(Base):
         nullable=True
     )
 
+    # ==========================
+    # CAMPOS PARA EXCLUSÃO DE CONTA
+    # ==========================
+    deletion_status: Mapped[str] = mapped_column(
+        String(20),
+        default="active",
+        nullable=False
+    )
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+    deletion_scheduled_for: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+    deletion_code: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True
+    )
+    deletion_code_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+    deletion_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+
     @hybrid_property
     def formatted_id(self) -> str:
         year = datetime.now().year

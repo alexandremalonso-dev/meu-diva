@@ -304,33 +304,43 @@ export default function TherapistDashboardPage() {
       const therapistAppointments = appointmentsData.filter((apt: Appointment) => apt.therapist_user_id === user.id);
       setAppointments(therapistAppointments);
       applySessionFilter("all", therapistAppointments);
-      let allPatients: Patient[] = [];
-      try {
-        const patientsData = await apiCall({ url: "/api/patients", requireAuth: true });
-        if (Array.isArray(patientsData)) allPatients = patientsData;
-      } catch (error) { console.error("❌ Erro ao carregar pacientes:", error); }
+      
+      // 🔥 CORREÇÃO: Montar pacientes APENAS a partir das sessões do terapeuta
       const patientMap = new Map<number, Patient>();
-      allPatients.forEach(p => {
-        patientMap.set(p.id, { id: p.id, user_id: p.id, full_name: p.full_name || p.email, email: p.email, phone: p.phone, session_count: 0, is_frequent: false, is_blocked: false, foto_url: p.foto_url });
-      });
+      
       therapistAppointments.forEach((apt) => {
         if (!apt.patient) return;
-        const existing = patientMap.get(apt.patient_user_id);
+        
+        const patientId = apt.patient_user_id;
+        const existing = patientMap.get(patientId);
+        
         if (existing) {
           existing.session_count++;
-          existing.full_name = apt.patient.full_name || existing.full_name;
-          existing.email = apt.patient.email || existing.email;
-          if (apt.patient.foto_url) existing.foto_url = apt.patient.foto_url;
           const aptDate = new Date(apt.starts_at);
-          if (!existing.last_session || aptDate > existing.last_session) existing.last_session = aptDate;
+          if (!existing.last_session || aptDate > existing.last_session) {
+            existing.last_session = aptDate;
+          }
         } else {
-          patientMap.set(apt.patient_user_id, { id: apt.patient_user_id, user_id: apt.patient_user_id, full_name: apt.patient.full_name, email: apt.patient.email, phone: apt.patient.phone, session_count: 1, last_session: new Date(apt.starts_at), is_frequent: false, is_blocked: false, foto_url: apt.patient.foto_url });
+          patientMap.set(patientId, {
+            id: patientId,
+            user_id: patientId,
+            full_name: apt.patient.full_name || apt.patient.email,
+            email: apt.patient.email,
+            phone: apt.patient.phone || "",
+            session_count: 1,
+            last_session: new Date(apt.starts_at),
+            is_frequent: false,
+            is_blocked: false,
+            foto_url: apt.patient.foto_url
+          });
         }
       });
+      
       const patientsList = Array.from(patientMap.values());
       patientsList.forEach(p => p.is_frequent = p.session_count >= 3);
       patientsList.sort((a, b) => b.session_count - a.session_count);
       setFrequentPatients(patientsList);
+      
       let personalEventsData: any[] = [];
       try { personalEventsData = await apiCall({ url: "/api/personal-events", requireAuth: true }); } catch (error) {}
       setCalendarEvents(buildCalendarEvents(therapistAppointments, personalEventsData));

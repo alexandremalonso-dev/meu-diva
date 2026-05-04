@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Loader2, AlertTriangle, Mail, Trash2 } from "lucide-react";
+import { X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface AccountDeletionModalProps {
@@ -23,7 +23,7 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
     setLoading(true);
     setError("");
     try {
-      await api("/api/auth/request-account-deletion", {
+      await api("/api/users/me/delete-request", {
         method: "POST",
         requireAuth: true
       });
@@ -44,14 +44,15 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
     setLoading(true);
     setError("");
     try {
-      await api("/api/auth/confirm-account-deletion", {
+      await api("/api/users/me/delete-confirm", {
         method: "POST",
-        body: { code },
+        body: JSON.stringify({ code }),
         requireAuth: true
       });
       onDeleted();
       onClose();
     } catch (err: any) {
+      console.error("Erro detalhado:", err);
       setError(err.message || "Código inválido");
     } finally {
       setLoading(false);
@@ -99,7 +100,7 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-700 flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>Esta ação é irreversível! Todos os seus dados serão apagados permanentemente.</span>
+                    <span>Esta ação é irreversível! Um código de verificação será enviado para seu e-mail.</span>
                   </p>
                 </div>
                 <div className="mt-4 text-sm text-gray-500">
@@ -132,7 +133,7 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
                   className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  {loading ? "Enviando..." : "Sim, excluir minha conta"}
+                  {loading ? "Enviando..." : "Solicitar exclusão"}
                 </button>
               </div>
             </>
@@ -170,7 +171,7 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
                 className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                {loading ? "Verificando..." : "Confirmar exclusão permanente"}
+                {loading ? "Verificando..." : "Confirmar exclusão"}
               </button>
 
               <button

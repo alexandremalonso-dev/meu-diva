@@ -1,14 +1,15 @@
-// ✅ Detecta o backend correto baseado no hostname — funciona em non-prod, prod e local
+// ✅ Detecta o backend correto baseado no hostname
 function getApiBaseUrl(): string {
   if (typeof window === "undefined") {
     return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   }
-  const host = window.location.hostname;
-  if (host.includes("meudiva-frontend-non-prod") || host.includes("homologacao")) {
-    return "https://meudiva-api-non-prod-365415900882.southamerica-east1.run.app";
+  // Sempre usa a variável de ambiente se disponível
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
-  if (host.includes("app.meudivaonline.com") || host.includes("meudiva-frontend-prod")) {
-    return "https://api.meudivaonline.com";
+  const host = window.location.hostname;
+  if (host.includes("app.meudivaonline.com")) {
+    return "https://meudiva-api-backend-592671373665.southamerica-east1.run.app";
   }
   return "http://localhost:8000";
 }
