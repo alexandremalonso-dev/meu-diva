@@ -36,6 +36,19 @@ const CORES = {
 
 const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
+// 🔥 Extrai HH:MM diretamente da string ISO sem converter timezone
+const getHorarioStr = (startsAt: string): string => {
+  const match = startsAt.match(/T(\d{2}:\d{2})/)
+  return match ? match[1] : new Date(startsAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+}
+
+// 🔥 Extrai a data local (YYYY-MM-DD) da string ISO sem converter timezone
+const getDateStr = (startsAt: string): string => {
+  const match = startsAt.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (match) return match[1]
+  return new Date(startsAt).toISOString().split('T')[0]
+}
+
 export function AgendaPublica({
   agenda: agendaInicial,
   therapistId,
@@ -72,14 +85,12 @@ export function AgendaPublica({
     }
     const grupos: Record<string, any[]> = {};
     slots.forEach((slot) => {
-      const dateStr = new Date(slot.starts_at).toLocaleDateString("pt-BR");
+      // 🔥 Usa a data local da string ISO sem conversão de timezone
+      const dateStr = getDateStr(slot.starts_at)
       if (!grupos[dateStr]) grupos[dateStr] = [];
       grupos[dateStr].push(slot);
     });
-    const diasOrdenados = Object.keys(grupos).sort((a, b) => {
-      const parse = (s: string) => { const [d, m, y] = s.split("/"); return new Date(`${y}-${m}-${d}`).getTime(); };
-      return parse(a) - parse(b);
-    });
+    const diasOrdenados = Object.keys(grupos).sort();
     setSlotsPorDia(grupos);
     setDias(diasOrdenados);
     setCurrentPage(0);
@@ -120,32 +131,42 @@ export function AgendaPublica({
   const totalPaginas = Math.ceil(dias.length / DIAS_POR_PAGINA);
   const diasPaginados = dias.slice(currentPage * DIAS_POR_PAGINA, (currentPage + 1) * DIAS_POR_PAGINA);
 
+  // 🔥 Usa YYYY-MM-DD direto — sem conversão de timezone
   const getDiaSemana = (dateStr: string) => {
-    const [d, m, y] = dateStr.split("/");
-    return DIAS_SEMANA[new Date(`${y}-${m}-${d}`).getDay()];
-  };
+    const [y, m, d] = dateStr.split("-").map(Number)
+    return DIAS_SEMANA[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+  }
 
   const getDiaMes = (dateStr: string) => {
-    const [d, m] = dateStr.split("/");
-    return `${d}/${m}`;
-  };
+    const [, m, d] = dateStr.split("-")
+    return `${d}/${m}`
+  }
 
-  const isHoje = (dateStr: string) => dateStr === hoje.toLocaleDateString("pt-BR");
+  const isHoje = (dateStr: string) => {
+    const hojeStr = hoje.toISOString().split('T')[0]
+    return dateStr === hojeStr
+  }
 
   const getHorarios = (slots: any[]) =>
     (slots || [])
-      .filter(s => { const h = new Date(s.starts_at).getHours(); return h >= 7 && h <= 22; })
-      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+      .filter(s => {
+        const h = parseInt(getHorarioStr(s.starts_at).split(':')[0])
+        return h >= 7 && h <= 22
+      })
+      .sort((a, b) => getHorarioStr(a.starts_at).localeCompare(getHorarioStr(b.starts_at)))
 
   const periodoLabel = (() => {
     if (!diasPaginados.length) return "";
-    const [d1, m1] = diasPaginados[0].split("/");
-    const [d2, m2, y2] = diasPaginados[diasPaginados.length - 1].split("/");
-    const mesAno = new Date(`${y2}-${m2}-${d2}`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-    const label = m1 === m2
-      ? `${d1} – ${d2}/${m2} · ${mesAno.charAt(0).toUpperCase() + mesAno.slice(1)}`
-      : `${d1}/${m1} – ${d2}/${m2} · ${mesAno.charAt(0).toUpperCase() + mesAno.slice(1)}`;
-    return label;
+    const first = diasPaginados[0]
+    const last = diasPaginados[diasPaginados.length - 1]
+    const [y1, m1, d1] = first.split("-")
+    const [y2, m2, d2] = last.split("-")
+    const mesAno = new Date(Date.UTC(parseInt(y2), parseInt(m2) - 1, parseInt(d2)))
+      .toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    const mesAnoFmt = mesAno.charAt(0).toUpperCase() + mesAno.slice(1)
+    return m1 === m2
+      ? `${d1} – ${d2}/${m2} · ${mesAnoFmt}`
+      : `${d1}/${m1} – ${d2}/${m2} · ${mesAnoFmt}`
   })();
 
   const handleAgendar = async (slot: any) => {
@@ -162,57 +183,54 @@ export function AgendaPublica({
 
       const walletData = await api("/api/wallet/balance");
       const balance = walletData.balance || 0;
-
-      const startsAt = new Date(slot.starts_at);
-      const therapistName = encodeURIComponent("Terapeuta");
-      const date = encodeURIComponent(startsAt.toLocaleDateString('pt-BR'));
-      const time = encodeURIComponent(startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
       const duration = slot.duration_minutes || 50;
 
       if (balance >= sessionPrice) {
+        // SALDO SUFICIENTE: cria appointment e confirma direto pela wallet
         const bookingData = await api("/api/appointments", {
           method: "POST",
           body: JSON.stringify({
             therapist_user_id: Number(therapistId),
             starts_at: slot.starts_at,
             ends_at: slot.ends_at,
-            duration_minutes: slot.duration_minutes || 50,
+            duration_minutes: duration,
           }),
         });
 
         const appointmentId = bookingData.id;
+
         await api(`/api/appointments/${appointmentId}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status: "confirmed" }),
         });
 
         await carregarTodosSlots();
+
+        const therapistName = encodeURIComponent("Terapeuta");
+        const date = encodeURIComponent(getDiaMes(getDateStr(slot.starts_at)));
+        const time = encodeURIComponent(getHorarioStr(slot.starts_at));
         const isMobileContext = window.location.pathname.startsWith('/mobile') || sessionStorage.getItem('oauth_from_mobile') === 'true';
         const dashPath = isMobileContext ? '/mobile/dashboard' : '/patient/dashboard';
-        router.push(`${dashPath}?payment_success=true&appointment_id=${appointmentId}&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${sessionPrice}`);
+
+        router.push(
+          `${dashPath}?payment_success=true&appointment_id=${appointmentId}` +
+          `&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${sessionPrice}`
+        );
         return;
       }
 
-      const residual = sessionPrice - balance;
-      const isMobileContext = window.location.pathname.startsWith('/mobile') || sessionStorage.getItem('oauth_from_mobile') === 'true';
-      const dashPath = isMobileContext ? '/mobile/dashboard' : '/patient/dashboard';
-      const successUrl = `${window.location.origin}${dashPath}?payment_success=true&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${sessionPrice}`;
-      const cancelUrl = `${window.location.origin}/terapeuta/${therapistId}?cancel=true`;
-
-      const stripeData = await api("/api/payments/create-checkout", {
+      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout MP
+      const bookingData = await api("/api/appointments", {
         method: "POST",
         body: JSON.stringify({
-          amount: residual,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
           therapist_user_id: Number(therapistId),
           starts_at: slot.starts_at,
           ends_at: slot.ends_at,
-          duration_minutes: slot.duration_minutes || 50,
+          duration_minutes: duration,
         }),
       });
 
-      window.location.href = stripeData.checkout_url;
+      router.push(`/checkout?appointment_id=${bookingData.id}`);
 
     } catch (error: any) {
       console.error("Erro ao agendar:", error);
@@ -254,10 +272,8 @@ export function AgendaPublica({
             display: "flex", alignItems: "center", gap: "6px",
             padding: "7px 12px", borderRadius: "8px", border: "none",
             backgroundColor: currentPage === 0 ? CORES.cinza : CORES.rosa,
-            color: CORES.branco,
-            cursor: currentPage === 0 ? "not-allowed" : "pointer",
-            opacity: currentPage === 0 ? 0.4 : 1,
-            fontWeight: "500", fontSize: "13px",
+            color: CORES.branco, cursor: currentPage === 0 ? "not-allowed" : "pointer",
+            opacity: currentPage === 0 ? 0.4 : 1, fontWeight: "500", fontSize: "13px",
           }}
         >
           <ChevronLeft size={16} /> {!isMobile && "Anterior"}
@@ -279,10 +295,8 @@ export function AgendaPublica({
             display: "flex", alignItems: "center", gap: "6px",
             padding: "7px 12px", borderRadius: "8px", border: "none",
             backgroundColor: currentPage >= totalPaginas - 1 ? CORES.cinza : CORES.rosa,
-            color: CORES.branco,
-            cursor: currentPage >= totalPaginas - 1 ? "not-allowed" : "pointer",
-            opacity: currentPage >= totalPaginas - 1 ? 0.4 : 1,
-            fontWeight: "500", fontSize: "13px",
+            color: CORES.branco, cursor: currentPage >= totalPaginas - 1 ? "not-allowed" : "pointer",
+            opacity: currentPage >= totalPaginas - 1 ? 0.4 : 1, fontWeight: "500", fontSize: "13px",
           }}
         >
           {!isMobile && "Próximo"} <ChevronRight size={16} />
@@ -329,7 +343,6 @@ export function AgendaPublica({
                       <p style={{ fontSize: "12px", textAlign: "center", padding: "8px", color: CORES.cinzaTexto }}>–</p>
                     ) : (
                       horarios.map((slot, i) => {
-                        const time = new Date(slot.starts_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
                         const isSlotLoading = loadingSlot === slot.starts_at;
                         return (
                           <button
@@ -348,7 +361,7 @@ export function AgendaPublica({
                               transition: "opacity 0.2s",
                             }}
                           >
-                            {isSlotLoading ? "..." : time}
+                            {isSlotLoading ? "..." : getHorarioStr(slot.starts_at)}
                           </button>
                         );
                       })

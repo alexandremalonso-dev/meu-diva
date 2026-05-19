@@ -53,15 +53,12 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
   }, [frequentTherapists]);
 
   const loadAllSlots = async () => {
-    // Inicializa com loading
     setTherapistsWithSlots(frequentTherapists.map(t => ({
       therapist: t, profileId: 0, nextSlots: [], loading: true
     })));
 
-    // Busca profile_ids de uma vez
     const therapistsData = await api('/api/therapists').catch(() => []);
 
-    // Carrega slots de cada terapeuta em paralelo
     const results = await Promise.all(
       frequentTherapists.map(async (therapist) => {
         try {
@@ -75,7 +72,7 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
           const slots: AvailableSlot[] = (data.slots || [])
             .filter((s: any) => new Date(s.starts_at) > new Date())
             .sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
-            .slice(0, 3); // Apenas os 3 próximos
+            .slice(0, 3);
 
           return { therapist, profileId: profile.id, nextSlots: slots, loading: false };
         } catch {
@@ -104,7 +101,6 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
     finally { setLoadingModal(false); }
   };
 
-  // ✅ Lógica de payment igual ao CardTerapeuta — sem criar appointment antes do Stripe
   const handleAgendar = async (slot: AvailableSlot, therapist: Therapist) => {
     const key = `${therapist.user_id}_${slot.starts_at}`;
     if (isLoading) return;
@@ -114,15 +110,10 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
       const walletData = await api('/api/wallet/balance');
       const balance = walletData.balance || 0;
       const preco = therapist.session_price || 200;
-
-      const startsAt = new Date(slot.starts_at);
-      const therapistName = encodeURIComponent(therapist.full_name || "Terapeuta");
-      const date = encodeURIComponent(startsAt.toLocaleDateString('pt-BR'));
-      const time = encodeURIComponent(startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
       const duration = slot.duration_minutes || 50;
 
       if (balance >= preco) {
-        // ✅ Saldo suficiente — cria e confirma direto
+        // SALDO SUFICIENTE: cria appointment e confirma direto
         const bookingData = await api('/api/appointments', {
           method: "POST",
           body: JSON.stringify({
@@ -132,33 +123,39 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
             duration_minutes: duration,
           })
         });
+
         await api(`/api/appointments/${bookingData.id}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status: "confirmed" })
         });
+
         setModalSlots(null);
-        router.push(`/patient/dashboard?payment_success=true&appointment_id=${bookingData.id}&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${preco}`);
+
+        const therapistName = encodeURIComponent(therapist.full_name || "Terapeuta");
+        const startsAt = new Date(slot.starts_at);
+        const date = encodeURIComponent(startsAt.toLocaleDateString('pt-BR'));
+        const time = encodeURIComponent(startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+
+        router.push(
+          `/patient/dashboard?payment_success=true&appointment_id=${bookingData.id}` +
+          `&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${preco}`
+        );
         return;
       }
 
-      // ✅ Saldo insuficiente — vai pro Stripe SEM criar appointment antes
-      const residual = preco - balance;
-      const successUrl = `${window.location.origin}/patient/dashboard?payment_success=true&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${preco}`;
-      const cancelUrl = `${window.location.origin}/patient/dashboard`;
-
-      const stripeData = await api('/api/payments/create-checkout', {
+      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout próprio
+      const bookingData = await api('/api/appointments', {
         method: "POST",
         body: JSON.stringify({
-          amount: residual,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
           therapist_user_id: therapist.user_id,
           starts_at: slot.starts_at,
           ends_at: slot.ends_at,
           duration_minutes: duration,
         })
       });
-      window.location.href = stripeData.checkout_url;
+
+      setModalSlots(null);
+      router.push(`/checkout?appointment_id=${bookingData.id}`);
 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('ocupado') || err.message?.toLowerCase().includes('conflict')) {
@@ -238,7 +235,6 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
               const fotoUrl = item.therapist.foto_url ? getFotoSrc(item.therapist.foto_url) ?? "" : null;
               return (
                 <div key={item.therapist.user_id} className="border border-gray-100 rounded-xl p-3">
-                  {/* Info terapeuta */}
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-100 flex-shrink-0 flex items-center justify-center">
                       {fotoUrl
@@ -258,7 +254,6 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
                     </button>
                   </div>
 
-                  {/* Próximos slots */}
                   {item.loading ? (
                     <div className="flex justify-center py-2">
                       <Loader2 className="w-4 h-4 text-[#E03673] animate-spin" />
@@ -312,7 +307,6 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
             className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header modal */}
             <div className="flex items-center justify-between p-4 border-b">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
@@ -331,7 +325,6 @@ export function QuickBooking({ therapists, frequentTherapists, suggestion }: Qui
               </button>
             </div>
 
-            {/* Slots */}
             <div className="flex-1 overflow-y-auto p-4">
               {loadingModal ? (
                 <div className="flex justify-center py-8">

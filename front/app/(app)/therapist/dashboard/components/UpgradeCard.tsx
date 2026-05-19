@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useApi } from "@/lib/useApi";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 import { Crown, TrendingUp, CheckCircle, ArrowRight, Loader2, Sparkles, Star, Zap, Rocket, Percent, FileText } from "lucide-react";
 
 const CORES = {
@@ -36,29 +36,14 @@ export function UpgradeCard({
   popular = false,
   currentSaving = 0
 }: UpgradeCardProps) {
-  const { execute: apiCall } = useApi();
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = () => {
     if (!user) return;
-    setLoading(true);
-    try {
-      const response = await apiCall({
-        url: "/api/payments/create-subscription-checkout",
-        method: "POST",
-        body: { plan: planId },
-        requireAuth: true
-      });
-      
-      if (response?.checkout_url) {
-        window.location.href = response.checkout_url;
-      }
-    } catch (error) {
-      console.error("Erro ao criar checkout:", error);
-    } finally {
-      setLoading(false);
-    }
+    // 🔥 Redireciona direto para o checkout personalizado
+    router.push(`/subscription-checkout?plan=${planId}`);
   };
 
   const formatPrice = (value: number) => {
@@ -68,25 +53,15 @@ export function UpgradeCard({
     }).format(value);
   };
 
-  // Ícone baseado no plano
   const getIcon = () => {
-    if (planId === "premium") {
-      return <Crown className="w-6 h-6" />;
-    }
-    if (planId === "profissional") {
-      return <TrendingUp className="w-6 h-6" />;
-    }
+    if (planId === "premium") return <Crown className="w-6 h-6" />;
+    if (planId === "profissional") return <TrendingUp className="w-6 h-6" />;
     return <Star className="w-6 h-6" />;
   };
 
-  // Cor de destaque baseada no plano
   const getAccentColor = () => {
-    if (planId === "premium") {
-      return CORES.rosa;
-    }
-    if (planId === "profissional") {
-      return CORES.laranja;
-    }
+    if (planId === "premium") return CORES.rosa;
+    if (planId === "profissional") return CORES.laranja;
     return CORES.azul;
   };
 
@@ -147,18 +122,13 @@ export function UpgradeCard({
         
         <ul className="space-y-2 mb-6">
           {features.map((feature, index) => {
-            // Destacar relatórios com ícone específico
             const isReportFeature = feature.toLowerCase().includes("relatório");
             return (
               <li key={index} className="flex items-start gap-2 text-sm">
                 {isReportFeature ? (
-                  <FileText className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                    popular ? "text-white" : "text-[#2F80D3]"
-                  }`} />
+                  <FileText className={`w-4 h-4 mt-0.5 flex-shrink-0 ${popular ? "text-white" : "text-[#2F80D3]"}`} />
                 ) : (
-                  <CheckCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                    popular ? "text-white" : "text-[#F59E0B]"
-                  }`} />
+                  <CheckCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${popular ? "text-white" : "text-[#F59E0B]"}`} />
                 )}
                 <span className={popular ? "text-white/90" : "text-gray-600"}>
                   {feature}

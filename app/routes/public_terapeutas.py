@@ -14,7 +14,6 @@ from app.core.appointment_status import AppointmentStatus
 from app.schemas.therapist import TherapistProfileOut
 from app.schemas.slots import AvailableSlot, AvailableSlotsResponse
 
-# 🔥 CRÍTICO: DEFINIR O ROUTER AQUI!
 router = APIRouter(prefix="/public/terapeutas", tags=["público"])
 
 
@@ -30,7 +29,6 @@ def _parse_tz_offset(tz_offset: str) -> timezone:
             s = s[1:]
         elif s.startswith("+"):
             s = s[1:]
-
         hh, mm = s.split(":")
         delta = timedelta(hours=int(hh), minutes=int(mm))
         return timezone(sign * delta)
@@ -43,6 +41,14 @@ def _parse_tz_offset(tz_offset: str) -> timezone:
 
 def _overlaps(s1: datetime, e1: datetime, s2: datetime, e2: datetime) -> bool:
     return s1 < e2 and e1 > s2
+
+
+def _db_weekday_to_python(db_weekday: int) -> int:
+    """
+    Converte o weekday do banco (0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab)
+    para o padrão Python/datetime.weekday() (0=Seg, 1=Ter, 2=Qua, 3=Qui, 4=Sex, 5=Sab, 6=Dom)
+    """
+    return (db_weekday - 1) % 7
 
 
 # ==========================
@@ -63,9 +69,6 @@ def listar_terapeutas_publicos(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
 ):
-    """
-    Lista terapeutas públicos com filtros avançados
-    """
     print(f"\n📋 GET /public/terapeutas - Listando terapeutas")
     print(f"   Filtros: nome={nome}, especialidade={especialidade}, abordagem={abordagem}, genero={genero}")
 
@@ -96,7 +99,6 @@ def listar_terapeutas_publicos(
     if duracao_50min:
         query = query.where(TherapistProfile.session_duration_50min == True)
 
-    # Ordenação inicial (featured e rating)
     query = query.order_by(
         TherapistProfile.featured.desc(),
         TherapistProfile.rating.desc(),
@@ -106,14 +108,12 @@ def listar_terapeutas_publicos(
     offset = (page - 1) * limit
     terapeutas = db.execute(query.offset(offset).limit(limit)).scalars().all()
 
-    # 🔥 Ordenação por prioridade de plano (Premium > Profissional > Essencial)
     from app.services.plan_priority import get_therapist_plan, PLAN_PRIORITY
-    
+
     def get_plan_priority(therapist):
         plan = get_therapist_plan(therapist.user_id, db)
         return PLAN_PRIORITY.get(plan, 1)
-    
-    # Ordenar terapeutas por prioridade do plano (maior prioridade primeiro)
+
     terapeutas_ordenados = sorted(terapeutas, key=get_plan_priority, reverse=True)
 
     print(f"✅ Encontrados {len(terapeutas_ordenados)} terapeutas")
@@ -163,11 +163,6 @@ def get_slots_disponiveis(
     tz_offset: str = "-03:00",
     db: Session = Depends(get_db)
 ):
-    """
-    Retorna os slots disponíveis para um terapeuta.
-    - Se start_date e end_date informados: busca no intervalo exato (inclusive ambos os dias)
-    - Se não informados: busca os próximos 'days' dias
-    """
     print(f"\n📢 GET /public/terapeutas/{terapeuta_id}/slots")
     print(f"   Parâmetros: start_date={start_date}, end_date={end_date}, days={days}")
 
@@ -181,23 +176,16 @@ def get_slots_disponiveis(
     tz = _parse_tz_offset(tz_offset)
     now = datetime.now(tz)
 
-    # ✅ CORREÇÃO PRINCIPAL:
-    # range_start / range_end  → usados para resposta e filtragem de appointments (com hora)
-    # loop_start_date / loop_end_date → datas puras para o loop de geração de slots (sem hora)
     if start_date and end_date:
         try:
-            # range_start: início do dia informado
             range_start = datetime.strptime(start_date, "%Y-%m-%d").replace(
                 hour=0, minute=0, second=0, microsecond=0, tzinfo=tz
             )
-            # range_end: fim do último dia informado (23:59:59) — usado apenas na query SQL
             range_end = datetime.strptime(end_date, "%Y-%m-%d").replace(
                 hour=23, minute=59, second=59, microsecond=999999, tzinfo=tz
             )
-            # ✅ datas puras para o loop — sem - timedelta(seconds=1), sem distorção
             loop_start_date: date_type = range_start.date()
             loop_end_date: date_type = datetime.strptime(end_date, "%Y-%m-%d").date()
-            print(f"📅 Intervalo personalizado: {loop_start_date} a {loop_end_date} (inclusive)")
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
     else:
@@ -205,7 +193,6 @@ def get_slots_disponiveis(
         range_end = now + timedelta(days=days)
         loop_start_date = range_start.date()
         loop_end_date = range_end.date()
-        print(f"📅 Intervalo padrão ({days} dias): {loop_start_date} a {loop_end_date}")
 
     range_start_utc = range_start.astimezone(timezone.utc)
     range_end_utc = range_end.astimezone(timezone.utc)
@@ -222,7 +209,6 @@ def get_slots_disponiveis(
     ).scalars().all()
 
     if not active_periods:
-        print("⚠️ Nenhum período de disponibilidade encontrado")
         return AvailableSlotsResponse(
             therapist_user_id=profile.user_id,
             range_start=range_start,
@@ -232,6 +218,7 @@ def get_slots_disponiveis(
         )
 
     # Mapear períodos com seus slots por dia da semana
+    # 🔥 CORREÇÃO: converte weekday do banco (0=Dom) para Python (0=Seg)
     periods_with_slots = {}
     for period in active_periods:
         slots = db.execute(
@@ -240,19 +227,13 @@ def get_slots_disponiveis(
 
         slots_by_weekday = {}
         for slot in slots:
-            slots_by_weekday.setdefault(slot.weekday, []).append(
+            python_weekday = _db_weekday_to_python(slot.weekday)
+            slots_by_weekday.setdefault(python_weekday, []).append(
                 (slot.start_time, slot.end_time)
             )
         periods_with_slots[period] = slots_by_weekday
 
-    print(f"📋 Períodos encontrados: {len(periods_with_slots)}")
-    for period, slots_by_wd in periods_with_slots.items():
-        dias_nomes = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
-        print(f"   {period.start_date} → {period.end_date}")
-        for wd, intervals in slots_by_wd.items():
-            print(f"     {dias_nomes[wd]}: {len(intervals)} intervalo(s)")
-
-    # Buscar appointments já ocupados no período
+    # Buscar appointments já ocupados
     busy_appts = db.execute(
         select(Appointment).where(
             and_(
@@ -283,69 +264,61 @@ def get_slots_disponiveis(
         durations_to_generate = [50]
 
     all_slots = []
-    dias_nomes = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
+
+    weekdays_available = set()
+    for slots_by_wd in periods_with_slots.values():
+        weekdays_available.update(slots_by_wd.keys())
+
+    print(f"📅 Dias da semana disponíveis (Python weekday): {weekdays_available}")
 
     for duration in durations_to_generate:
         step = timedelta(minutes=duration)
-        slots = []
 
-        # ✅ Loop usa loop_end_date (date puro) — sem risco de corte por timezone
-        d = loop_start_date
-        while d <= loop_end_date:
-            iso_weekday = d.isoweekday()   # 1=Segunda ... 7=Domingo
-            db_weekday = iso_weekday - 1   # 0=Segunda ... 6=Domingo
+        for weekday in weekdays_available:
+            current_date = loop_start_date
+            days_ahead = (weekday - current_date.weekday()) % 7
+            first_date = current_date + timedelta(days=days_ahead)
 
-            # Encontrar período que cobre esta data
-            period_for_date = None
-            slots_for_date = []
+            d = first_date
+            while d <= loop_end_date:
+                period_for_date = None
+                slots_for_date = []
 
-            for period, slots_by_wd in periods_with_slots.items():
-                if period.start_date <= d <= period.end_date:
-                    period_for_date = period
-                    slots_for_date = slots_by_wd.get(db_weekday, [])
-                    break
+                for period, slots_by_wd in periods_with_slots.items():
+                    if period.start_date <= d <= period.end_date:
+                        period_for_date = period
+                        slots_for_date = slots_by_wd.get(weekday, [])
+                        break
 
-            if not period_for_date or not slots_for_date:
-                d += timedelta(days=1)
-                continue
+                if period_for_date and slots_for_date:
+                    for start_t, end_t in slots_for_date:
+                        day_start = datetime.combine(d, start_t, tzinfo=tz)
+                        day_end = datetime.combine(d, end_t, tzinfo=tz)
 
-            for start_t, end_t in slots_for_date:
-                day_start = datetime.combine(d, start_t, tzinfo=tz)
-                day_end = datetime.combine(d, end_t, tzinfo=tz)
+                        if day_end <= now:
+                            continue
+                        if day_start < range_start:
+                            day_start = range_start
 
-                # Pula blocos já encerrados
-                if day_end <= now:
-                    continue
+                        cursor = day_start
+                        while cursor + step <= day_end:
+                            s = cursor
+                            e = cursor + step
+                            if all(not _overlaps(s, e, bs, be) for bs, be in busy_windows):
+                                all_slots.append(
+                                    AvailableSlot(
+                                        starts_at=s,
+                                        ends_at=e,
+                                        duration_minutes=duration,
+                                    )
+                                )
+                            cursor += step
 
-                # Não gerar slots antes do início do range
-                if day_start < range_start:
-                    day_start = range_start
-
-                cursor = day_start
-                while cursor + step <= day_end:
-                    s = cursor
-                    e = cursor + step
-                    if all(not _overlaps(s, e, bs, be) for bs, be in busy_windows):
-                        slots.append(
-                            AvailableSlot(
-                                starts_at=s,
-                                ends_at=e,
-                                duration_minutes=duration,
-                            )
-                        )
-                    cursor += step
-
-            d += timedelta(days=1)
-
-        all_slots.extend(slots)
+                d += timedelta(days=7)
 
     all_slots.sort(key=lambda x: x.starts_at)
 
-    print(f"✅ Total: {len(all_slots)} slots gerados de {loop_start_date} a {loop_end_date}")
-    if all_slots:
-        print(f"   Primeiro: {all_slots[0].starts_at.strftime('%Y-%m-%d %H:%M')}")
-        print(f"   Último:   {all_slots[-1].starts_at.strftime('%Y-%m-%d %H:%M')}")
-
+    print(f"✅ Total: {len(all_slots)} slots gerados")
     return AvailableSlotsResponse(
         therapist_user_id=profile.user_id,
         range_start=range_start,

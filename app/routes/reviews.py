@@ -85,22 +85,42 @@ def create_review(
     return review
 
 
-@router.get("/therapist/{therapist_user_id}", response_model=List[ReviewOut])
+@router.get("/therapist/{therapist_user_id}")
 def get_therapist_reviews(
     therapist_user_id: int,
     limit: int = 10,
     offset: int = 0,
     db: Session = Depends(get_db),
-    # 🔥 REMOVIDO current_user - endpoint público
 ):
     """
     Retorna todas as avaliações de um terapeuta (PÚBLICO - não requer autenticação)
     """
     print(f"\n📋 Buscando avaliações do terapeuta: {therapist_user_id}")
     
-    reviews = db.query(Review).filter(
+    # 🔥 JOIN com User para pegar o nome do paciente
+    results = db.query(
+        Review,
+        User.full_name.label("patient_name")
+    ).join(
+        User, User.id == Review.patient_user_id
+    ).filter(
         Review.therapist_user_id == therapist_user_id
-    ).order_by(Review.created_at.desc()).offset(offset).limit(limit).all()
+    ).order_by(
+        Review.created_at.desc()
+    ).offset(offset).limit(limit).all()
+    
+    # 🔥 Montar resposta com patient_name
+    reviews = []
+    for review, patient_name in results:
+        reviews.append({
+            "id": review.id,
+            "rating": review.rating,
+            "comment": review.comment,
+            "created_at": review.created_at,
+            "patient": {
+                "full_name": patient_name or "Paciente"
+            }
+        })
     
     print(f"✅ {len(reviews)} avaliações encontradas")
     return reviews

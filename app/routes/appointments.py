@@ -178,7 +178,7 @@ async def _cancel_unpaid_appointment_async(appointment_id: int):
         if appt.status == AppointmentStatus.scheduled:
             appt.status = AppointmentStatus.cancelled_by_patient
             appt.cancelled_at = datetime.now()
-            appt.cancel_reason = "Pagamento não confirmado em 2 minutos"
+            appt.cancel_reason = "Pagamento não confirmado em 15 minutos"
             db.commit()
             
             # 🔥 Emitir evento de cancelamento
@@ -330,7 +330,8 @@ def create_appointment(
         from app.models.availability import AvailabilityPeriod, AvailabilitySlot
         starts_at_local = starts_at.astimezone(BR_TZ)
         ends_at_local = ends_at.astimezone(BR_TZ)
-        weekday = starts_at_local.weekday()
+        python_weekday = starts_at_local.weekday()
+        db_weekday = (python_weekday + 1) % 7
         start_t = starts_at_local.time()
         end_t = ends_at_local.time()
 
@@ -340,23 +341,27 @@ def create_appointment(
             AvailabilityPeriod.end_date >= starts_at_local.date()
         ))).scalars().all()
 
-        if not active_periods:
-            raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
+        # DEPOIS — pula validação se force=True e for terapeuta/admin
+        force = getattr(payload, 'force', False)
+        skip_availability = force and (is_therapist or is_admin)
 
-        is_available = False
-        for period in active_periods:
-            slot = db.execute(select(AvailabilitySlot).where(and_(
-                AvailabilitySlot.period_id == period.id,
-                AvailabilitySlot.weekday == weekday,
-                AvailabilitySlot.start_time <= start_t,
-                AvailabilitySlot.end_time >= end_t
-            ))).scalars().first()
-            if slot:
-                is_available = True
-                break
+        if not skip_availability:
+            if not active_periods:
+                raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
 
-        if not is_available:
-            raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
+            is_available = False
+            for period in active_periods:
+                slot = db.execute(select(AvailabilitySlot).where(and_(
+                    AvailabilitySlot.period_id == period.id,
+                    AvailabilitySlot.weekday == db_weekday,
+                    AvailabilitySlot.start_time <= start_t,
+                    AvailabilitySlot.end_time >= end_t
+                ))).scalars().first()
+                if slot:
+                    is_available = True
+                    break
+            if not is_available:
+                raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
 
         overlap_conflict = db.execute(select(Appointment).where(and_(
             Appointment.therapist_user_id == payload.therapist_user_id,
@@ -415,10 +420,10 @@ def create_appointment(
         # 🔥 SE NÃO TEM SALDO, AGENDAR CANCELAMENTO AUTOMÁTICO APÓS 2 MINUTOS
         if saldo_insuficiente:
             import threading
-            thread = threading.Thread(target=_schedule_auto_cancel, args=(appt.id, 2))
+            thread = threading.Thread(target=_schedule_auto_cancel, args=(appt.id, 15))
             thread.daemon = True
             thread.start()
-            print(f"⏰ Cancelamento automático agendado para appointment {appt.id} em 2 minutos")
+            print(f"⏰ Cancelamento automático agendado para appointment {appt.id} em 15 minutos")
 
         # 🔥 Emitir evento de WebSocket para criação de sessão
         try:
@@ -524,7 +529,8 @@ def reschedule_appointment(
         from app.models.availability import AvailabilityPeriod, AvailabilitySlot
         starts_at_local = starts_at.astimezone(BR_TZ)
         ends_at_local = ends_at.astimezone(BR_TZ)
-        weekday = starts_at_local.weekday()
+        python_weekday = starts_at_local.weekday()
+        db_weekday = (python_weekday + 1) % 7
         start_t = starts_at_local.time()
         end_t = ends_at_local.time()
 
@@ -533,22 +539,28 @@ def reschedule_appointment(
             AvailabilityPeriod.start_date <= starts_at_local.date(),
             AvailabilityPeriod.end_date >= starts_at_local.date()
         ))).scalars().all()
-        if not active_periods:
-            raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
 
-        is_available = False
-        for period in active_periods:
-            slot = db.execute(select(AvailabilitySlot).where(and_(
-                AvailabilitySlot.period_id == period.id,
-                AvailabilitySlot.weekday == weekday,
-                AvailabilitySlot.start_time <= start_t,
-                AvailabilitySlot.end_time >= end_t
-            ))).scalars().first()
-            if slot:
-                is_available = True
-                break
-        if not is_available:
-            raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
+        # 🔥 force=True permite terapeuta/admin agendar fora da disponibilidade
+        force = getattr(payload, 'force', False)
+        skip_availability = force and (is_therapist or is_admin)
+
+        if not skip_availability:
+            if not active_periods:
+                raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
+
+            is_available = False
+            for period in active_periods:
+                slot = db.execute(select(AvailabilitySlot).where(and_(
+                    AvailabilitySlot.period_id == period.id,
+                    AvailabilitySlot.weekday == db_weekday,
+                    AvailabilitySlot.start_time <= start_t,
+                    AvailabilitySlot.end_time >= end_t
+                ))).scalars().first()
+                if slot:
+                    is_available = True
+                    break
+            if not is_available:
+                raise HTTPException(status_code=400, detail="Horário fora da disponibilidade do terapeuta")
 
         conflict = db.execute(select(Appointment).where(and_(
             Appointment.therapist_user_id == original.therapist_user_id,
@@ -565,7 +577,7 @@ def reschedule_appointment(
             therapist_user_id=therapist_profile.user_id,
             starts_at=starts_at,
             ends_at=ends_at,
-            status=AppointmentStatus.scheduled,  # 🔥 NUNCA confirmado sem pagamento
+            status=AppointmentStatus.scheduled,
             rescheduled_from_id=original.id,
             session_price=original.session_price,
             duration_minutes=payload.duration_minutes or original.duration_minutes or 50
@@ -587,17 +599,16 @@ def reschedule_appointment(
         
         # 🔥 Agendar cancelamento automático para o novo appointment se não pago
         if current_user.role == UserRole.patient:
-            # Verificar saldo do paciente
             patient_profile = db.execute(select(PatientProfile).where(PatientProfile.user_id == current_user.id)).scalar_one_or_none()
             if patient_profile:
                 from app.models.wallet import Wallet
                 wallet = db.execute(select(Wallet).where(Wallet.patient_id == patient_profile.id)).scalar_one_or_none()
                 if not wallet or wallet.balance < new_appt.session_price:
                     import threading
-                    thread = threading.Thread(target=_schedule_auto_cancel, args=(new_appt.id, 2))
+                    thread = threading.Thread(target=_schedule_auto_cancel, args=(new_appt.id, 15))
                     thread.daemon = True
                     thread.start()
-                    print(f"⏰ Cancelamento automático agendado para reagendamento {new_appt.id} em 2 minutos")
+                    print(f"⏰ Cancelamento automático agendado para reagendamento {new_appt.id} em 15 minutos")
         
         # 🔥 Notificação de reagendamento
         try:
@@ -756,8 +767,9 @@ def complete_appointment(
         if therapist_profile:
             therapist_profile.total_sessions = (therapist_profile.total_sessions or 0) + 1
             db.add(therapist_profile)
-            db.commit()
             print(f"✅ total_sessions do terapeuta {therapist_profile.user_id} atualizado para {therapist_profile.total_sessions}")
+    
+    db.commit()  # 🔥 Garantir que as alterações no total_sessions sejam salvas
     
     # 🔥 Emitir evento de WebSocket para atualizar prontuários pendentes
     try:
@@ -1044,17 +1056,6 @@ def update_appointment_status(
                 Ledger.appointment_id == appt.id,
                 Ledger.transaction_type == "session_debit"
             )).scalars().first()
-            
-            # Se não foi debitado, verificar pagamento via Stripe
-            if not already_debited:
-                from app.models.payment import Payment
-                payment = db.execute(select(Payment).where(
-                    Payment.appointment_id == appt.id,
-                    Payment.status.in_(["paid"])
-                )).scalars().first()
-                
-                if not payment:
-                    raise HTTPException(status_code=402, detail="Pagamento não confirmado. Realize o pagamento primeiro.")
 
         if new_status == AppointmentStatus.completed:
             if _utcnow() < _to_utc(appt.starts_at):

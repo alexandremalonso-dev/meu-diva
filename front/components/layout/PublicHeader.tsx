@@ -70,14 +70,26 @@ export function PublicHeader({ showBackButton = false, backTo = "/", title, onCh
     }
   }, [userRole, user]);
 
+  // 🔥 RECARREGAR PERFIL QUANDO O USER MUDAR
   useEffect(() => {
     if (user?.id && userRole) {
       loadProfile();
-      // ✅ Atualiza foto no header após upload bem-sucedido
-      window.addEventListener('refreshProfile', loadProfile);
-      return () => window.removeEventListener('refreshProfile', loadProfile);
     }
   }, [user, userRole, loadProfile]);
+
+  // 🔥 ESCUTAR EVENTO DE ATUALIZAÇÃO DO PERFIL (disparado após salvar)
+  useEffect(() => {
+    const handleRefreshProfile = () => {
+      console.log("🔄 Evento refreshProfile recebido - recarregando perfil");
+      loadProfile();
+    };
+    
+    window.addEventListener('refreshProfile', handleRefreshProfile);
+    
+    return () => {
+      window.removeEventListener('refreshProfile', handleRefreshProfile);
+    };
+  }, [loadProfile]);
 
   const handleLogout = async () => {
     await logout();
@@ -96,11 +108,16 @@ export function PublicHeader({ showBackButton = false, backTo = "/", title, onCh
     }
   };
 
+  // 🔥 CORRIGIDO: suporta profile.user.full_name (terapeuta) e profile.full_name (paciente)
+  const getDisplayName = () => {
+    return user?.full_name || (profile as any)?.user?.full_name || profile?.full_name || user?.email;
+};
+
   const getInitial = () => {
-    if (profile?.full_name) return profile.full_name.charAt(0).toUpperCase();
-    if (user?.full_name) return user.full_name.charAt(0).toUpperCase();
-    return user?.email?.charAt(0).toUpperCase() || 'U';
-  };
+  const name = user?.full_name || (profile as any)?.user?.full_name || profile?.full_name;
+  if (name) return name.charAt(0).toUpperCase();
+  return user?.email?.charAt(0).toUpperCase() || 'U';
+};
 
   const profileLink = userRole === 'therapist'
     ? '/therapist/profile'
@@ -118,9 +135,8 @@ export function PublicHeader({ showBackButton = false, backTo = "/", title, onCh
     ? '/empresa/dashboard'
     : '/patient/dashboard';
 
-  const displayName = profile?.full_name || user?.full_name || user?.email;
+  const displayName = getDisplayName();
 
-  // ✅ Corrigido: evita duplicar BACKEND_URL se foto já for URL completa do GCS
   const fotoUrl = profile?.foto_url
     ? (profile.foto_url.startsWith('http') ? profile.foto_url : `${BACKEND_URL}${profile.foto_url}`)
     : null;
@@ -211,7 +227,6 @@ export function PublicHeader({ showBackButton = false, backTo = "/", title, onCh
                       {userRole === 'admin' ? 'Administrador' : userRole === 'empresa' ? 'Empresa' : 'Meu Perfil'}
                     </p>
                   </div>
-                  {/* Foto de perfil — lógica 100% preservada */}
                   <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-white font-bold text-xl sm:text-2xl overflow-hidden ring-2 shadow-md" style={{ backgroundColor: "#E03673", ringColor: "rgba(224,54,115,0.3)" }}>
                     {fotoUrl ? (
                       <img

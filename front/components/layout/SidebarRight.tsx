@@ -261,7 +261,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="w-[420px] h-full bg-white border-l border-gray-200 shadow-lg flex flex-col relative flex-shrink-0">
+    <div className="w-[420px] bg-white border-l border-gray-200 shadow-lg flex flex-col relative flex-shrink-0" style={{ height: "100%" }}>
       <button onClick={() => setIsMinimized(true)}
         className="absolute -left-3 top-72 bg-[#E03673] hover:bg-[#c02c5e] text-white rounded-full p-2 shadow-md z-20 transition-all hover:scale-105"
         title="Recolher sidebar">

@@ -114,9 +114,17 @@ class Appointment(Base):
         cascade="all, delete-orphan"
     )
 
-    # 🔥 NOVO: Relacionamento com comissão
+    # 🔥 Relacionamento com comissão
     commission = relationship(
         "app.models.commission.Commission",
+        back_populates="appointment",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+    # 🔥 NOVO: Relacionamento com avaliação (review)
+    review = relationship(
+        "app.models.review.Review",
         back_populates="appointment",
         uselist=False,
         cascade="all, delete-orphan"

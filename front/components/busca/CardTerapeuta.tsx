@@ -49,9 +49,23 @@ interface CardTerapeutaProps {
     phone?: string;
     accepts_corporate_sessions?: boolean;
   };
+  isLoggedIn?: boolean;
 }
 
-export function CardTerapeuta({ terapeuta }: CardTerapeutaProps) {
+// 🔥 Extrai HH:MM diretamente da string ISO sem converter timezone
+const getHorarioStr = (startsAt: string): string => {
+  const match = startsAt.match(/T(\d{2}:\d{2})/)
+  return match ? match[1] : new Date(startsAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+}
+
+// 🔥 Extrai a data local (YYYY-MM-DD) da string ISO sem converter timezone
+const getDateStr = (startsAt: string): string => {
+  const match = startsAt.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (match) return match[1]
+  return new Date(startsAt).toISOString().split('T')[0]
+}
+
+export function CardTerapeuta({ terapeuta, isLoggedIn = false }: CardTerapeutaProps) {
   const router = useRouter();
   const hoje = new Date();
 
@@ -73,14 +87,12 @@ export function CardTerapeuta({ terapeuta }: CardTerapeutaProps) {
   const processarSlots = useCallback((slotsData: any[]) => {
     const grupos: Record<string, any[]> = {};
     (slotsData || []).forEach((slot: any) => {
-      const dateStr = new Date(slot.starts_at).toLocaleDateString("pt-BR");
+      // 🔥 Usa a data local da string ISO sem conversão de timezone
+      const dateStr = getDateStr(slot.starts_at)
       if (!grupos[dateStr]) grupos[dateStr] = [];
       grupos[dateStr].push(slot);
     });
-    const diasOrdenados = Object.keys(grupos).sort((a, b) => {
-      const parse = (s: string) => { const [d, m, y] = s.split("/"); return new Date(`${y}-${m}-${d}`).getTime(); };
-      return parse(a) - parse(b);
-    });
+    const diasOrdenados = Object.keys(grupos).sort();
     setSlotsPorDia(grupos);
     setDias(diasOrdenados);
     setCurrentPage(0);
@@ -103,7 +115,7 @@ export function CardTerapeuta({ terapeuta }: CardTerapeutaProps) {
     }
   }, [terapeuta.id, processarSlots]);
 
-useEffect(() => { carregarSlots(); }, [carregarSlots]);
+  useEffect(() => { carregarSlots(); }, [carregarSlots]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -113,91 +125,105 @@ useEffect(() => { carregarSlots(); }, [carregarSlots]);
       }
     }
   }, []);
+
   const totalPaginas = Math.ceil(dias.length / DIAS_POR_PAGINA);
   const diasPaginados = dias.slice(currentPage * DIAS_POR_PAGINA, (currentPage + 1) * DIAS_POR_PAGINA);
 
+  // 🔥 Usa YYYY-MM-DD direto — sem conversão de timezone
   const getDiaSemana = (dateStr: string) => {
-    const [d, m, y] = dateStr.split("/");
-    return DIAS_SEMANA[new Date(Date.UTC(parseInt(y), parseInt(m) - 1, parseInt(d))).getUTCDay()];
-  };
+    const [y, m, d] = dateStr.split("-").map(Number)
+    return DIAS_SEMANA[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+  }
 
-  const getDiaMes = (dateStr: string) => { const [d, m] = dateStr.split("/"); return `${d}/${m}`; };
+  const getDiaMes = (dateStr: string) => {
+    const [, m, d] = dateStr.split("-")
+    return `${d}/${m}`
+  }
 
-  const isHoje = (dateStr: string) => dateStr === hoje.toLocaleDateString("pt-BR");
+  const isHoje = (dateStr: string) => {
+    const hojeStr = hoje.toISOString().split('T')[0]
+    return dateStr === hojeStr
+  }
 
   const getHorarios = (slots: any[]) =>
     (slots || [])
-      .filter(s => { const h = new Date(s.starts_at).getHours(); return h >= 7 && h <= 22; })
-      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+      .filter(s => {
+        const h = parseInt(getHorarioStr(s.starts_at).split(':')[0])
+        return h >= 7 && h <= 22
+      })
+      .sort((a, b) => getHorarioStr(a.starts_at).localeCompare(getHorarioStr(b.starts_at)))
 
   const periodoLabel = (() => {
     if (!diasPaginados.length) return "";
-    const [d1, m1] = diasPaginados[0].split("/");
-    const [d2, m2, y2] = diasPaginados[diasPaginados.length - 1].split("/");
-    const mesAno = new Date(`${y2}-${m2}-${d2}`).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
-    return m1 === m2 ? `${d1}–${d2}/${m2} · ${mesAno}` : `${d1}/${m1}–${d2}/${m2} · ${mesAno}`;
+    const first = diasPaginados[0]
+    const last = diasPaginados[diasPaginados.length - 1]
+    const [y1, m1, d1] = first.split("-")
+    const [y2, m2, d2] = last.split("-")
+    const mesAno = new Date(Date.UTC(parseInt(y2), parseInt(m2) - 1, parseInt(d2)))
+      .toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
+    return m1 === m2
+      ? `${d1}–${d2}/${m2} · ${mesAno}`
+      : `${d1}/${m1}–${d2}/${m2} · ${mesAno}`
   })();
 
   const handleAgendar = async (slot: any) => {
+    if (!isLoggedIn) {
+      router.push('/auth/login?redirect=/busca')
+      return
+    }
     if (isLoading) return;
     setIsLoading(true);
     try {
-      // ✅ Verifica autenticação
-      await api('/api/users/me');
-
-      // ✅ Verifica saldo ANTES de criar o appointment
+      // Verifica saldo ANTES de criar o appointment
       const walletData = await api('/api/wallet/balance');
       const balance = walletData.balance || 0;
 
-      const startsAt = new Date(slot.starts_at);
-      const therapistName = encodeURIComponent(terapeuta.full_name);
-      const date = encodeURIComponent(startsAt.toLocaleDateString('pt-BR'));
-      const time = encodeURIComponent(startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-      const duration = 50;
-      const price = preco;
-
       if (balance >= preco) {
-        // ✅ SALDO SUFICIENTE: cria appointment e confirma direto
+        // SALDO SUFICIENTE: cria appointment e confirma direto pela wallet
         const bookingData = await api('/api/appointments', {
           method: "POST",
           body: JSON.stringify({
             therapist_user_id: terapeuta.user_id,
             starts_at: slot.starts_at,
             ends_at: slot.ends_at,
-            duration_minutes: 50
+            duration_minutes: 50,
           })
         });
+
         const appointmentId = bookingData.id;
+
         await api(`/api/appointments/${appointmentId}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status: "confirmed" })
         });
+
         await carregarSlots();
-        router.push(`/patient/dashboard?payment_success=true&appointment_id=${appointmentId}&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${price}`);
+
+        const therapistName = encodeURIComponent(terapeuta.full_name);
+        const startsAt = slot.starts_at;
+        const date = encodeURIComponent(getDiaMes(getDateStr(startsAt)));
+        const time = encodeURIComponent(getHorarioStr(startsAt));
+
+        router.push(
+          `/patient/dashboard?payment_success=true&appointment_id=${appointmentId}` +
+          `&therapist_name=${therapistName}&date=${date}&time=${time}&duration=50&price=${preco}`
+        );
         return;
       }
 
-      // ✅ SALDO INSUFICIENTE: vai direto pro Stripe SEM criar appointment
-      // O appointment será criado pelo webhook após pagamento confirmado
-      const residual = preco - balance;
-      const isMobile = window.location.pathname.startsWith('/mobile') || sessionStorage.getItem('oauth_from_mobile') === 'true';
-      const dashPath = isMobile ? '/mobile/dashboard' : '/patient/dashboard';
-      const successUrl = `${window.location.origin}${dashPath}?payment_success=true&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${price}`;
-      const cancelUrl = `${window.location.origin}/busca?cancel=true`;
-
-      const stripeData = await api('/api/payments/create-checkout', {
+      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout MP
+      const bookingData = await api('/api/appointments', {
         method: "POST",
         body: JSON.stringify({
-          amount: residual,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
           therapist_user_id: terapeuta.user_id,
           starts_at: slot.starts_at,
           ends_at: slot.ends_at,
-          duration_minutes: 50
+          duration_minutes: 50,
         })
       });
-      window.location.href = stripeData.checkout_url;
+
+      const appointmentId = bookingData.id;
+      router.push(`/checkout?appointment_id=${appointmentId}`);
 
     } catch (err: any) {
       console.error("Erro ao agendar:", err);
@@ -251,18 +277,10 @@ useEffect(() => { carregarSlots(); }, [carregarSlots]);
           {terapeuta.accepts_corporate_sessions === true && (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
               <span style={{
-                backgroundColor: "#E8F4FD",
-                color: CORES.azul,
-                fontSize: "11px",
-                fontWeight: "600",
-                padding: "4px 10px",
-                borderRadius: "20px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px"
+                backgroundColor: "#E8F4FD", color: CORES.azul, fontSize: "11px", fontWeight: "600",
+                padding: "4px 10px", borderRadius: "20px", display: "inline-flex", alignItems: "center", gap: "4px"
               }}>
-                <Building2 size={12} />
-                Aceita plano empresa
+                <Building2 size={12} /> Aceita plano empresa
               </span>
             </div>
           )}
@@ -386,7 +404,7 @@ useEffect(() => { carregarSlots(); }, [carregarSlots]);
                                 }}
                               >
                                 <Clock size={10} />
-                                {isLoading ? "..." : new Date(slot.starts_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                {isLoading ? "..." : getHorarioStr(slot.starts_at)}
                               </button>
                             ))
                           )}

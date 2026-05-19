@@ -45,9 +45,23 @@ interface MobileCardTerapeutaProps {
     video_url?: string;
     accepts_corporate_sessions?: boolean;
   };
+  isLoggedIn?: boolean;
 }
 
-export function MobileCardTerapeuta({ terapeuta }: MobileCardTerapeutaProps) {
+// 🔥 Extrai HH:MM diretamente da string ISO sem converter timezone
+const getHorarioStr = (startsAt: string): string => {
+  const match = startsAt.match(/T(\d{2}:\d{2})/)
+  return match ? match[1] : new Date(startsAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+}
+
+// 🔥 Extrai a data local (YYYY-MM-DD) da string ISO sem converter timezone
+const getDateStr = (startsAt: string): string => {
+  const match = startsAt.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (match) return match[1]
+  return new Date(startsAt).toISOString().split('T')[0]
+}
+
+export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCardTerapeutaProps) {
   const router = useRouter();
   const hoje = new Date();
 
@@ -69,14 +83,12 @@ export function MobileCardTerapeuta({ terapeuta }: MobileCardTerapeutaProps) {
   const processarSlots = useCallback((slotsData: any[]) => {
     const grupos: Record<string, any[]> = {};
     (slotsData || []).forEach((slot: any) => {
-      const dateStr = new Date(slot.starts_at).toLocaleDateString("pt-BR");
+      // 🔥 Usa a data local da string ISO sem conversão de timezone
+      const dateStr = getDateStr(slot.starts_at)
       if (!grupos[dateStr]) grupos[dateStr] = [];
       grupos[dateStr].push(slot);
     });
-    const diasOrdenados = Object.keys(grupos).sort((a, b) => {
-      const parse = (s: string) => { const [d, m, y] = s.split("/"); return new Date(`${y}-${m}-${d}`).getTime(); };
-      return parse(a) - parse(b);
-    });
+    const diasOrdenados = Object.keys(grupos).sort();
     setSlotsPorDia(grupos);
     setDias(diasOrdenados);
     setCurrentPage(0);
@@ -102,71 +114,86 @@ export function MobileCardTerapeuta({ terapeuta }: MobileCardTerapeutaProps) {
   const totalPaginas = Math.ceil(dias.length / DIAS_POR_PAGINA);
   const diasPaginados = dias.slice(currentPage * DIAS_POR_PAGINA, (currentPage + 1) * DIAS_POR_PAGINA);
 
+  // 🔥 Usa YYYY-MM-DD direto — sem conversão de timezone
   const getDiaSemana = (dateStr: string) => {
-    const [d, m, y] = dateStr.split("/");
-    return DIAS_SEMANA[new Date(Date.UTC(parseInt(y), parseInt(m) - 1, parseInt(d))).getUTCDay()];
-  };
+    const [y, m, d] = dateStr.split("-").map(Number)
+    return DIAS_SEMANA[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+  }
 
-  const getDiaMes = (dateStr: string) => { const [d, m] = dateStr.split("/"); return `${d}/${m}`; };
-  const isHoje = (dateStr: string) => dateStr === hoje.toLocaleDateString("pt-BR");
+  const getDiaMes = (dateStr: string) => {
+    const [, m, d] = dateStr.split("-")
+    return `${d}/${m}`
+  }
+
+  const isHoje = (dateStr: string) => {
+    const hojeStr = hoje.toISOString().split('T')[0]
+    return dateStr === hojeStr
+  }
 
   const getHorarios = (slots: any[]) =>
     (slots || [])
-      .filter(s => { const h = new Date(s.starts_at).getHours(); return h >= 7 && h <= 22; })
-      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+      .filter(s => {
+        const h = parseInt(getHorarioStr(s.starts_at).split(':')[0])
+        return h >= 7 && h <= 22
+      })
+      .sort((a, b) => getHorarioStr(a.starts_at).localeCompare(getHorarioStr(b.starts_at)))
 
   const handleAgendar = async (slot: any) => {
+    if (!isLoggedIn) {
+      router.push('/auth/login?redirect=/busca')
+      return
+    }
     if (isLoading) return;
     setIsLoading(true);
     try {
-      await api('/api/users/me');
       const walletData = await api('/api/wallet/balance');
       const balance = walletData.balance || 0;
 
-      const startsAt = new Date(slot.starts_at);
-      const therapistName = encodeURIComponent(terapeuta.full_name);
-      const date = encodeURIComponent(startsAt.toLocaleDateString('pt-BR'));
-      const time = encodeURIComponent(startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-      const duration = 50;
-      const price = preco;
-
       if (balance >= preco) {
+        // SALDO SUFICIENTE: cria appointment e confirma direto pela wallet
         const bookingData = await api('/api/appointments', {
           method: "POST",
           body: JSON.stringify({
             therapist_user_id: terapeuta.user_id,
             starts_at: slot.starts_at,
             ends_at: slot.ends_at,
-            duration_minutes: 50
+            duration_minutes: 50,
           })
         });
+
         const appointmentId = bookingData.id;
+
         await api(`/api/appointments/${appointmentId}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status: "confirmed" })
         });
+
         await carregarSlots();
-        router.push(`/mobile/dashboard?payment_success=true&appointment_id=${appointmentId}&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${price}`);
+
+        const therapistName = encodeURIComponent(terapeuta.full_name);
+        const date = encodeURIComponent(getDiaMes(getDateStr(slot.starts_at)));
+        const time = encodeURIComponent(getHorarioStr(slot.starts_at));
+
+        router.push(
+          `/mobile/dashboard?payment_success=true&appointment_id=${appointmentId}` +
+          `&therapist_name=${therapistName}&date=${date}&time=${time}&duration=50&price=${preco}`
+        );
         return;
       }
 
-      const residual = preco - balance;
-      const successUrl = `${window.location.origin}/mobile/dashboard?payment_success=true&therapist_name=${therapistName}&date=${date}&time=${time}&duration=${duration}&price=${price}`;
-      const cancelUrl = `${window.location.origin}/busca?cancel=true`;
-
-      const stripeData = await api('/api/payments/create-checkout', {
+      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout MP
+      const bookingData = await api('/api/appointments', {
         method: "POST",
         body: JSON.stringify({
-          amount: residual,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
           therapist_user_id: terapeuta.user_id,
           starts_at: slot.starts_at,
           ends_at: slot.ends_at,
-          duration_minutes: 50
+          duration_minutes: 50,
         })
       });
-      window.location.href = stripeData.checkout_url;
+
+      const appointmentId = bookingData.id;
+      router.push(`/checkout?appointment_id=${appointmentId}`);
 
     } catch (err: any) {
       console.error("Erro ao agendar:", err);
@@ -254,13 +281,11 @@ export function MobileCardTerapeuta({ terapeuta }: MobileCardTerapeutaProps) {
       )}
 
       {/* TAGS */}
-      {(terapeuta.abordagem) && (
+      {terapeuta.abordagem && (
         <div style={{ padding: "0 16px 12px", display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {terapeuta.abordagem && (
-            <span style={{ fontSize: 11, backgroundColor: "#E0F7FA", color: CORES.ciano, padding: "3px 8px", borderRadius: 10, display: "flex", alignItems: "center", gap: 3 }}>
-              <Brain size={10} /> {terapeuta.abordagem}
-            </span>
-          )}
+          <span style={{ fontSize: 11, backgroundColor: "#E0F7FA", color: CORES.ciano, padding: "3px 8px", borderRadius: 10, display: "flex", alignItems: "center", gap: 3 }}>
+            <Brain size={10} /> {terapeuta.abordagem}
+          </span>
         </div>
       )}
 
@@ -325,7 +350,7 @@ export function MobileCardTerapeuta({ terapeuta }: MobileCardTerapeutaProps) {
                           }}
                         >
                           <Clock size={9} />
-                          {isLoading ? "..." : new Date(slot.starts_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          {isLoading ? "..." : getHorarioStr(slot.starts_at)}
                         </button>
                       ))
                     )}

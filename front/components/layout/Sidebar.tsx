@@ -78,6 +78,7 @@ const therapistNavItems: NavItem[] = [
   { name: "Sessões Realizadas", href: "/therapist/sessions/completed", icon: CalendarCheck },
   { name: "Documentos", href: "/therapist/documents/required", icon: FileText },
   { name: "Notas Fiscais", href: "/therapist/invoices", icon: Receipt },
+  { name: "Planos", href: "/therapist/subscription", icon: CreditCard },
 ];
 
 const adminNavItems: NavItem[] = [
@@ -145,7 +146,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-16 bg-white border-r border-gray-200 shadow-sm h-full flex flex-col relative">
+    <aside className="w-16 bg-white border-r border-gray-200 shadow-sm flex flex-col relative" style={{ height: "100%" }}>
       <div className="h-16 flex items-center justify-center border-b border-gray-200 flex-shrink-0">
         <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center bg-white">
           <Image 

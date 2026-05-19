@@ -1,7 +1,9 @@
 import os
-import stripe
 import json
-from datetime import datetime, timedelta
+import hashlib
+import hmac
+import mercadopago
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
@@ -12,7 +14,7 @@ from app.db.database import get_db
 from app.core.permissions import require_roles
 from app.core.roles import UserRole
 from app.core.config import settings
-from app.core.pricing_config import get_plan_price_cents, get_plan_name
+from app.core.pricing_config import get_plan_name
 
 from app.models.user import User
 from app.models.patient_profile import PatientProfile
@@ -24,478 +26,283 @@ from app.models.therapist_profile import TherapistProfile
 from app.core.appointment_status import AppointmentStatus
 
 from app.schemas.payment import (
-    CreateCheckoutRequest,
-    CreateCheckoutResponse,
-    PaymentStatusResponse
+    CreatePaymentIntentRequest,
+    PaymentStatusResponse,
 )
 
-# 🔥 ALTERADO: Google Meet → Jitsi
 from app.services.jitsi_service import jitsi_service
 from app.services.email_service import email_service
 
-# ============================================
-# CONFIG STRIPE
-# ============================================
+MP_ACCESS_TOKEN = getattr(settings, "mp_access_token", None) or os.getenv("MP_ACCESS_TOKEN", "")
+MP_PUBLIC_KEY   = os.getenv("MP_PUBLIC_KEY", "")
+MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET", "")
 
-STRIPE_SECRET_KEY = settings.stripe_secret_key or os.getenv("STRIPE_SECRET_KEY", "")
-STRIPE_WEBHOOK_SECRET = settings.stripe_webhook_secret or os.getenv("STRIPE_WEBHOOK_SECRET", "")
+# IDs dos planos de assinatura criados no painel do Mercado Pago
+MP_PLAN_IDS = {
+    "profissional": "d2ec35a8800f454c8e4e9472c635e767",
+    "premium":      "c02a3c222900447181af9b10314af05f",
+}
 
-if STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
-    print("✅ Stripe configurado com chave real")
+if MP_ACCESS_TOKEN:
+    sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
+    print("✅ Mercado Pago configurado")
 else:
-    print("⚠️ Stripe em modo MOCK - sem chave configurada")
+    sdk = None
+    print("⚠️ Mercado Pago em modo MOCK - sem chave configurada")
 
-# ============================================
-# ROUTER
-# ============================================
-
+BR_TZ = timezone(timedelta(hours=-3))
 router = APIRouter(prefix="/payments", tags=["payments"])
 
-# ============================================
-# HELPERS
-# ============================================
 
-def get_patient_id_from_user(db: Session, user_id: int) -> int:
-    patient = db.execute(
-        select(PatientProfile).where(PatientProfile.user_id == user_id)
-    ).scalar_one_or_none()
+def D(value) -> Decimal:
+    """Converte qualquer valor numérico para Decimal com segurança."""
+    return Decimal(str(value))
 
+
+def get_patient_id_from_user(db, user_id):
+    patient = db.execute(select(PatientProfile).where(PatientProfile.user_id == user_id)).scalar_one_or_none()
     if not patient:
         raise HTTPException(status_code=404, detail="Perfil de paciente não encontrado")
-
     return patient.id
 
 
-def get_patient_wallet(db: Session, patient_id: int) -> Wallet:
-    wallet = db.execute(
-        select(Wallet).where(Wallet.patient_id == patient_id)
-    ).scalar_one_or_none()
-
+def get_patient_wallet(db, patient_id):
+    wallet = db.execute(select(Wallet).where(Wallet.patient_id == patient_id)).scalar_one_or_none()
     if not wallet:
         raise HTTPException(status_code=404, detail="Carteira não encontrada")
-
     return wallet
 
 
-# 🔥 FUNÇÃO PARA GERAR JITSI MEET, ENVIAR EMAILS E NOTIFICAÇÕES
-def generate_meet_and_send_emails_and_notifications(appointment: Appointment, db: Session):
-    """Gera link do Jitsi Meet, envia e-mails e cria notificações no dashboard"""
+def _verify_mp_signature(request_body, x_signature, x_request_id):
+    if not MP_WEBHOOK_SECRET:
+        return True
+    try:
+        parts = dict(p.split("=", 1) for p in x_signature.split(","))
+        ts = parts.get("ts", "")
+        v1 = parts.get("v1", "")
+        manifest = f"id:{json.loads(request_body).get('data', {}).get('id', '')};request-id:{x_request_id};ts:{ts};"
+        expected = hmac.new(MP_WEBHOOK_SECRET.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, v1)
+    except Exception as e:
+        print(f"⚠️ Erro assinatura MP: {e}")
+        return False
+
+
+def generate_meet_and_send_emails_and_notifications(appointment, db):
     meet_url = None
     try:
         if jitsi_service:
             therapist = db.get(User, appointment.therapist_user_id)
             if therapist:
                 meet_url = jitsi_service.get_meet_url(
-                    appointment_id=appointment.id,
-                    user_id=therapist.id,
-                    user_name=therapist.full_name or therapist.email.split('@')[0],
-                    is_moderator=True
+                    appointment_id=appointment.id, user_id=therapist.id,
+                    user_name=therapist.full_name or therapist.email.split('@')[0], is_moderator=True
                 )
                 if meet_url:
                     appointment.video_call_url = meet_url
                     db.commit()
-                    print(f"✅ [WEBHOOK] Jitsi Meet gerado com sucesso: {meet_url}")
-                else:
-                    print(f"⚠️ [WEBHOOK] get_meet_url retornou None")
-            else:
-                print(f"⚠️ [WEBHOOK] Terapeuta não encontrado para a sessão {appointment.id}")
-        else:
-            print(f"⚠️ [WEBHOOK] jitsi_service não disponível")
+                    print(f"✅ [MP] Jitsi Meet: {meet_url}")
     except Exception as e:
-        print(f"❌ [WEBHOOK] Erro ao gerar Jitsi Meet: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    # Enviar e-mails de confirmação
+        print(f"❌ [MP] Erro Jitsi: {e}")
     try:
         patient = db.get(User, appointment.patient_user_id)
         therapist = db.get(User, appointment.therapist_user_id)
         if patient and therapist:
-            email_service.send_appointment_confirmation(
-                appointment, patient.email, therapist.email, meet_url
-            )
-            print(f"📧 [WEBHOOK] E-mails de confirmação enviados")
-        else:
-            print(f"⚠️ [WEBHOOK] Paciente ou terapeuta não encontrados")
+            email_service.send_appointment_confirmation(appointment, patient.email, therapist.email, meet_url)
     except Exception as e:
-        print(f"⚠️ [WEBHOOK] Erro ao enviar e-mails: {e}")
-    
-    # 🔥 CRIAR NOTIFICAÇÕES NO DASHBOARD
+        print(f"⚠️ [MP] Erro e-mails: {e}")
     try:
         from app.services.notification_service import NotificationService
         patient = db.get(User, appointment.patient_user_id)
         therapist = db.get(User, appointment.therapist_user_id)
-        
         if patient and therapist:
-            notification_service = NotificationService(db)
-            notification_service.notify_appointment_confirmed(
-                appointment, patient, therapist, meet_url
-            )
-            print(f"🔔 [WEBHOOK] Notificações de confirmação criadas")
+            NotificationService(db).notify_appointment_confirmed(appointment, patient, therapist, meet_url)
     except Exception as e:
-        print(f"⚠️ [WEBHOOK] Erro ao criar notificações: {e}")
+        print(f"⚠️ [MP] Erro notificações: {e}")
 
 
-# 🔥 FUNÇÃO PARA REGISTRAR COMISSÃO
-def get_therapist_commission_rate(therapist_user_id: int, db: Session) -> float:
-    """Retorna a taxa de comissão baseada no plano ativo do terapeuta"""
+def get_therapist_commission_rate(therapist_user_id, db):
     from app.models.subscription import Subscription
-    
-    therapist_profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)
-    ).scalar_one_or_none()
-    
+    therapist_profile = db.execute(select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)).scalar_one_or_none()
     if not therapist_profile:
         return 20.0
-    
-    subscription = db.execute(
-        select(Subscription).where(
-            Subscription.therapist_id == therapist_profile.id,
-            Subscription.status == "active"
-        )
-    ).scalar_one_or_none()
-    
+    subscription = db.execute(select(Subscription).where(
+        Subscription.therapist_id == therapist_profile.id, Subscription.status == "active"
+    )).scalar_one_or_none()
     if not subscription:
-        return 20.0
-    if subscription.plan == "essencial":
         return 20.0
     if subscription.plan == "profissional":
         return 10.0
     if subscription.plan == "premium":
         return 3.0
-    
     return 20.0
 
 
-def register_commission(
-    appointment_id: int,
-    therapist_user_id: int,
-    patient_user_id: int,
-    session_price: float,
-    commission_rate: float,
-    db: Session,
-    is_refund: bool = False,
-    refunded_from_id: int = None
-):
-    """Registra uma comissão (ou estorno de comissão) no banco"""
+def register_commission(appointment_id, therapist_user_id, patient_user_id, session_price, commission_rate, db, is_refund=False):
     from app.models.commission import Commission
-    from app.models.patient_profile import PatientProfile
-    from app.models.therapist_profile import TherapistProfile
-    
-    therapist_profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)
-    ).scalar_one_or_none()
-    
-    patient_profile = db.execute(
-        select(PatientProfile).where(PatientProfile.user_id == patient_user_id)
-    ).scalar_one_or_none()
-    
-    if not therapist_profile or not patient_profile:
-        print(f"⚠️ Perfis não encontrados para comissão: therapist={therapist_user_id}, patient={patient_user_id}")
+    therapist_profile = db.execute(select(TherapistProfile).where(TherapistProfile.user_id == therapist_user_id)).scalar_one_or_none()
+    if not therapist_profile:
         return
-    
     commission_amount = (session_price * commission_rate) / 100
     net_amount = session_price - commission_amount
-    
     if is_refund:
         commission_amount = -commission_amount
         net_amount = -net_amount
-    
-    commission = Commission(
+    db.add(Commission(
         appointment_id=appointment_id,
         therapist_id=therapist_profile.id,
-        patient_id=patient_profile.id,
         session_price=session_price,
         commission_rate=commission_rate,
         commission_amount=commission_amount,
         net_amount=net_amount,
         is_refund=is_refund,
-        refunded_from_id=refunded_from_id
-    )
-    db.add(commission)
-    print(f"✅ Comissão registrada: taxa={commission_rate}%, valor={commission_amount}, líquido={net_amount}")
+    ))
+
+
+def _build_therapist_summary(appointment, db):
+    therapist_profile = db.execute(select(TherapistProfile).where(TherapistProfile.user_id == appointment.therapist_user_id)).scalar_one_or_none()
+    therapist_user = db.get(User, appointment.therapist_user_id)
+    if not therapist_profile or not therapist_user:
+        return {"name": "Terapeuta", "crp": "", "specialties": [], "photo_url": None, "session_price": float(appointment.session_price), "session_duration_minutes": 50}
+    specialties = []
+    if hasattr(therapist_profile, "specialties") and therapist_profile.specialties:
+        raw = therapist_profile.specialties
+        if isinstance(raw, list):
+            specialties = raw
+        elif isinstance(raw, str):
+            try:
+                specialties = json.loads(raw)
+            except Exception:
+                specialties = [raw]
+    return {
+        "name": therapist_user.full_name or therapist_user.email,
+        "crp": getattr(therapist_profile, "crp", "") or "",
+        "specialties": specialties,
+        "photo_url": getattr(therapist_profile, "foto_url", None),
+        "session_price": float(appointment.session_price),
+        "session_duration_minutes": getattr(therapist_profile, "session_duration_minutes", 50) or 50,
+    }
+
+
+def _confirm_appointment_after_payment(payment, wallet, mp_payment_id, source_label, db):
+    """Confirma o agendamento após pagamento aprovado — usado por cartão e Pix."""
+    payment_amount = D(payment.amount)
+    wallet.balance = D(wallet.balance) + payment_amount
+    db.add(Ledger(
+        wallet_id=wallet.id, transaction_type="credit_purchase",
+        amount=payment_amount, balance_after=wallet.balance,
+        description=f"Recarga via {source_label}",
+        meta_data={"payment_id": payment.id, "mp_payment_id": str(mp_payment_id)}
+    ))
+    payment.status = "paid"
+    payment.paid_at = datetime.now()
+
+    if payment.appointment_id:
+        appointment = db.get(Appointment, int(payment.appointment_id))
+        if appointment and appointment.status in [AppointmentStatus.scheduled, AppointmentStatus.proposed]:
+            session_price = D(appointment.session_price)
+            appointment.status = AppointmentStatus.confirmed
+            wallet.balance = D(wallet.balance) - session_price
+            db.add(Ledger(
+                wallet_id=wallet.id, appointment_id=appointment.id,
+                transaction_type="session_debit", amount=session_price,
+                balance_after=wallet.balance,
+                description=f"Sessão {appointment.id} - Confirmada ({source_label})"
+            ))
+            generate_meet_and_send_emails_and_notifications(appointment, db)
+            commission_rate = get_therapist_commission_rate(appointment.therapist_user_id, db)
+            register_commission(
+                appointment_id=appointment.id, therapist_user_id=appointment.therapist_user_id,
+                patient_user_id=appointment.patient_user_id, session_price=float(session_price),
+                commission_rate=commission_rate, db=db,
+            )
+
+    db.commit()
+    print(f"✅ [{source_label}] Pagamento confirmado. Saldo final: R$ {float(wallet.balance):.2f}")
 
 
 # ============================================
-# FUNÇÕES PARA ASSINATURAS (PLANOS)
+# ASSINATURAS — Stripe (mantido para quem já tem)
 # ============================================
 
-def handle_subscription_created(subscription_data: dict, db: Session):
-    """Cria assinatura no banco quando criada no Stripe e notifica terapeuta"""
+def handle_subscription_created(subscription_data, db):
     from app.models.subscription import Subscription
     from app.services.notification_service import NotificationService
-    
     stripe_subscription_id = subscription_data.get("id")
     customer_id = subscription_data.get("customer")
     plan_id = subscription_data.get("items", {}).get("data", [{}])[0].get("price", {}).get("id")
     current_period_start = datetime.fromtimestamp(subscription_data.get("current_period_start", 0))
     current_period_end = datetime.fromtimestamp(subscription_data.get("current_period_end", 0))
     status = subscription_data.get("status", "active")
-    
-    plan_map = {
-        "price_essencial": "essencial",
-        "price_profissional": "profissional", 
-        "price_premium": "premium"
-    }
+    plan_map = {"price_essencial": "essencial", "price_profissional": "profissional", "price_premium": "premium"}
     plan = plan_map.get(plan_id, "essencial")
-    
-    therapist_profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.stripe_customer_id == customer_id)
-    ).scalar_one_or_none()
-    
+    therapist_profile = db.execute(select(TherapistProfile).where(TherapistProfile.stripe_customer_id == customer_id)).scalar_one_or_none()
     if not therapist_profile:
-        print(f"⚠️ Terapeuta não encontrado para customer {customer_id}")
         return
-    
-    plan_display_name = get_plan_name(plan)
-    
-    existing = db.execute(
-        select(Subscription).where(Subscription.stripe_subscription_id == stripe_subscription_id)
-    ).scalar_one_or_none()
-    
+    existing = db.execute(select(Subscription).where(Subscription.stripe_subscription_id == stripe_subscription_id)).scalar_one_or_none()
     if existing:
-        existing.status = status
-        existing.plan = plan
-        existing.current_period_start = current_period_start
-        existing.current_period_end = current_period_end
+        existing.status = status; existing.plan = plan
+        existing.current_period_start = current_period_start; existing.current_period_end = current_period_end
         existing.updated_at = datetime.now()
     else:
-        subscription = Subscription(
-            therapist_id=therapist_profile.id,
-            plan=plan,
-            status=status,
-            stripe_subscription_id=stripe_subscription_id,
-            stripe_customer_id=customer_id,
-            current_period_start=current_period_start,
-            current_period_end=current_period_end
-        )
-        db.add(subscription)
-    
+        db.add(Subscription(therapist_id=therapist_profile.id, plan=plan, status=status,
+            stripe_subscription_id=stripe_subscription_id, stripe_customer_id=customer_id,
+            current_period_start=current_period_start, current_period_end=current_period_end))
     db.commit()
-    print(f"✅ Assinatura {stripe_subscription_id} - Plano: {plan} - Status: {status}")
-    
     try:
         therapist_user = db.get(User, therapist_profile.user_id)
         if therapist_user and status == "active":
-            notification_service = NotificationService(db)
-            notification_service.notify_subscription_activated(therapist_user, plan_display_name)
-            print(f"🔔 Notificação de assinatura ativada enviada para terapeuta {therapist_user.id}")
+            NotificationService(db).notify_subscription_activated(therapist_user, get_plan_name(plan))
     except Exception as e:
-        print(f"⚠️ Erro ao enviar notificação de ativação: {e}")
+        print(f"⚠️ {e}")
 
 
-def handle_subscription_updated(subscription_data: dict, db: Session):
-    """Atualiza status da assinatura (incluindo downgrade automático) e notifica terapeuta"""
+def handle_subscription_updated(subscription_data, db):
     from app.models.subscription import Subscription
     from app.services.notification_service import NotificationService
-    
     stripe_subscription_id = subscription_data.get("id")
     status = subscription_data.get("status")
-    current_period_start = datetime.fromtimestamp(subscription_data.get("current_period_start", 0))
-    current_period_end = datetime.fromtimestamp(subscription_data.get("current_period_end", 0))
-    cancel_at_period_end = subscription_data.get("cancel_at_period_end", False)
-    
-    subscription = db.execute(
-        select(Subscription).where(Subscription.stripe_subscription_id == stripe_subscription_id)
-    ).scalar_one_or_none()
-    
+    subscription = db.execute(select(Subscription).where(Subscription.stripe_subscription_id == stripe_subscription_id)).scalar_one_or_none()
     if not subscription:
-        print(f"⚠️ Assinatura não encontrada: {stripe_subscription_id}")
         return
-    
     old_plan = subscription.plan
     subscription.status = status
-    subscription.current_period_start = current_period_start
-    subscription.current_period_end = current_period_end
-    subscription.cancel_at_period_end = cancel_at_period_end
+    subscription.current_period_start = datetime.fromtimestamp(subscription_data.get("current_period_start", 0))
+    subscription.current_period_end = datetime.fromtimestamp(subscription_data.get("current_period_end", 0))
+    subscription.cancel_at_period_end = subscription_data.get("cancel_at_period_end", False)
     subscription.updated_at = datetime.now()
-    
     if status in ["canceled", "expired", "incomplete_expired", "past_due"]:
         subscription.plan = "essencial"
-        print(f"🔄 Downgrade automático para plano essencial - Terapeuta {subscription.therapist_id}")
-    
     db.commit()
-    print(f"✅ Assinatura atualizada: {stripe_subscription_id} - Status: {status} - Plano: {subscription.plan}")
-    
     if status in ["canceled", "expired", "incomplete_expired"]:
         try:
             therapist_user = db.get(User, subscription.therapist_profile.user_id)
             if therapist_user:
-                plan_display_name = get_plan_name(old_plan)
-                notification_service = NotificationService(db)
-                notification_service.notify_subscription_cancelled(therapist_user, plan_display_name)
-                print(f"🔔 Notificação de assinatura cancelada enviada para terapeuta {therapist_user.id}")
+                NotificationService(db).notify_subscription_cancelled(therapist_user, get_plan_name(old_plan))
         except Exception as e:
-            print(f"⚠️ Erro ao enviar notificação de cancelamento: {e}")
+            print(f"⚠️ {e}")
 
 
-def handle_subscription_deleted(subscription_data: dict, db: Session):
-    """Remove ou marca como cancelada a assinatura e notifica terapeuta"""
+def handle_subscription_deleted(subscription_data, db):
     from app.models.subscription import Subscription
     from app.services.notification_service import NotificationService
-    
     stripe_subscription_id = subscription_data.get("id")
-    
-    subscription = db.execute(
-        select(Subscription).where(Subscription.stripe_subscription_id == stripe_subscription_id)
-    ).scalar_one_or_none()
-    
-    if subscription:
-        old_plan = subscription.plan
-        subscription.status = "cancelled"
-        subscription.plan = "essencial"
-        subscription.updated_at = datetime.now()
-        db.commit()
-        print(f"✅ Assinatura cancelada e downgrade para essencial: {stripe_subscription_id}")
-        
-        try:
-            therapist_user = db.get(User, subscription.therapist_profile.user_id)
-            if therapist_user:
-                plan_display_name = get_plan_name(old_plan)
-                notification_service = NotificationService(db)
-                notification_service.notify_subscription_cancelled(therapist_user, plan_display_name)
-                print(f"🔔 Notificação de assinatura cancelada enviada para terapeuta {therapist_user.id}")
-        except Exception as e:
-            print(f"⚠️ Erro ao enviar notificação de cancelamento: {e}")
-
-
-def handle_invoice_payment_failed(invoice_data: dict, db: Session):
-    """Notifica sobre falha no pagamento da assinatura"""
-    from app.services.notification_service import NotificationService
-    
-    subscription_id = invoice_data.get("subscription")
-    customer_id = invoice_data.get("customer")
-    
-    print(f"⚠️ Falha no pagamento da assinatura: {subscription_id}")
-    print(f"   Cliente: {customer_id}")
-    
-    try:
-        therapist_profile = db.execute(
-            select(TherapistProfile).where(TherapistProfile.stripe_customer_id == customer_id)
-        ).scalar_one_or_none()
-        
-        if therapist_profile:
-            therapist_user = db.get(User, therapist_profile.user_id)
-            if therapist_user:
-                notification_service = NotificationService(db)
-                notification_service.create_notification(
-                    user_id=therapist_user.id,
-                    notification_type="subscription_payment_failed",
-                    title="Falha no pagamento da assinatura",
-                    message=f"O pagamento da sua assinatura falhou. Verifique seus dados de pagamento para não perder os benefícios.",
-                    data={"subscription_id": subscription_id},
-                    action_link="/therapist/subscription"
-                )
-                print(f"🔔 Notificação de falha no pagamento enviada para terapeuta {therapist_user.id}")
-    except Exception as e:
-        print(f"⚠️ Erro ao enviar notificação de falha no pagamento: {e}")
-
-
-# ============================================
-# CREATE CHECKOUT (PARA SESSÕES)
-# ============================================
-
-@router.post("/create-checkout", response_model=CreateCheckoutResponse)
-async def create_checkout(
-    payload: CreateCheckoutRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Security(require_roles([UserRole.patient]))
-):
-    print(f"\n💳 Checkout - User {current_user.id} - Appointment {payload.appointment_id}")
-
-    if payload.amount <= 0:
-        raise HTTPException(status_code=400, detail="Valor inválido")
-
-    appointment = db.get(Appointment, payload.appointment_id)
-
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment não encontrado")
-
-    if appointment.patient_user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-
-    if appointment.status not in [AppointmentStatus.scheduled, AppointmentStatus.proposed]:
-        print(f"❌ Status inválido: {appointment.status}")
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Appointment inválido para pagamento. Status atual: {appointment.status}"
-        )
-
-    print(f"✅ Appointment status válido: {appointment.status}")
-
-    patient_id = get_patient_id_from_user(db, current_user.id)
-    wallet = get_patient_wallet(db, patient_id)
-
-    payment = Payment(
-        patient_id=patient_id,
-        wallet_id=wallet.id,
-        appointment_id=appointment.id,
-        amount=Decimal(payload.amount),
-        currency="BRL",
-        status="pending",
-        description=f"Pagamento sessão #{appointment.id}"
-    )
-
-    db.add(payment)
+    subscription = db.execute(select(Subscription).where(Subscription.stripe_subscription_id == stripe_subscription_id)).scalar_one_or_none()
+    if not subscription:
+        return
+    old_plan = subscription.plan
+    subscription.status = "cancelled"; subscription.plan = "essencial"; subscription.updated_at = datetime.now()
     db.commit()
-    db.refresh(payment)
-
-    if not STRIPE_SECRET_KEY:
-        print("⚠️ Stripe não configurado - usando modo MOCK")
-        return CreateCheckoutResponse(
-            checkout_url=f"http://localhost:3000/mock-payment/{payment.id}",
-            session_id=f"mock_{payment.id}"
-        )
-
     try:
-        if appointment.status == AppointmentStatus.proposed:
-            product_description = f"Convite para sessão em {appointment.starts_at.strftime('%d/%m/%Y %H:%M')}"
-        else:
-            product_description = f"Sessão agendada para {appointment.starts_at.strftime('%d/%m/%Y %H:%M')}"
-
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{
-                "price_data": {
-                    "currency": "brl",
-                    "unit_amount": int(payload.amount * 100),
-                    "product_data": {
-                        "name": "Sessão de terapia - Meu Divã",
-                        "description": product_description,
-                    },
-                },
-                "quantity": 1,
-            }],
-            mode="payment",
-            success_url=payload.success_url,
-            cancel_url=payload.cancel_url,
-            metadata={
-                "payment_id": str(payment.id),
-                "appointment_id": str(appointment.id),
-                "type": "appointment_payment",
-                "appointment_status": appointment.status.value,
-                "already_debited": str(getattr(payload, 'already_debited', 0))
-            }
-        )
-
-        payment.stripe_session_id = session.id
-        db.commit()
-
-        print(f"✅ Checkout Stripe criado: {session.url}")
-        
-        return CreateCheckoutResponse(
-            checkout_url=session.url,
-            session_id=session.id
-        )
-        
+        therapist_user = db.get(User, subscription.therapist_profile.user_id)
+        if therapist_user:
+            NotificationService(db).notify_subscription_cancelled(therapist_user, get_plan_name(old_plan))
     except Exception as e:
-        print(f"❌ Erro ao criar checkout Stripe: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao criar checkout: {str(e)}")
+        print(f"⚠️ {e}")
 
 
 # ============================================
-# CREATE CHECKOUT PARA ASSINATURA (PLANO)
+# ASSINATURAS — Mercado Pago (novo)
 # ============================================
 
 @router.post("/create-subscription-checkout")
@@ -504,222 +311,616 @@ async def create_subscription_checkout(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist]))
 ):
-    """Cria checkout para assinatura de plano (Profissional ou Premium)"""
+    """
+    Compatibilidade: retorna checkout_url do MP para o fluxo antigo (redirect).
+    Mantido para não quebrar UpgradeCard e TherapistSubscriptionPage existentes.
+    """
     body = await request.json()
-    plan = body.get("plan", "profissional")
-    
-    prices = {
-        "profissional": 7900,
-        "premium": 14900
+    plan = body.get("plan", "").lower()
+
+    if plan not in MP_PLAN_IDS:
+        raise HTTPException(status_code=400, detail=f"Plano inválido: {plan}. Use 'profissional' ou 'premium'.")
+
+    plan_id = MP_PLAN_IDS[plan]
+    checkout_url = f"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id={plan_id}"
+    print(f"📦 Subscription checkout (redirect) - User {current_user.id} - Plano {plan}")
+    return {"checkout_url": checkout_url}
+
+
+@router.post("/create-subscription")
+async def create_subscription(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """
+    Cria uma assinatura MP diretamente via API com card_token_id.
+    Usado pelo checkout personalizado /therapist/subscription/checkout.
+    """
+    from app.models.subscription import Subscription
+    from app.services.notification_service import NotificationService
+
+    body = await request.json()
+    plan = body.get("plan", "").lower()
+    card_token_id = body.get("card_token_id", "")
+    payer_email = body.get("payer_email", current_user.email)
+    payer_cpf = body.get("payer_cpf", "").replace(".", "").replace("-", "")
+
+    if plan not in MP_PLAN_IDS:
+        raise HTTPException(status_code=400, detail=f"Plano inválido: {plan}.")
+    if not card_token_id:
+        raise HTTPException(status_code=400, detail="card_token_id é obrigatório.")
+    if not payer_cpf or len(payer_cpf) < 11:
+        raise HTTPException(status_code=400, detail="CPF inválido.")
+    if not sdk:
+        raise HTTPException(status_code=503, detail="Mercado Pago não configurado.")
+
+    plan_id = MP_PLAN_IDS[plan]
+    plan_prices = {"profissional": 79.00, "premium": 149.00}
+    plan_names = {"profissional": "Plano Profissional — Meu Divã", "premium": "Plano Premium — Meu Divã"}
+
+    mp_payload = {
+        "preapproval_plan_id": plan_id,
+        "reason": plan_names[plan],
+        "external_reference": f"therapist_{current_user.id}_plan_{plan}",
+        "payer_email": payer_email,
+        "card_token_id": card_token_id,
+        "back_url": f"{os.getenv('FRONTEND_URL', 'https://app.meudivaonline.com')}/therapist/dashboard?subscription=success",
+        "status": "authorized",
     }
-    
-    price = prices.get(plan)
-    if not price:
-        raise HTTPException(status_code=400, detail="Plano inválido")
-    
+
+    print(f"📦 Criando assinatura MP - User {current_user.id} - Plano {plan}")
+
+    try:
+        response = sdk.preapproval().create(mp_payload)
+        mp_data = response.get("response", {})
+        mp_status = mp_data.get("status")
+        mp_id = mp_data.get("id")
+        mp_error = mp_data.get("message", "")
+
+        print(f"📦 MP Subscription: status={mp_status} | id={mp_id} | error={mp_error}")
+
+        if mp_status not in ("authorized", "pending"):
+            raise HTTPException(status_code=400, detail=f"Assinatura não aprovada: {mp_error or mp_status}")
+
+        # Salva no banco
+        therapist_profile = db.execute(
+            select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+        ).scalar_one_or_none()
+        if not therapist_profile:
+            raise HTTPException(status_code=404, detail="Perfil do terapeuta não encontrado")
+
+        now = datetime.now()
+        from app.models.subscription import Subscription
+        existing = db.execute(
+            select(Subscription).where(Subscription.therapist_id == therapist_profile.id)
+        ).scalar_one_or_none()
+
+        if existing:
+            existing.plan = plan
+            existing.status = "active" if mp_status == "authorized" else "pending"
+            existing.stripe_subscription_id = str(mp_id)
+            existing.current_period_start = now
+            existing.current_period_end = now.replace(month=now.month % 12 + 1) if now.month < 12 else now.replace(year=now.year + 1, month=1)
+            existing.cancel_at_period_end = False
+            existing.updated_at = now
+        else:
+            period_end = now.replace(month=now.month % 12 + 1) if now.month < 12 else now.replace(year=now.year + 1, month=1)
+            db.add(Subscription(
+                therapist_id=therapist_profile.id,
+                plan=plan,
+                status="active" if mp_status == "authorized" else "pending",
+                stripe_subscription_id=str(mp_id),
+                current_period_start=now,
+                current_period_end=period_end,
+                cancel_at_period_end=False,
+            ))
+        db.commit()
+
+        try:
+            NotificationService(db).notify_subscription_activated(current_user, get_plan_name(plan))
+        except Exception as e:
+            print(f"⚠️ Erro notificação: {e}")
+
+        print(f"✅ Assinatura MP criada: {mp_id} - {plan}")
+        return {"status": mp_status, "mp_subscription_id": mp_id, "plan": plan}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Erro ao criar assinatura MP: {e}")
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro ao criar assinatura: {str(e)}")
+
+
+@router.post("/webhook/mp/subscription")
+async def mp_subscription_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook do MP para assinaturas (preapproval).
+    Ativado quando o terapeuta assina, renova ou cancela.
+    """
+    try:
+        raw_body = await request.body()
+        body = json.loads(raw_body)
+
+        print(f"\n🔔 MP SUBSCRIPTION WEBHOOK: {json.dumps(body)[:300]}")
+
+        event_type = body.get("type")
+        resource_id = body.get("data", {}).get("id")
+
+        if event_type not in ("subscription_preapproval", "subscription_authorized_payment") or not resource_id:
+            return {"status": "ignored"}
+
+        if not sdk:
+            return {"status": "ignored"}
+
+        # Busca os detalhes da assinatura no MP
+        preapproval_response = sdk.preapproval().get(resource_id)
+        preapproval = preapproval_response.get("response", {})
+
+        mp_status = preapproval.get("status")
+        plan_id = preapproval.get("preapproval_plan_id", "")
+        payer_email = preapproval.get("payer_email", "")
+        external_reference = preapproval.get("external_reference", "")
+        next_payment_date = preapproval.get("next_payment_date")
+        date_created = preapproval.get("date_created")
+
+        print(f"📦 MP Subscription: status={mp_status} | plan_id={plan_id} | email={payer_email}")
+
+        # Descobre qual plano pelo preapproval_plan_id
+        plan_name = next((k for k, v in MP_PLAN_IDS.items() if v == plan_id), None)
+        if not plan_name:
+            print(f"⚠️ plan_id não reconhecido: {plan_id}")
+            return {"status": "ignored"}
+
+        # Encontra o terapeuta pelo email do pagador
+        user = db.execute(select(User).where(User.email == payer_email)).scalar_one_or_none()
+        if not user:
+            print(f"⚠️ Usuário não encontrado para email: {payer_email}")
+            return {"status": "ignored"}
+
+        therapist_profile = db.execute(
+            select(TherapistProfile).where(TherapistProfile.user_id == user.id)
+        ).scalar_one_or_none()
+        if not therapist_profile:
+            print(f"⚠️ Perfil de terapeuta não encontrado para user: {user.id}")
+            return {"status": "ignored"}
+
+        from app.models.subscription import Subscription
+        from app.services.notification_service import NotificationService
+
+        # Calcula datas do período
+        now = datetime.now()
+        period_start = datetime.fromisoformat(date_created.replace("Z", "+00:00")).replace(tzinfo=None) if date_created else now
+        period_end = datetime.fromisoformat(next_payment_date.replace("Z", "+00:00")).replace(tzinfo=None) if next_payment_date else (now + timedelta(days=30))
+
+        # Busca assinatura existente pelo resource_id do MP
+        existing = db.execute(
+            select(Subscription).where(Subscription.stripe_subscription_id == resource_id)
+        ).scalar_one_or_none()
+
+        if mp_status == "authorized":
+            # Assinatura ativa
+            if existing:
+                existing.status = "active"
+                existing.plan = plan_name
+                existing.current_period_start = period_start
+                existing.current_period_end = period_end
+                existing.updated_at = now
+            else:
+                db.add(Subscription(
+                    therapist_id=therapist_profile.id,
+                    plan=plan_name,
+                    status="active",
+                    stripe_subscription_id=resource_id,  # reutiliza campo para ID do MP
+                    current_period_start=period_start,
+                    current_period_end=period_end,
+                ))
+            db.commit()
+            print(f"✅ Assinatura MP ativada: terapeuta {user.id} - plano {plan_name}")
+            try:
+                NotificationService(db).notify_subscription_activated(user, get_plan_name(plan_name))
+            except Exception as e:
+                print(f"⚠️ Erro notificação: {e}")
+
+        elif mp_status in ("cancelled", "paused", "pending"):
+            if existing:
+                existing.status = "cancelled" if mp_status == "cancelled" else mp_status
+                existing.plan = "essencial" if mp_status == "cancelled" else existing.plan
+                existing.updated_at = now
+                db.commit()
+                print(f"⚠️ Assinatura MP {mp_status}: terapeuta {user.id}")
+                if mp_status == "cancelled":
+                    try:
+                        NotificationService(db).notify_subscription_cancelled(user, get_plan_name(plan_name))
+                    except Exception as e:
+                        print(f"⚠️ Erro notificação: {e}")
+
+        return {"status": "success"}
+
+    except Exception as e:
+        print(f"❌ ERRO MP SUBSCRIPTION WEBHOOK: {e}")
+        import traceback; traceback.print_exc()
+        return {"status": "error", "detail": str(e)}
+
+
+@router.post("/therapist/subscription/cancel")
+async def cancel_mp_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """Cancela a assinatura MP do terapeuta."""
+    from app.models.subscription import Subscription
+    from app.services.notification_service import NotificationService
+
     therapist_profile = db.execute(
         select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
     ).scalar_one_or_none()
-    
     if not therapist_profile:
         raise HTTPException(status_code=404, detail="Perfil não encontrado")
-    
-    customer_id = therapist_profile.stripe_customer_id
-    
-    if not customer_id:
-        customer = stripe.Customer.create(
-            email=current_user.email,
-            name=current_user.full_name or current_user.email,
-            metadata={"user_id": str(current_user.id)}
+
+    subscription = db.execute(
+        select(Subscription).where(
+            Subscription.therapist_id == therapist_profile.id,
+            Subscription.status == "active"
         )
-        customer_id = customer.id
-        therapist_profile.stripe_customer_id = customer_id
-        db.commit()
-    
-    session = stripe.checkout.Session.create(
-        payment_method_types=["card"],
-        mode="subscription",
-        line_items=[{
-            "price_data": {
-                "currency": "brl",
-                "product_data": {
-                    "name": f"Plano {plan.capitalize()} - Meu Divã",
-                    "description": f"Assinatura mensal do plano {plan.capitalize()} com comissão reduzida"
-                },
-                "unit_amount": price,
-                "recurring": {"interval": "month"}
-            },
-            "quantity": 1,
-        }],
-        customer=customer_id,
-        success_url=f"{settings.FRONTEND_URL}/therapist/subscription?success=true",
-        cancel_url=f"{settings.FRONTEND_URL}/therapist/subscription?canceled=true",
-        metadata={
-            "type": "subscription",
-            "plan": plan,
-            "therapist_id": str(therapist_profile.id)
-        }
-    )
-    
-    return {"checkout_url": session.url}
+    ).scalar_one_or_none()
 
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Assinatura ativa não encontrada")
 
-# ============================================
-# WEBHOOK - COM TRATAMENTO DE ERRO
-# ============================================
-
-@router.post("/webhook")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    try:
-        print("\n" + "="*70)
-        print("🔔 WEBHOOK RECEBIDO")
-        print("="*70)
-
-        payload = await request.body()
-        sig_header = request.headers.get("stripe-signature")
-
+    # Cancela no MP se tiver SDK
+    if sdk and subscription.stripe_subscription_id:
         try:
-            if STRIPE_WEBHOOK_SECRET:
-                event = stripe.Webhook.construct_event(
-                    payload,
-                    sig_header,
-                    STRIPE_WEBHOOK_SECRET
-                )
-            else:
-                event = json.loads(payload)
+            sdk.preapproval().update(subscription.stripe_subscription_id, {"status": "cancelled"})
+            print(f"✅ Assinatura MP cancelada: {subscription.stripe_subscription_id}")
         except Exception as e:
-            print("❌ Erro validação webhook:", e)
-            raise HTTPException(status_code=400, detail="Webhook inválido")
+            print(f"⚠️ Erro ao cancelar no MP: {e}")
 
-        event_type = event.get("type")
-        print(f"📦 Evento: {event_type}")
+    old_plan = subscription.plan
+    subscription.status = "cancelled"
+    subscription.plan = "essencial"
+    subscription.cancel_at_period_end = False
+    subscription.updated_at = datetime.now()
+    db.commit()
 
-        if event_type == "checkout.session.completed":
-            try:
-                session = event["data"]["object"]
-                metadata = session.get("metadata", {}) or {}
-
-                if metadata.get("type") == "subscription":
-                    print("📋 É assinatura - ignorado neste handler")
-                    return {"status": "ignored"}
-                
-                payment_id = metadata.get("payment_id")
-                appointment_id = metadata.get("appointment_id")
-                already_debited = float(metadata.get("already_debited", 0))
-
-                print(f"📋 payment_id: {payment_id}")
-                print(f"📋 appointment_id: {appointment_id}")
-                print(f"📋 already_debited: R$ {already_debited}")
-
-                if not payment_id:
-                    print("⚠️ payment_id ausente")
-                    return {"status": "ignored"}
-
-                payment = db.get(Payment, int(payment_id))
-
-                if not payment:
-                    print("⚠️ payment não encontrado")
-                    return {"status": "ignored"}
-
-                if payment.status == "paid":
-                    print("⚠️ pagamento já processado")
-                    return {"status": "already_processed"}
-
-                wallet = db.get(Wallet, payment.wallet_id)
-
-                if not wallet:
-                    print("❌ Wallet não encontrada")
-                    return {"status": "error", "detail": "Wallet not found"}
-
-                # CRÉDITO DO PAGAMENTO STRIPE
-                old_balance = wallet.balance
-                wallet.balance += Decimal(str(payment.amount))
-
-                credit = Ledger(
-                    wallet_id=wallet.id,
-                    transaction_type="credit_purchase",
-                    amount=payment.amount,
-                    balance_after=wallet.balance,
-                    description="Recarga via Stripe",
-                    meta_data={"payment_id": payment.id}
-                )
-                db.add(credit)
-
-                payment.status = "paid"
-                payment.paid_at = datetime.now()
-
-                if appointment_id:
-                    appointment = db.get(Appointment, int(appointment_id))
-
-                    if appointment:
-                        print(f"\n📋 Processando sessão {appointment.id}")
-                        
-                        old_status = appointment.status
-                        if appointment.status == AppointmentStatus.proposed:
-                            appointment.status = AppointmentStatus.confirmed
-                        elif appointment.status == AppointmentStatus.scheduled:
-                            appointment.status = AppointmentStatus.confirmed
-                        print(f"✅ Status atualizado: {old_status} → {appointment.status}")
-
-                        existing_debit = db.execute(
-                            select(Ledger).where(
-                                Ledger.appointment_id == appointment.id,
-                                Ledger.transaction_type == "session_debit"
-                            )
-                        ).scalar_one_or_none()
-                        
-                        if not existing_debit:
-                            wallet.balance -= Decimal(str(appointment.session_price))
-                            debit = Ledger(
-                                wallet_id=wallet.id,
-                                appointment_id=appointment.id,
-                                transaction_type="session_debit",
-                                amount=appointment.session_price,
-                                balance_after=wallet.balance,
-                                description=f"Sessão {appointment.id} - Pagamento confirmado"
-                            )
-                            db.add(debit)
-                            print(f"💰 Débito realizado: R$ {appointment.session_price}")
-                        
-                        # 🔥 GERAR JITSI MEET
-                        generate_meet_and_send_emails_and_notifications(appointment, db)
-                        
-                        # 🔥 REGISTRAR COMISSÃO
-                        commission_rate = get_therapist_commission_rate(appointment.therapist_user_id, db)
-                        register_commission(
-                            appointment_id=appointment.id,
-                            therapist_user_id=appointment.therapist_user_id,
-                            patient_user_id=appointment.patient_user_id,
-                            session_price=float(appointment.session_price),
-                            commission_rate=commission_rate,
-                            db=db
-                        )
-
-                db.commit()
-                print(f"💰 Webhook concluído! Saldo final: R$ {wallet.balance}")
-                
-            except Exception as e:
-                print(f"❌ ERRO DENTRO DO checkout.session.completed: {e}")
-                import traceback
-                traceback.print_exc()
-                db.rollback()
-                return {"status": "error", "detail": str(e)}
-
-        elif event_type == "customer.subscription.created":
-            handle_subscription_created(event["data"]["object"], db)
-        elif event_type == "customer.subscription.updated":
-            handle_subscription_updated(event["data"]["object"], db)
-        elif event_type == "customer.subscription.deleted":
-            handle_subscription_deleted(event["data"]["object"], db)
-        elif event_type == "invoice.payment_failed":
-            handle_invoice_payment_failed(event["data"]["object"], db)
-
-        return {"status": "success"}
-        
+    try:
+        NotificationService(db).notify_subscription_cancelled(current_user, get_plan_name(old_plan))
     except Exception as e:
-        print(f"❌ ERRO GERAL NO WEBHOOK: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"⚠️ {e}")
+
+    return {"message": "Assinatura cancelada com sucesso"}
+
+
+# ============================================
+# CREATE PAYMENT INTENT (sessões)
+# ============================================
+
+@router.post("/create-payment-intent")
+async def create_payment_intent(
+    payload: CreatePaymentIntentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.patient]))
+):
+    print(f"\n💳 MP Intent - User {current_user.id} - Appointment {payload.appointment_id}")
+
+    appointment = db.get(Appointment, payload.appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado")
+    if appointment.patient_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    if appointment.status not in [AppointmentStatus.scheduled, AppointmentStatus.proposed]:
+        raise HTTPException(status_code=400, detail=f"Agendamento inválido. Status: {appointment.status}")
+
+    patient_id = get_patient_id_from_user(db, current_user.id)
+    wallet = get_patient_wallet(db, patient_id)
+
+    total_amount = D(appointment.session_price)
+    wallet_balance = D(wallet.balance)
+
+    if wallet_balance >= total_amount:
+        wallet.balance = wallet_balance - total_amount
+        db.add(Ledger(
+            wallet_id=wallet.id, appointment_id=appointment.id,
+            transaction_type="session_debit", amount=total_amount,
+            balance_after=wallet.balance,
+            description=f"Sessão {appointment.id} - Paga com saldo da carteira"
+        ))
+        appointment.status = AppointmentStatus.confirmed
+        db.commit()
+        generate_meet_and_send_emails_and_notifications(appointment, db)
+        commission_rate = get_therapist_commission_rate(appointment.therapist_user_id, db)
+        register_commission(
+            appointment_id=appointment.id, therapist_user_id=appointment.therapist_user_id,
+            patient_user_id=appointment.patient_user_id, session_price=float(total_amount),
+            commission_rate=commission_rate, db=db,
+        )
+        db.commit()
+        return {
+            "mp_public_key": MP_PUBLIC_KEY, "already_paid": True,
+            "payment_id": None, "appointment_id": appointment.id,
+            "amount": 0, "total_amount": float(total_amount), "wallet_balance": float(wallet_balance),
+            "message": "Sessão paga com saldo da carteira",
+            "therapist": _build_therapist_summary(appointment, db),
+            "appointment_date": appointment.starts_at.astimezone(BR_TZ).isoformat(),
+            "appointment_time": appointment.starts_at.astimezone(BR_TZ).strftime("%H:%M"),
+        }
+
+    amount_to_pay = total_amount - wallet_balance
+
+    if wallet_balance > D(0):
+        wallet.balance = D(0)
+        db.add(Ledger(
+            wallet_id=wallet.id, appointment_id=appointment.id,
+            transaction_type="session_debit", amount=wallet_balance,
+            balance_after=D(0),
+            description=f"Sessão {appointment.id} - Débito parcial (saldo: R$ {float(wallet_balance):.2f})"
+        ))
+        print(f"💰 Débito parcial: R$ {float(wallet_balance):.2f}")
+
+    payment = db.execute(
+        select(Payment).where(Payment.appointment_id == appointment.id, Payment.status == "pending")
+    ).scalar_one_or_none()
+
+    if not payment:
+        payment = Payment(
+            user_id=current_user.id, patient_id=patient_id, wallet_id=wallet.id,
+            appointment_id=appointment.id, amount=amount_to_pay,
+            currency="BRL", status="pending", description=f"Sessão #{appointment.id}",
+        )
+        db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
+    starts_br = appointment.starts_at.astimezone(BR_TZ)
+    return {
+        "mp_public_key": MP_PUBLIC_KEY, "already_paid": False,
+        "payment_id": payment.id, "appointment_id": appointment.id,
+        "amount": float(amount_to_pay), "total_amount": float(total_amount),
+        "wallet_balance": float(wallet_balance),
+        "therapist": _build_therapist_summary(appointment, db),
+        "appointment_date": starts_br.isoformat(),
+        "appointment_time": starts_br.strftime("%H:%M"),
+    }
+
+
+# ============================================
+# CREATE PIX
+# ============================================
+
+@router.post("/create-pix")
+async def create_pix(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.patient]))
+):
+    body = await request.json()
+    payment_id = body.get("payment_id")
+    payer_email = body.get("payer_email", current_user.email)
+    payer_cpf = body.get("payer_cpf", "")
+
+    if not payment_id:
+        raise HTTPException(status_code=400, detail="payment_id é obrigatório")
+    if not payer_cpf:
+        raise HTTPException(status_code=400, detail="CPF é obrigatório para pagamento via Pix")
+
+    payment = db.get(Payment, int(payment_id))
+    if not payment:
+        raise HTTPException(status_code=404, detail="Pagamento não encontrado")
+    if payment.status == "paid":
+        return {"status": "approved", "detail": "Pagamento já processado"}
+
+    if not sdk:
+        return {
+            "status": "pending", "mp_payment_id": "mock_pix_123",
+            "qr_code": "00020126580014br.gov.bcb.pix0136mock-pix-key5204000053039865802BR5925Meu Diva6009SAO PAULO62070503***6304ABCD",
+            "qr_code_base64": "",
+            "expires_at": (datetime.now() + timedelta(minutes=30)).isoformat(),
+        }
+
+    payment_amount = D(payment.amount)
+    mp_payload = {
+        "transaction_amount": float(payment_amount),
+        "description": f"Sessão de terapia #{payment.appointment_id} — Meu Divã",
+        "payment_method_id": "pix",
+        "payer": {
+            "email": payer_email,
+            "identification": {"type": "CPF", "number": payer_cpf.replace(".", "").replace("-", "")},
+        },
+        "external_reference": str(payment.id),
+        "notification_url": f"{os.getenv('BACKEND_URL', 'https://api.meudivaonline.com')}/api/payments/webhook/mp",
+        "metadata": {"payment_id": str(payment.id), "appointment_id": str(payment.appointment_id)},
+        "date_of_expiration": (datetime.now(BR_TZ) + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%S.000-03:00"),
+    }
+
+    try:
+        response = sdk.payment().create(mp_payload)
+        mp_data = response.get("response", {})
+        mp_status = mp_data.get("status")
+        mp_id = mp_data.get("id")
+
+        if mp_status not in ("pending", "approved"):
+            raise HTTPException(status_code=400, detail=f"Erro MP: {mp_data.get('status_detail', 'Erro ao gerar Pix')}")
+
+        payment.meta_data = {**(payment.meta_data or {}), 'mp_payment_id': str(mp_id)}
+        db.commit()
+
+        pix_data = mp_data.get("point_of_interaction", {}).get("transaction_data", {})
+        return {
+            "status": "pending", "mp_payment_id": mp_id, "payment_id": payment.id,
+            "qr_code": pix_data.get("qr_code", ""),
+            "qr_code_base64": pix_data.get("qr_code_base64", ""),
+            "amount": float(payment_amount),
+            "expires_at": (datetime.now(BR_TZ) + timedelta(minutes=30)).isoformat(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Erro MP Pix: {e}")
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar Pix: {str(e)}")
+
+
+# ============================================
+# PROCESS PAYMENT (Cartão)
+# ============================================
+
+@router.post("/process-payment")
+async def process_payment(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.patient]))
+):
+    body = await request.json()
+    payment_id = body.get("payment_id")
+
+    if not payment_id:
+        appointment_id = body.get("appointment_id")
+        if appointment_id:
+            appointment = db.get(Appointment, int(appointment_id))
+            if appointment and appointment.status == AppointmentStatus.confirmed:
+                return {"status": "approved", "detail": "Pago com saldo da carteira"}
+        raise HTTPException(status_code=400, detail="payment_id é obrigatório")
+
+    card_token      = body.get("card_token")
+    payment_method_id = body.get("payment_method_id")
+    issuer_id       = body.get("issuer_id")
+    payer_email     = body.get("payer_email", current_user.email)
+    payer_cpf       = body.get("payer_cpf", "")
+
+    if not card_token:
+        raise HTTPException(status_code=400, detail="card_token é obrigatório")
+
+    payment = db.get(Payment, int(payment_id))
+    if not payment:
+        raise HTTPException(status_code=404, detail="Pagamento não encontrado")
+    if payment.status == "paid":
+        return {"status": "approved", "detail": "Pagamento já processado"}
+
+    wallet = db.get(Wallet, payment.wallet_id)
+    if not wallet:
+        raise HTTPException(status_code=404, detail="Carteira não encontrada")
+
+    payment_amount = D(payment.amount)
+
+    if not sdk:
+        _confirm_appointment_after_payment(payment, wallet, "mock", "MP Mock", db)
+        return {"status": "approved"}
+
+    mp_payload = {
+        "transaction_amount": float(payment_amount),
+        "token": card_token,
+        "description": f"Sessão #{payment.appointment_id} — Meu Divã",
+        "installments": 1,
+        "payment_method_id": payment_method_id,
+        "issuer_id": issuer_id,
+        "payer": {
+            "email": payer_email,
+            **({"identification": {"type": "CPF", "number": payer_cpf}} if payer_cpf else {}),
+        },
+        "external_reference": str(payment.id),
+        "notification_url": f"{os.getenv('BACKEND_URL', 'https://api.meudivaonline.com')}/api/payments/webhook/mp",
+        "metadata": {"payment_id": str(payment.id), "appointment_id": str(payment.appointment_id)},
+    }
+
+    try:
+        response = sdk.payment().create(mp_payload)
+        mp_data = response.get("response", {})
+        mp_status = mp_data.get("status")
+        mp_id = mp_data.get("id")
+        status_detail = mp_data.get("status_detail", "")
+
+        print(f"📦 MP Cartão: status={mp_status} | detail={status_detail} | id={mp_id}")
+
+        payment.meta_data = {**(payment.meta_data or {}), 'mp_payment_id': str(mp_id)}
+        db.commit()
+
+        if mp_status == "approved":
+            _confirm_appointment_after_payment(payment, wallet, str(mp_id), "Mercado Pago", db)
+            return {"status": "approved", "mp_payment_id": mp_id}
+        elif mp_status in ("in_process", "pending"):
+            return {"status": "pending", "mp_payment_id": mp_id}
+        else:
+            return {"status": "rejected", "status_detail": status_detail, "detail": _mp_rejection_message(status_detail)}
+
+    except Exception as e:
+        print(f"❌ Erro MP: {e}")
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro ao processar pagamento: {str(e)}")
+
+
+def _mp_rejection_message(status_detail):
+    messages = {
+        "cc_rejected_insufficient_amount": "Saldo insuficiente no cartão.",
+        "cc_rejected_bad_filled_card_number": "Número do cartão incorreto.",
+        "cc_rejected_bad_filled_date": "Data de validade incorreta.",
+        "cc_rejected_bad_filled_security_code": "Código de segurança incorreto.",
+        "cc_rejected_bad_filled_other": "Dados do cartão incorretos.",
+        "cc_rejected_call_for_authorize": "Ligue para seu banco para autorizar o pagamento.",
+        "cc_rejected_card_disabled": "Cartão desabilitado. Entre em contato com seu banco.",
+        "cc_rejected_duplicated_payment": "Pagamento duplicado. Aguarde alguns minutos.",
+        "cc_rejected_high_risk": "Pagamento recusado por segurança.",
+        "cc_rejected_max_attempts": "Limite de tentativas atingido. Tente outro cartão.",
+        "cc_rejected_other_reason": "Cartão recusado. Tente outro cartão.",
+    }
+    return messages.get(status_detail, "Pagamento não aprovado. Verifique os dados e tente novamente.")
+
+
+# ============================================
+# WEBHOOK MERCADO PAGO (pagamentos)
+# ============================================
+
+@router.post("/webhook/mp")
+async def mp_webhook(request: Request, db: Session = Depends(get_db)):
+    try:
+        raw_body = await request.body()
+        x_signature = request.headers.get("x-signature", "")
+        x_request_id = request.headers.get("x-request-id", "")
+
+        if MP_WEBHOOK_SECRET and not _verify_mp_signature(raw_body, x_signature, x_request_id):
+            raise HTTPException(status_code=400, detail="Assinatura inválida")
+
+        body = json.loads(raw_body)
+
+        # Redireciona assinaturas para o handler correto
+        if body.get("type") in ("subscription_preapproval", "subscription_authorized_payment"):
+            return await mp_subscription_webhook(request, db)
+
+        if body.get("type") != "payment":
+            return {"status": "ignored"}
+
+        mp_payment_id = body.get("data", {}).get("id")
+        if not mp_payment_id or not sdk:
+            return {"status": "ignored"}
+
+        mp_response = sdk.payment().get(mp_payment_id)
+        mp_data = mp_response.get("response", {})
+        mp_status = mp_data.get("status")
+        external_reference = mp_data.get("external_reference")
+
+        print(f"📦 MP Webhook: status={mp_status} | ref={external_reference}")
+
+        if mp_status != "approved" or not external_reference:
+            return {"status": "ignored"}
+
+        payment = db.get(Payment, int(external_reference))
+        if not payment:
+            return {"status": "ignored"}
+        if payment.status == "paid":
+            return {"status": "already_processed"}
+
+        wallet = db.get(Wallet, payment.wallet_id)
+        if not wallet:
+            return {"status": "error", "detail": "Wallet not found"}
+
+        _confirm_appointment_after_payment(payment, wallet, str(mp_payment_id), "MP Webhook", db)
+        return {"status": "success"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ ERRO MP WEBHOOK: {e}")
+        import traceback; traceback.print_exc()
         return {"status": "error", "detail": str(e)}
 
 
@@ -734,20 +935,16 @@ def get_payment_status(
     current_user: User = Security(require_roles([UserRole.patient]))
 ):
     payment = db.get(Payment, payment_id)
-
     if not payment:
         raise HTTPException(status_code=404, detail="Pagamento não encontrado")
-
     patient_id = get_patient_id_from_user(db, current_user.id)
-
     if payment.patient_id != patient_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-
     return PaymentStatusResponse(
         payment_id=payment.id,
         appointment_id=payment.appointment_id,
         amount=payment.amount,
         status=payment.status,
         created_at=payment.created_at,
-        paid_at=payment.paid_at
+        paid_at=payment.paid_at,
     )

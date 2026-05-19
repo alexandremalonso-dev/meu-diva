@@ -54,6 +54,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
 
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [showReschedule, setShowReschedule] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -134,7 +135,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
       });
       setIsAvailableNow(newStatus);
       showToast(
-        newStatus ? "Você agora está disponível para atendimento imediato!" : "Atendimento imediatodesativado",
+        newStatus ? "Você agora está disponível para atendimento imediato!" : "Atendimento imediato desativado",
         "success"
       );
     } catch (error: any) {
@@ -314,6 +315,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
     } else {
       setSelectedEvent(info.event);
       setShowReschedule(false);
+      setShowCancelConfirm(false);
       onEventClick(appointment);
     }
   };
@@ -321,32 +323,31 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
   const handleRescheduleClick = () => setShowReschedule(true);
   const handleCancelReschedule = () => { setShowReschedule(false); setNewDate(''); setNewTime(''); };
 
-  const handleCancelAppointment = async () => {
+  // 🔥 ALTERAÇÃO MÍNIMA: sem confirm() do browser
+  const handleCancelAppointment = () => setShowCancelConfirm(true);
+
+  const handleConfirmCancel = async () => {
     const appointment = selectedEvent?.extendedProps?.appointment;
     if (!appointment) return;
-    if (confirm('Cancelar esta sessão?')) {
-      try {
-        if (onCancel) {
-          await onCancel(appointment.id);
-        } else {
-          await apiCall({ url: `/api/appointments/${appointment.id}/status`, method: 'PATCH', body: { status: 'cancelled_by_therapist' } });
-        }
-        showToast('Sessão cancelada!', 'success');
-        setSelectedEvent(null);
-        dispatchAppointmentUpdated();
-      } catch (error: any) {
-        showToast(error.message || 'Erro ao cancelar', 'error');
+    try {
+      if (onCancel) {
+        await onCancel(appointment.id);
+      } else {
+        await apiCall({ url: `/api/appointments/${appointment.id}/status`, method: 'PATCH', body: { status: 'cancelled_by_therapist' } });
       }
+      showToast('Sessão cancelada!', 'success');
+      setSelectedEvent(null);
+      setShowCancelConfirm(false);
+      dispatchAppointmentUpdated();
+    } catch (error: any) {
+      showToast(error.message || 'Erro ao cancelar', 'error');
     }
   };
 
-  // 🔥 ALTERADO: Redireciona para página embed do Jitsi
   const handleStartSession = () => {
     const appointment = selectedEvent?.extendedProps?.appointment;
     if (appointment?.id) {
-      // Fecha o modal
       setSelectedEvent(null);
-      // Redireciona para a página de videochamada embed
       router.push(`/therapist/videochamada/${appointment.id}`);
     }
   };
@@ -755,7 +756,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
               <div className="p-4 bg-[#FCE4EC] border-b border-[#E03673]/20">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2"><Calendar className="w-5 h-5 text-[#E03673]" /><h3 className="text-lg font-semibold text-gray-900">Detalhes da Sessão</h3></div>
-                  <button onClick={() => setSelectedEvent(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                  <button onClick={() => { setSelectedEvent(null); setShowCancelConfirm(false); }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
                 </div>
               </div>
               <div className="p-5">
@@ -840,10 +841,28 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
                       className="flex-1 bg-[#2F80D3] hover:bg-[#236bb3] text-white py-2.5 rounded-lg font-medium flex items-center justify-center gap-2">
                       <RefreshCw className="w-4 h-4" />Reagendar
                     </button>
-                    <button onClick={handleCancelAppointment}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-medium flex items-center justify-center gap-2">
-                      <XCircle className="w-4 h-4" />Cancelar
-                    </button>
+
+                    {/* 🔥 ALTERAÇÃO MÍNIMA: confirmação inline sem modal do browser */}
+                    {!showCancelConfirm ? (
+                      <button onClick={handleCancelAppointment}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-medium flex items-center justify-center gap-2">
+                        <XCircle className="w-4 h-4" />Cancelar
+                      </button>
+                    ) : (
+                      <div className="flex-1 flex flex-col gap-2">
+                        <p className="text-xs text-center text-gray-600 font-medium">Confirmar cancelamento?</p>
+                        <div className="flex gap-2">
+                          <button onClick={handleConfirmCancel}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg text-sm font-medium">
+                            Sim
+                          </button>
+                          <button onClick={() => setShowCancelConfirm(false)}
+                            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium">
+                            Não
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -870,7 +889,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
                     </div>
                   </div>
                 )}
-                <button onClick={() => setSelectedEvent(null)} className="w-full mt-4 text-center text-sm text-gray-400 hover:text-gray-600 py-2">Fechar</button>
+                <button onClick={() => { setSelectedEvent(null); setShowCancelConfirm(false); }} className="w-full mt-4 text-center text-sm text-gray-400 hover:text-gray-600 py-2">Fechar</button>
               </div>
             </div>
           </div>

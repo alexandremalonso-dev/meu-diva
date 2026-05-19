@@ -302,8 +302,9 @@ export default function TherapistProfilePage() {
     loadProfile();
   }, [user]);
 
-  const handleUploadComplete = (novaFotoUrl: string) => {
+  const handleUploadComplete = async (novaFotoUrl: string) => {
     setFotoUrl(novaFotoUrl);
+    await loadProfile();
   };
 
   const handleEmailChangeSuccess = (newEmail: string) => {
@@ -371,6 +372,7 @@ export default function TherapistProfilePage() {
           method: "PATCH",
           body: JSON.stringify({ full_name: formData.full_name })
         });
+        if (typeof loadMe === 'function') await loadMe();
       }
       await api("/api/therapists/me/profile", {
         method: "POST",
@@ -415,6 +417,12 @@ export default function TherapistProfilePage() {
       if (typeof loadMe === 'function') await loadMe();
       await loadProfile();
       setSuccess("Perfil atualizado com sucesso!");
+      window.dispatchEvent(new CustomEvent('refreshProfile')); 
+      
+      
+      // 🔥 DISPARAR EVENTO PARA ATUALIZAR O HEADER
+      window.dispatchEvent(new CustomEvent('refreshProfile'));
+      
     } catch (err: any) {
       console.error("❌ Erro ao salvar:", err);
       setError(err.message || "Erro ao salvar perfil");
@@ -599,7 +607,7 @@ export default function TherapistProfilePage() {
                 <textarea value={formData.bio} onChange={(e) => handleChange("bio", e.target.value)} rows={4} className="w-full p-2 border rounded-lg" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Especialidades (texto livre)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Especialidades (texto libre)</label>
                 <input type="text" value={formData.specialties} onChange={(e) => handleChange("specialties", e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Ex: Psicanálise, TCC, Terapia de Casal" />
               </div>
               <div>
@@ -682,12 +690,20 @@ export default function TherapistProfilePage() {
                 </div>
               </div>
 
+              {/* 🔥 CAMPO DO PREÇO CORRIGIDO - step removido */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <DollarSign className="w-4 h-4" />Preço da sessão (R$)
                 </label>
-                <input type="number" value={formData.session_price} onChange={(e) => handleChange("session_price", e.target.value)} className="w-full p-2 border rounded-lg" min="0" step="10" />
+                <input 
+                  type="number" 
+                  value={formData.session_price} 
+                  onChange={(e) => handleChange("session_price", e.target.value)} 
+                  className="w-full p-2 border rounded-lg" 
+                  min="0" 
+                />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <Instagram className="w-4 h-4" />Instagram <span className="text-gray-400 text-xs">(opcional)</span>

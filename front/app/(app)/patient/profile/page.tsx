@@ -54,6 +54,10 @@ export default function PatientProfilePage() {
     loadProfile();
   }, []);
 
+  const handlePhotoUpdate = async () => {
+    await loadProfile();
+  };
+
   const handleSaveProfile = async (profileData: Partial<PatientProfile>) => {
     try {
       const updated = await api('/api/patient/profile', {
@@ -195,6 +199,7 @@ export default function PatientProfilePage() {
           <ProfileForm
             initialProfile={profile}
             onSave={handleSaveProfile}
+            onPhotoUpdate={handlePhotoUpdate}
             userEmail={userData?.email || user?.email || ""}
           />
         )}

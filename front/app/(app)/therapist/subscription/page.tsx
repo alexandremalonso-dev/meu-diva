@@ -139,54 +139,14 @@ export default function TherapistSubscriptionPage() {
       return;
     }
     
-    // Verificar se o token é válido antes de tentar
     const token = localStorage.getItem('access_token');
     if (!token) {
       router.push('/auth/login');
       return;
     }
-    
-    setUpgrading(planId);
-    setError("");
-    
-    try {
-      console.log("📡 Chamando API para criar checkout...");
-      
-      // 🔥 SEM TIPO GENÉRICO - IGUAL AO DASHBOARD
-      const response = await apiCall({
-        url: "/api/payments/create-subscription-checkout",
-        method: "POST",
-        body: { plan: planId },
-        requireAuth: true
-      });
-      
-      console.log("✅ Resposta recebida:", response);
-      
-      // 🔥 ACESSAR checkout_url DA MESMA FORMA QUE O DASHBOARD
-      if (response?.checkout_url) {
-        console.log("🔗 Redirecionando para Stripe:", response.checkout_url);
-        // 🔥 USAR window.location.href - IGUAL AO DASHBOARD
-        window.location.href = response.checkout_url;
-      } else {
-        throw new Error("URL de checkout não recebida");
-      }
-      
-    } catch (err: any) {
-      console.error("❌ Erro detalhado:", err);
-      
-      // Se for erro de autenticação, limpar tokens e redirecionar
-      if (err.message?.includes("401") || err.message?.includes("Token") || err.message?.includes("token")) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        router.push('/auth/login');
-        return;
-      }
-      
-      setError(err.message || "Erro ao processar assinatura");
-      setTimeout(() => setError(""), 5000);
-    } finally {
-      setUpgrading(null);
-    }
+
+    // 🔥 Redireciona direto para o checkout personalizado
+    router.push(`/subscription-checkout?plan=${planId}`);
   }
 
   async function handleCancelSubscription() {

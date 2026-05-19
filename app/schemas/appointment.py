@@ -75,6 +75,7 @@ class RescheduleRequest(BaseModel):
     starts_at: datetime
     ends_at: Optional[datetime] = None
     duration_minutes: Optional[int] = None
+    force: bool = False  # 🔥 Permite terapeuta/admin forçar fora da disponibilidade
 
     @model_validator(mode="after")
     def validate_dates(self):

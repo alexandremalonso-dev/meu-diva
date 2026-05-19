@@ -218,7 +218,8 @@ def upsert_profile(
             existing.experiencia = payload.experiencia
             existing.abordagem = payload.abordagem
             existing.idiomas = payload.idiomas
-            existing.foto_url = payload.foto_url
+            if payload.foto_url is not None:
+                existing.foto_url = payload.foto_url
             existing.updated_at = datetime.now()
             existing.phone = payload.phone
             existing.birth_date = payload.birth_date
@@ -379,7 +380,7 @@ def update_session_price(
 
 
 # ==========================
-# UPLOAD DE FOTO
+# UPLOAD DE FOTO — substitui o endpoint existente em therapists.py
 # ==========================
 
 @router.post("/me/profile/photo", response_model=dict)
@@ -389,46 +390,40 @@ async def upload_therapist_photo(
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
 ):
     print(f"\n📸 POST /therapists/me/profile/photo - Usuário: {current_user.id}")
-    
+
     try:
+        from app.core.storage import StorageService
+        storage_service = StorageService()
+
         profile = db.execute(
             select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
         ).scalar_one_or_none()
-        
+
         if not profile:
             raise HTTPException(status_code=404, detail="Perfil do terapeuta não encontrado")
-        
+
         file_ext = os.path.splitext(file.filename)[1].lower()
         if file_ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=400, detail="Formato de arquivo não permitido. Use JPG, PNG ou WEBP")
-        
+            raise HTTPException(status_code=400, detail="Formato não permitido. Use JPG, PNG ou WEBP")
+
         file_content = await file.read()
         if len(file_content) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail="Arquivo muito grande. Máximo 5MB")
-        
-        await file.seek(0)
-        
-        if profile.foto_url:
-            old_file_path = os.path.join(UPLOAD_DIR, os.path.basename(profile.foto_url))
-            if os.path.exists(old_file_path):
-                os.remove(old_file_path)
-                print(f"🗑️ Foto antiga removida: {old_file_path}")
-        
-        unique_filename = f"therapist_{current_user.id}_{uuid.uuid4().hex}{file_ext}"
-        file_path = os.path.join(UPLOAD_DIR, unique_filename)
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        foto_url = f"/uploads/therapists/{unique_filename}"
+
+        # Upload para o GCS — retorna URL pública completa
+        foto_url = storage_service.upload_file(
+            file_content=file_content,
+            folder="therapists",
+            content_type=file.content_type or "image/jpeg"
+        )
+
         profile.foto_url = foto_url
         profile.updated_at = datetime.now()
-        
         db.commit()
-        
-        print(f"✅ Foto salva: {foto_url}")
+
+        print(f"✅ Foto salva no GCS: {foto_url}")
         return {"foto_url": foto_url, "message": "Foto atualizada com sucesso"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -735,7 +730,12 @@ def available_slots(
             end_d = range_end.date()
 
             while d <= end_d:
-                weekday = datetime(d.year, d.month, d.day, tzinfo=tz).weekday()
+                # Python weekday(): 0=seg, 1=ter, ..., 6=dom
+                # Frontend/JS weekday: 0=dom, 1=seg, ..., 6=sab
+                # Conversão: python_weekday + 1) % 7
+                python_weekday = datetime(d.year, d.month, d.day, tzinfo=tz).weekday()
+                weekday = (python_weekday + 1) % 7
+
                 day_windows = av_by_weekday.get(weekday, [])
 
                 for w in day_windows:
@@ -912,62 +912,74 @@ def get_therapist_commissions(
 
 
 # ==========================
-# 🔥 ASSINATURA DO TERAPEUTA - GET
+# 🔥 ASSINATURA DO TERAPEUTA - CANCELAR (MP)
 # ==========================
 
-@router.get("/subscription", response_model=dict)
-def get_therapist_subscription(
+@router.post("/subscription/cancel", response_model=dict)
+def cancel_therapist_subscription(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.therapist]))
 ):
     """
-    Retorna a assinatura atual do terapeuta
+    Cancela a assinatura do terapeuta no Mercado Pago
     """
     from app.models.subscription import Subscription
     from app.models.therapist_profile import TherapistProfile
-    
-    print(f"\n📋 Buscando assinatura para terapeuta: {current_user.id}")
-    
+    from app.services.notification_service import NotificationService
+    from app.core.pricing_config import get_plan_name
+    import mercadopago
+    import os
+
+    print(f"\n❌ Cancelando assinatura MP para terapeuta: {current_user.id}")
+
     therapist_profile = db.execute(
         select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
     ).scalar_one_or_none()
-    
+
     if not therapist_profile:
-        print(f"⚠️ Perfil não encontrado, retornando plano essencial")
-        return {
-            "id": None,
-            "plan": "essencial",
-            "status": "active",
-            "stripe_subscription_id": None,
-            "current_period_start": None,
-            "current_period_end": None,
-            "cancel_at_period_end": False
-        }
-    
+        raise HTTPException(status_code=404, detail="Perfil do terapeuta não encontrado")
+
     subscription = db.execute(
-        select(Subscription).where(Subscription.therapist_id == therapist_profile.id)
+        select(Subscription).where(
+            Subscription.therapist_id == therapist_profile.id,
+            Subscription.status == "active"
+        )
     ).scalar_one_or_none()
-    
+
     if not subscription:
-        print(f"⚠️ Nenhuma assinatura encontrada, retornando plano essencial")
-        return {
-            "id": None,
-            "plan": "essencial",
-            "status": "active",
-            "stripe_subscription_id": None,
-            "current_period_start": None,
-            "current_period_end": None,
-            "cancel_at_period_end": False
-        }
-    
+        raise HTTPException(status_code=404, detail="Nenhuma assinatura ativa encontrada")
+
+    # Cancela no MP
+    mp_access_token = os.getenv("MP_ACCESS_TOKEN", "")
+    if mp_access_token and subscription.stripe_subscription_id:
+        try:
+            sdk = mercadopago.SDK(mp_access_token)
+            sdk.preapproval().update(
+                subscription.stripe_subscription_id,
+                {"status": "cancelled"}
+            )
+            print(f"✅ Assinatura MP cancelada: {subscription.stripe_subscription_id}")
+        except Exception as e:
+            print(f"⚠️ Erro ao cancelar no MP: {e}")
+
+    old_plan = subscription.plan
+    subscription.status = "cancelled"
+    subscription.plan = "essencial"
+    subscription.cancel_at_period_end = False
+    subscription.updated_at = datetime.now()
+    db.commit()
+
+    try:
+        NotificationService(db).notify_subscription_cancelled(current_user, get_plan_name(old_plan))
+    except Exception as e:
+        print(f"⚠️ Erro notificação: {e}")
+
+    print(f"✅ Assinatura cancelada. Terapeuta voltou ao plano Essencial.")
+
     return {
-        "id": subscription.id,
-        "plan": subscription.plan,
-        "status": subscription.status,
-        "stripe_subscription_id": subscription.stripe_subscription_id,
-        "current_period_start": subscription.current_period_start.isoformat() if subscription.current_period_start else None,
-        "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
-        "cancel_at_period_end": subscription.cancel_at_period_end
+        "success": True,
+        "message": "Assinatura cancelada com sucesso. Você voltará ao plano Essencial.",
+        "will_cancel_at_period_end": False
     }
 
 # ==========================
@@ -1131,64 +1143,3 @@ def set_default_therapist_address(
     db.commit()
     
     return {"success": True}
-
-
-# ==========================
-# 🔥 ASSINATURA DO TERAPEUTA - CANCELAR
-# ==========================
-
-@router.post("/subscription/cancel", response_model=dict)
-def cancel_therapist_subscription(
-    db: Session = Depends(get_db),
-    current_user: User = Security(require_roles([UserRole.therapist]))
-):
-    """
-    Cancela a assinatura do terapeuta no Stripe (cancelamento programado para fim do período)
-    """
-    from app.models.subscription import Subscription
-    from app.models.therapist_profile import TherapistProfile
-    
-    print(f"\n❌ Cancelando assinatura para terapeuta: {current_user.id}")
-    
-    therapist_profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
-    ).scalar_one_or_none()
-    
-    if not therapist_profile:
-        raise HTTPException(status_code=404, detail="Perfil do terapeuta não encontrado")
-    
-    subscription = db.execute(
-        select(Subscription).where(Subscription.therapist_id == therapist_profile.id)
-    ).scalar_one_or_none()
-    
-    if not subscription:
-        raise HTTPException(status_code=404, detail="Nenhuma assinatura ativa encontrada")
-    
-    if not subscription.stripe_subscription_id:
-        raise HTTPException(status_code=400, detail="Assinatura não integrada com Stripe")
-    
-    try:
-        import stripe
-        from app.core.config import settings
-        
-        stripe.api_key = settings.stripe_secret_key
-        
-        stripe.Subscription.modify(
-            subscription.stripe_subscription_id,
-            cancel_at_period_end=True
-        )
-        
-        subscription.cancel_at_period_end = True
-        db.commit()
-        
-        print(f"✅ Assinatura {subscription.stripe_subscription_id} será cancelada ao final do período")
-        
-        return {
-            "success": True,
-            "message": "Assinatura cancelada com sucesso. Você voltará ao plano Essencial no fim do período.",
-            "will_cancel_at_period_end": True
-        }
-        
-    except Exception as e:
-        print(f"❌ Erro ao cancelar assinatura no Stripe: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao cancelar assinatura: {str(e)}")

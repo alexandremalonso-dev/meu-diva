@@ -131,17 +131,6 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
             <Calendar size={16} />
             {isLoggedIn ? "Agendar sessão" : "Entrar para agendar"}
           </button>
-
-          {/* Botão Dashboard — só aparece se logado */}
-          {isLoggedIn && (
-            <button
-              onClick={() => router.push(isMobile ? "/mobile/dashboard" : "/patient/dashboard")}
-              className="flex items-center gap-2 px-5 py-2 rounded-full font-semibold transition-all hover:scale-105"
-              style={{ backgroundColor: "white", color: CORES.azul }}
-            >
-              Dashboard
-            </button>
-          )}
         </div>
       </div>
     </div>

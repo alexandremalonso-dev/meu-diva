@@ -71,10 +71,10 @@ export function MainLayout({
         />
       )}
 
-      <div className="flex-1 flex min-h-0">
+      <div className="flex flex-1" style={{ minHeight: 0 }}>
         {/* Sidebar esquerda — oculta no mobile */}
         {isAuthenticated && !isMobile && (
-          <div className="w-16 flex-shrink-0">
+          <div className="w-16 flex-shrink-0 self-stretch">
             <Sidebar />
           </div>
         )}
@@ -86,7 +86,7 @@ export function MainLayout({
 
         {/* Sidebars direitas — ocultas no mobile */}
         {!isMobile && isAuthenticated && userRole === "admin" && (
-          <div style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0 }}>
+          <div style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0, alignSelf: "stretch" }}>
             <AdminSidebar
               isOpen={true}
               onClose={() => {}}
@@ -98,13 +98,13 @@ export function MainLayout({
         )}
 
         {!isMobile && isAuthenticated && userRole === "empresa" && (
-          <div style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0 }}>
+          <div style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0, alignSelf: "stretch" }}>
             <EmpresaSidebar />
           </div>
         )}
 
         {!isMobile && isAuthenticated && isOpen && (userRole === "therapist" || userRole === "patient") && (
-          <div style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0 }}>
+          <div style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0, alignSelf: "stretch" }}>
             <SidebarRight
               isOpen={isOpen}
               onClose={closeSidebar}

@@ -174,44 +174,13 @@ export default function TherapistDashboardPage() {
     }
   }, [apiCall]);
 
-  const handleUpgradeProfissional = async () => {
-    setUpgradeLoading("profissional");
-    try {
-      const response = await apiCall({
-        url: "/api/payments/create-subscription-checkout",
-        method: "POST",
-        body: { plan: "profissional" },
-        requireAuth: true
-      });
-      if (response?.checkout_url) {
-        window.location.href = response.checkout_url;
-      }
-    } catch (error) {
-      console.error("Erro ao criar checkout:", error);
-      setError("Erro ao processar upgrade");
-    } finally {
-      setUpgradeLoading(null);
-    }
+  // 🔥 ALTERAÇÃO MÍNIMA: redireciona para checkout personalizado
+  const handleUpgradeProfissional = () => {
+    router.push('/subscription-checkout?plan=profissional');
   };
 
-  const handleUpgradePremium = async () => {
-    setUpgradeLoading("premium");
-    try {
-      const response = await apiCall({
-        url: "/api/payments/create-subscription-checkout",
-        method: "POST",
-        body: { plan: "premium" },
-        requireAuth: true
-      });
-      if (response?.checkout_url) {
-        window.location.href = response.checkout_url;
-      }
-    } catch (error) {
-      console.error("Erro ao criar checkout:", error);
-      setError("Erro ao processar upgrade");
-    } finally {
-      setUpgradeLoading(null);
-    }
+  const handleUpgradePremium = () => {
+    router.push('/subscription-checkout?plan=premium');
   };
 
   const loadChartData = useCallback(async () => {

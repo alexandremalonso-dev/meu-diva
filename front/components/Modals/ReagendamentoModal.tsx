@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Loader2, AlertCircle, CalendarPlus, CheckCircle } from 'lucide-react';
+import { X, Calendar, Clock, Loader2, AlertCircle, CalendarPlus, CheckCircle, Clock3 } from 'lucide-react';
 import { useApi } from '@/lib/useApi';
 
 interface ReagendamentoModalProps {
@@ -33,11 +33,8 @@ export function ReagendamentoModal({
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [customDate, setCustomDate] = useState('');
   const [customTime, setCustomTime] = useState('');
-  const [useCustomSlot, setUseCustomSlot] = useState(false);
   const [showSlotsPicker, setShowSlotsPicker] = useState(false);
   const [therapistProfileId, setTherapistProfileId] = useState<number | null>(null);
-
-  // ✅ Estado do popup de sucesso
   const [showSuccess, setShowSuccess] = useState(false);
   const [successInfo, setSuccessInfo] = useState<{ date: string; time: string } | null>(null);
 
@@ -49,33 +46,31 @@ export function ReagendamentoModal({
 
   const loadTherapistProfile = async () => {
     try {
-      const profile = await apiCall({
-        url: "/api/therapists/me/profile",
-        requireAuth: true
-      });
+      const profile = await apiCall({ url: "/api/therapists/me/profile", requireAuth: true });
       setTherapistProfileId(profile.id);
+      return profile.id;
     } catch (error) {
       console.error("Erro ao carregar perfil do terapeuta:", error);
+      return null;
     }
   };
 
   const loadSuggestedSlots = async () => {
-    if (!therapistProfileId) {
-      await loadTherapistProfile();
-      if (!therapistProfileId) return;
+    let profileId = therapistProfileId;
+    if (!profileId) {
+      profileId = await loadTherapistProfile();
+      if (!profileId) return;
     }
-
     setLoadingSlots(true);
     setError(null);
     try {
       const data = await apiCall({
-        url: `/public/terapeutas/${therapistProfileId}/slots?days=30`,
+        url: `/public/terapeutas/${profileId}/slots?days=30`,
         requireAuth: true
       });
       setAvailableSlots(data.slots || []);
       setShowSlotsPicker(true);
     } catch (err: any) {
-      console.error('Erro ao carregar horários sugeridos:', err);
       setError('Não foi possível carregar os horários sugeridos');
     } finally {
       setLoadingSlots(false);
@@ -84,12 +79,7 @@ export function ReagendamentoModal({
 
   const formatDateTime = (dateTimeStr: string) => {
     const date = new Date(dateTimeStr);
-    return date.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
   const handleSelectSuggestedSlot = (slot: AvailableSlot) => {
@@ -99,89 +89,82 @@ export function ReagendamentoModal({
     const day = String(date.getDate()).padStart(2, '0');
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
-
     setCustomDate(`${year}-${month}-${day}`);
     setCustomTime(`${hours}:${minutes}`);
     setSelectedSlot(slot.starts_at);
-    setUseCustomSlot(true);
     setShowSlotsPicker(false);
   };
 
   const handleSubmit = async () => {
-    setLoading(true);
     setError(null);
 
-    let newDateTime: Date | null = null;
-    let duration = 50;
-
-    if (useCustomSlot) {
-      if (!customDate || !customTime) {
-        setError('Por favor, preencha data e horário');
-        setLoading(false);
-        return;
-      }
-      newDateTime = new Date(`${customDate}T${customTime}:00`);
-    } else {
-      if (!selectedSlot) {
-        setError('Por favor, selecione um horário');
-        setLoading(false);
-        return;
-      }
-      const slot = availableSlots.find(s => s.starts_at === selectedSlot);
-      if (slot) {
-        newDateTime = new Date(slot.starts_at);
-        duration = slot.duration_minutes;
-      }
-    }
-
-    if (!newDateTime) {
-      setError('Data/hora inválida');
+    // 🔥 CORRIGIDO: manual sempre livre — só precisa de data+hora
+    if (!customDate || !customTime) {
+      setError('Por favor, preencha data e horário');
       setLoading(false);
       return;
     }
 
-    const startsAtUTC = new Date(newDateTime);
-    const endsAtUTC = new Date(startsAtUTC);
-    endsAtUTC.setMinutes(endsAtUTC.getMinutes() + duration);
+    setLoading(true);
+
+    const newDateTime = new Date(`${customDate}T${customTime}:00`);
+    const duration = selectedSlot
+      ? (availableSlots.find(s => s.starts_at === selectedSlot)?.duration_minutes || 50)
+      : 50;
+
+    const endsAt = new Date(newDateTime);
+    endsAt.setMinutes(endsAt.getMinutes() + duration);
 
     try {
       await apiCall({
         url: `/api/appointments/${appointmentId}/reschedule`,
         method: 'POST',
         body: {
-          starts_at: startsAtUTC.toISOString(),
-          ends_at: endsAtUTC.toISOString(),
-          duration_minutes: duration
+          starts_at: newDateTime.toISOString(),
+          ends_at: endsAt.toISOString(),
+          duration_minutes: duration,
+          force: true
         },
         requireAuth: true
       });
 
-      // ✅ Exibir popup de sucesso com data/hora confirmada
       window.dispatchEvent(new Event("appointmentRescheduled"));
       setSuccessInfo({
-        date: startsAtUTC.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        time: startsAtUTC.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        date: newDateTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        time: newDateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       });
       setShowSuccess(true);
-
     } catch (err: any) {
-      console.error('❌ Erro detalhado:', err);
       setError(err.message || 'Erro ao reagendar sessão');
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Fecha o popup de sucesso, notifica o pai e fecha o modal
+  // 🔥 NOVO: reagendar depois — mantém no pendentes sem confirmar horário
+  const handleReagendarDepois = () => {
+    onClose();
+  };
+
   const handleSuccessClose = () => {
     setShowSuccess(false);
     onSuccess?.();
     onClose();
   };
 
+  const reset = () => {
+    setShowSuccess(false);
+    setSuccessInfo(null);
+    setError(null);
+    setCustomDate('');
+    setCustomTime('');
+    setSelectedSlot('');
+    setAvailableSlots([]);
+    setShowSlotsPicker(false);
+  };
+
   if (!isOpen) return null;
 
-  // ✅ POPUP DE SUCESSO — substitui o conteúdo do modal
   if (showSuccess && successInfo) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -197,10 +180,7 @@ export function ReagendamentoModal({
             <p className="text-xs text-gray-400 mb-6">
               O paciente e o terapeuta serão notificados por e-mail.
             </p>
-            <button
-              onClick={handleSuccessClose}
-              className="w-full bg-[#E03673] hover:bg-[#c02c5e] text-white py-3 rounded-xl font-medium transition-colors"
-            >
+            <button onClick={handleSuccessClose} className="w-full bg-[#E03673] hover:bg-[#c02c5e] text-white py-3 rounded-xl font-medium transition-colors">
               Fechar
             </button>
           </div>
@@ -231,24 +211,32 @@ export function ReagendamentoModal({
             </div>
           )}
 
+          {/* Botão horários sugeridos */}
           <button
             onClick={loadSuggestedSlots}
             disabled={loadingSlots}
-            className="w-full mb-4 bg-[#2F80D3] hover:bg-[#236bb3] text-white py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full mb-4 bg-[#2F80D3] hover:bg-[#236bb3] text-white py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {loadingSlots ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Carregando horários...
-              </>
+              <><Loader2 className="w-4 h-4 animate-spin" />Carregando horários...</>
             ) : (
-              <>
-                <CalendarPlus className="w-4 h-4" />
-                Ver horários sugeridos
-              </>
+              <><CalendarPlus className="w-4 h-4" />Ver horários sugeridos</>
             )}
           </button>
 
+          {/* Slot selecionado da lista */}
+          {selectedSlot && (
+            <div className="mb-4 p-2 bg-[#FCE4EC] border border-[#E03673]/30 rounded-lg flex items-center justify-between">
+              <p className="text-xs text-gray-600">
+                Horário sugerido selecionado: <strong>{formatDateTime(selectedSlot)}</strong>
+              </p>
+              <button onClick={() => { setSelectedSlot(''); setCustomDate(''); setCustomTime(''); }} className="text-xs text-[#E03673] hover:underline ml-2">
+                Limpar
+              </button>
+            </div>
+          )}
+
+          {/* Picker de slots */}
           {showSlotsPicker && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -263,17 +251,12 @@ export function ReagendamentoModal({
                 </div>
                 <div className="flex-1 overflow-y-auto p-5">
                   {availableSlots.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">
-                      Nenhum horário disponível nas próximas semanas.
-                    </p>
+                    <p className="text-center text-gray-500 py-8">Nenhum horário disponível nas próximas semanas.</p>
                   ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {availableSlots.slice(0, 30).map((slot, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSelectSuggestedSlot(slot)}
-                          className="p-3 bg-gray-100 hover:bg-[#FCE4EC] rounded-lg text-center transition-colors border border-gray-200 hover:border-[#E03673]"
-                        >
+                        <button key={idx} onClick={() => handleSelectSuggestedSlot(slot)}
+                          className="p-3 bg-gray-100 hover:bg-[#FCE4EC] rounded-lg text-center transition-colors border border-gray-200 hover:border-[#E03673]">
                           <p className="text-sm font-medium">{formatDateTime(slot.starts_at)}</p>
                           <p className="text-xs text-gray-500">{slot.duration_minutes} minutos</p>
                         </button>
@@ -290,113 +273,69 @@ export function ReagendamentoModal({
             </div>
           )}
 
-          <div className="mb-4">
-            <label className="flex items-center gap-2 mb-3">
-              <input
-                type="radio"
-                checked={!useCustomSlot}
-                onChange={() => setUseCustomSlot(false)}
-                className="h-4 w-4 text-[#E03673]"
-              />
-              <span className="text-sm font-medium text-gray-700">Usar horário sugerido</span>
-            </label>
-
-            {!useCustomSlot && (
-              <div className="ml-6">
-                {loadingSlots ? (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="w-6 h-6 text-[#E03673] animate-spin" />
-                  </div>
-                ) : availableSlots.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    Nenhum horário disponível nos próximos 30 dias.
-                    <br />
-                    <button onClick={() => setUseCustomSlot(true)} className="text-[#E03673] hover:underline">
-                      Agendar manualmente
-                    </button>
-                  </p>
-                ) : (
-                  <select
-                    value={selectedSlot}
-                    onChange={(e) => setSelectedSlot(e.target.value)}
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none"
-                  >
-                    <option value="">Selecione um horário...</option>
-                    {availableSlots.map((slot, idx) => (
-                      <option key={idx} value={slot.starts_at}>
-                        {formatDateTime(slot.starts_at)} ({slot.duration_minutes} min)
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            )}
+          {/* Divisor */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400">ou digite manualmente</span>
+            <div className="flex-1 h-px bg-gray-200" />
           </div>
 
-          <div className="mb-4">
-            <label className="flex items-center gap-2 mb-3">
+          {/* 🔥 Campos manuais SEMPRE visíveis e livres */}
+          <div className="space-y-3 mb-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Data
+              </label>
               <input
-                type="radio"
-                checked={useCustomSlot}
-                onChange={() => setUseCustomSlot(true)}
-                className="h-4 w-4 text-[#E03673]"
+                type="date"
+                value={customDate}
+                onChange={(e) => { setCustomDate(e.target.value); setSelectedSlot(''); setError(null); }}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none"
               />
-              <span className="text-sm font-medium text-gray-700">Escolher data e horário manualmente</span>
-            </label>
-
-            {useCustomSlot && (
-              <div className="ml-6 space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    Data
-                  </label>
-                  <input
-                    type="date"
-                    value={customDate}
-                    onChange={(e) => setCustomDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    Horário
-                  </label>
-                  <input
-                    type="time"
-                    value={customTime}
-                    onChange={(e) => setCustomTime(e.target.value)}
-                    className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none"
-                  />
-                </div>
-                <p className="text-xs text-gray-400">
-                  * Verifique se o horário está disponível na agenda do terapeuta
-                </p>
-              </div>
-            )}
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Horário
+              </label>
+              <input
+                type="time"
+                value={customTime}
+                onChange={(e) => { setCustomTime(e.target.value); setSelectedSlot(''); setError(null); }}
+                className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none"
+              />
+            </div>
+            <p className="text-xs text-gray-400">* Verifique se o horário está disponível na agenda do terapeuta</p>
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
-            Cancelar
-          </button>
+        <div className="p-4 border-t border-gray-100 flex justify-between gap-3">
+          {/* 🔥 NOVO: Reagendar depois — mantém no pendentes */}
           <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="px-4 py-2 bg-[#E03673] hover:bg-[#c02c5e] text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+            onClick={handleReagendarDepois}
+            className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm transition-colors"
+            title="Fechar e reagendar mais tarde"
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Reagendando...
-              </>
-            ) : (
-              'Confirmar Reagendamento'
-            )}
+            <Clock3 className="w-4 h-4" />
+            Reagendar depois
           </button>
+
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
+              Cancelar
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loading || !customDate || !customTime}
+              className="px-4 py-2 bg-[#E03673] hover:bg-[#c02c5e] text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />Reagendando...</>
+              ) : (
+                'Confirmar Reagendamento'
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

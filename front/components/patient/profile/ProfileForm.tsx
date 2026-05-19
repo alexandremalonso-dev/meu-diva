@@ -28,10 +28,11 @@ const educationLevels = [
 interface ProfileFormProps {
   initialProfile?: PatientProfile;
   onSave: (profile: Partial<PatientProfile>) => Promise<void>;
+  onPhotoUpdate?: () => Promise<void>;
   userEmail?: string;
 }
 
-export function ProfileForm({ initialProfile, onSave, userEmail }: ProfileFormProps) {
+export function ProfileForm({ initialProfile, onSave, onPhotoUpdate, userEmail }: ProfileFormProps) {
   const [formData, setFormData] = useState({
     full_name: initialProfile?.full_name || '',
     phone: initialProfile?.phone || '',
@@ -96,11 +97,11 @@ export function ProfileForm({ initialProfile, onSave, userEmail }: ProfileFormPr
     }
   };
 
-  const handlePhotoSuccess = (fotoUrl: string) => {
-    if (initialProfile) initialProfile.foto_url = fotoUrl;
+  const handlePhotoSuccess = async (fotoUrl: string) => {
     setToastType('success');
     setToastMessage('📸 Foto atualizada com sucesso!');
     window.dispatchEvent(new Event('refreshProfile'));
+    if (onPhotoUpdate) await onPhotoUpdate();
   };
 
   const handlePhotoError = (error: string) => {
