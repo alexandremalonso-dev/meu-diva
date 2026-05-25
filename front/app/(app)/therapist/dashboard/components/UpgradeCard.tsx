@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { Crown, TrendingUp, CheckCircle, ArrowRight, Loader2, Sparkles, Star, Zap, Rocket, Percent, FileText } from "lucide-react";
+import { Crown, TrendingUp, CheckCircle, ArrowRight, Loader2, Sparkles, Star, Zap, Rocket, Percent, FileText, ExternalLink } from "lucide-react";
 
 const CORES = {
   azul: "#2F80D3",
@@ -14,6 +14,11 @@ const CORES = {
   cinzaTexto: "#374151",
   branco: "#FFFFFF",
 };
+
+function isNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(window as any).Capacitor?.isNativePlatform?.();
+}
 
 interface UpgradeCardProps {
   planName: string;
@@ -42,7 +47,11 @@ export function UpgradeCard({
 
   const handleUpgrade = () => {
     if (!user) return;
-    // 🔥 Redireciona direto para o checkout personalizado
+    // ✅ Se for app nativo iOS, redireciona para o site
+    if (isNativeApp()) {
+      window.open("https://meudivaonline.com/para-terapeutas", "_blank");
+      return;
+    }
     router.push(`/subscription-checkout?plan=${planId}`);
   };
 
@@ -65,10 +74,49 @@ export function UpgradeCard({
     return CORES.azul;
   };
 
+  // ✅ No app nativo iOS, mostra card simplificado sem preço/botão de compra
+  if (isNativeApp()) {
+    return (
+      <div className={`rounded-xl overflow-hidden ${
+        popular
+          ? "bg-gradient-to-br from-[#E03673] to-[#E03673]/90 text-white shadow-md"
+          : "bg-white border-2 border-gray-100"
+      }`}>
+        <div className="p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <div style={{ color: popular ? CORES.branco : getAccentColor() }}>
+              {getIcon()}
+            </div>
+            <h3 className={`text-lg font-bold ${popular ? "text-white" : "text-gray-800"}`}>
+              {planName}
+            </h3>
+          </div>
+          <p className={`text-sm mb-4 ${popular ? "text-white/80" : "text-gray-500"}`}>
+            {description}
+          </p>
+          <p className={`text-xs mb-4 ${popular ? "text-white/70" : "text-gray-400"}`}>
+            Para fazer upgrade, acesse meudivaonline.com pelo navegador.
+          </p>
+          <button
+            onClick={handleUpgrade}
+            className={`w-full py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all ${
+              popular
+                ? "bg-white text-[#E03673] hover:bg-gray-100"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            <ExternalLink className="w-4 h-4" />
+            Ver planos no site
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`rounded-xl overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1 duration-300 ${
-      popular 
-        ? "bg-gradient-to-br from-[#E03673] to-[#E03673]/90 text-white shadow-md ring-2 ring-[#E03673]/30" 
+      popular
+        ? "bg-gradient-to-br from-[#E03673] to-[#E03673]/90 text-white shadow-md ring-2 ring-[#E03673]/30"
         : "bg-white border-2 border-gray-100 text-gray-800"
     }`}>
       {popular && (
@@ -78,7 +126,7 @@ export function UpgradeCard({
           <Zap className="w-3 h-3" />
         </div>
       )}
-      
+
       <div className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -102,11 +150,11 @@ export function UpgradeCard({
             </div>
           )}
         </div>
-        
+
         <p className={`text-sm mb-4 ${popular ? "text-white/80" : "text-gray-500"}`}>
           {description}
         </p>
-        
+
         <div className="mb-4 flex items-baseline gap-2 flex-wrap">
           <span className={`text-3xl font-bold ${popular ? "text-white" : "text-gray-800"}`}>
             {formatPrice(price)}
@@ -119,7 +167,7 @@ export function UpgradeCard({
             Comissão: {commission}
           </div>
         </div>
-        
+
         <ul className="space-y-2 mb-6">
           {features.map((feature, index) => {
             const isReportFeature = feature.toLowerCase().includes("relatório");
@@ -137,7 +185,7 @@ export function UpgradeCard({
             );
           })}
         </ul>
-        
+
         <button
           onClick={handleUpgrade}
           disabled={loading}

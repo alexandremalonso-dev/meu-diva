@@ -746,3 +746,117 @@ def delete_address(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao remover endereço")
+    
+# ==========================
+# FAVORITOS — adicionar ao final de app/routes/patient.py
+# ==========================
+
+from app.models.patient_favorite import PatientFavorite
+from app.models.therapist_profile import TherapistProfile
+
+@router.post("/favorites/{therapist_profile_id}", status_code=201)
+def add_favorite(
+    therapist_profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.patient))
+):
+    """Adiciona um terapeuta aos favoritos do paciente"""
+    profile = get_patient_profile_or_404(db, current_user.id)
+
+    # Verifica se o terapeuta existe
+    therapist = db.get(TherapistProfile, therapist_profile_id)
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Terapeuta não encontrado")
+
+    # Verifica se já está favoritado
+    existing = db.execute(
+        select(PatientFavorite).where(
+            PatientFavorite.patient_id == profile.id,
+            PatientFavorite.therapist_id == therapist_profile_id
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        return {"is_favorite": True, "message": "Já está nos favoritos"}
+
+    favorite = PatientFavorite(patient_id=profile.id, therapist_id=therapist_profile_id)
+    db.add(favorite)
+    db.commit()
+
+    return {"is_favorite": True, "message": "Adicionado aos favoritos"}
+
+
+@router.delete("/favorites/{therapist_profile_id}", status_code=200)
+def remove_favorite(
+    therapist_profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.patient))
+):
+    """Remove um terapeuta dos favoritos do paciente"""
+    profile = get_patient_profile_or_404(db, current_user.id)
+
+    favorite = db.execute(
+        select(PatientFavorite).where(
+            PatientFavorite.patient_id == profile.id,
+            PatientFavorite.therapist_id == therapist_profile_id
+        )
+    ).scalar_one_or_none()
+
+    if not favorite:
+        return {"is_favorite": False, "message": "Não estava nos favoritos"}
+
+    db.delete(favorite)
+    db.commit()
+
+    return {"is_favorite": False, "message": "Removido dos favoritos"}
+
+
+@router.get("/favorites/{therapist_profile_id}")
+def check_favorite(
+    therapist_profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.patient))
+):
+    """Verifica se um terapeuta está nos favoritos do paciente"""
+    profile = get_patient_profile_or_404(db, current_user.id)
+
+    existing = db.execute(
+        select(PatientFavorite).where(
+            PatientFavorite.patient_id == profile.id,
+            PatientFavorite.therapist_id == therapist_profile_id
+        )
+    ).scalar_one_or_none()
+
+    return {"is_favorite": existing is not None}
+
+
+@router.get("/favorites")
+def list_favorites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.patient))
+):
+    """Lista todos os terapeutas favoritados pelo paciente"""
+    profile = get_patient_profile_or_404(db, current_user.id)
+
+    favorites = db.execute(
+        select(PatientFavorite).where(PatientFavorite.patient_id == profile.id)
+    ).scalars().all()
+
+    therapist_ids = [f.therapist_id for f in favorites]
+
+    therapists = db.execute(
+        select(TherapistProfile).where(TherapistProfile.id.in_(therapist_ids))
+    ).scalars().all()
+
+    return [
+        {
+            "id": t.id,
+            "user_id": t.user_id,
+            "full_name": t.full_name,
+            "foto_url": t.foto_url,
+            "specialties": t.specialties,
+            "session_price": t.session_price,
+            "rating": t.rating,
+        }
+        for t in therapists
+    ]

@@ -44,10 +44,6 @@ def _overlaps(s1: datetime, e1: datetime, s2: datetime, e2: datetime) -> bool:
 
 
 def _db_weekday_to_python(db_weekday: int) -> int:
-    """
-    Converte o weekday do banco (0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab)
-    para o padrão Python/datetime.weekday() (0=Seg, 1=Ter, 2=Qua, 3=Qui, 4=Sex, 5=Sab, 6=Dom)
-    """
     return (db_weekday - 1) % 7
 
 
@@ -108,6 +104,7 @@ def listar_terapeutas_publicos(
     offset = (page - 1) * limit
     terapeutas = db.execute(query.offset(offset).limit(limit)).scalars().all()
 
+    # 🔥 Mostra TODOS os terapeutas, pagos sempre no topo
     from app.services.plan_priority import get_therapist_plan, PLAN_PRIORITY
 
     def get_plan_priority(therapist):
@@ -197,7 +194,6 @@ def get_slots_disponiveis(
     range_start_utc = range_start.astimezone(timezone.utc)
     range_end_utc = range_end.astimezone(timezone.utc)
 
-    # Buscar períodos de disponibilidade
     active_periods = db.execute(
         select(AvailabilityPeriod).where(
             and_(
@@ -217,8 +213,6 @@ def get_slots_disponiveis(
             count=0,
         )
 
-    # Mapear períodos com seus slots por dia da semana
-    # 🔥 CORREÇÃO: converte weekday do banco (0=Dom) para Python (0=Seg)
     periods_with_slots = {}
     for period in active_periods:
         slots = db.execute(
@@ -233,7 +227,6 @@ def get_slots_disponiveis(
             )
         periods_with_slots[period] = slots_by_weekday
 
-    # Buscar appointments já ocupados
     busy_appts = db.execute(
         select(Appointment).where(
             and_(
@@ -254,7 +247,6 @@ def get_slots_disponiveis(
         for a in busy_appts
     ]
 
-    # Durações oferecidas pelo terapeuta
     durations_to_generate = []
     if profile.session_duration_30min:
         durations_to_generate.append(30)

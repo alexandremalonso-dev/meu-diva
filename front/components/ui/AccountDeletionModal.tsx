@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Loader2, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface AccountDeletionModalProps {
@@ -16,6 +16,30 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [codeExpiresIn, setCodeExpiresIn] = useState<number | null>(null);
+
+  // Timer para expiração do código
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (step === "code" && codeExpiresIn !== null && codeExpiresIn > 0) {
+      interval = setInterval(() => {
+        setCodeExpiresIn(prev => (prev !== null && prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [step, codeExpiresIn]);
+
+  // Timer para cooldown do reenvio
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      interval = setInterval(() => {
+        setResendCooldown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
 
   if (!isOpen) return null;
 
@@ -28,8 +52,33 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
         requireAuth: true
       });
       setStep("code");
+      setCodeExpiresIn(15 * 60); // 15 minutos em segundos
+      setResendCooldown(60); // 60 segundos de cooldown para reenvio
     } catch (err: any) {
       setError(err.message || "Erro ao solicitar exclusão");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0) {
+      setError(`Aguarde ${resendCooldown} segundos para reenviar o código`);
+      return;
+    }
+    
+    setLoading(true);
+    setError("");
+    try {
+      await api("/api/users/me/delete-request", {
+        method: "POST",
+        requireAuth: true
+      });
+      setCodeExpiresIn(15 * 60);
+      setResendCooldown(60);
+      setError("");
+    } catch (err: any) {
+      setError(err.message || "Erro ao reenviar código");
     } finally {
       setLoading(false);
     }
@@ -53,10 +102,16 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
       onClose();
     } catch (err: any) {
       console.error("Erro detalhado:", err);
-      setError(err.message || "Código inválido");
+      setError(err.message || "Código inválido ou expirado");
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const reset = () => {
@@ -64,6 +119,8 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
     setCode("");
     setError("");
     setLoading(false);
+    setResendCooldown(0);
+    setCodeExpiresIn(null);
   };
 
   const handleClose = () => {
@@ -75,12 +132,12 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-red-600 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5" />
-            Excluir conta
-          </h3>
-          <button onClick={handleClose} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg">
+        <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-t-xl">
+          <div className="flex items-center gap-2">
+            <Trash2 className="w-5 h-5" />
+            <h3 className="text-lg font-semibold">Excluir Conta</h3>
+          </div>
+          <button onClick={handleClose} className="p-1.5 text-white hover:text-gray-200 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -139,10 +196,16 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
             </>
           ) : (
             <>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-gray-600 mb-2">
                 Enviamos um código de verificação para <strong>{userEmail}</strong>.
                 Digite o código abaixo para confirmar a exclusão da sua conta.
               </p>
+              
+              {codeExpiresIn !== null && codeExpiresIn > 0 && (
+                <p className="text-xs text-gray-400 mb-4">
+                  ⏱️ Código expira em {formatTime(codeExpiresIn)}
+                </p>
+              )}
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -171,18 +234,28 @@ export function AccountDeletionModal({ isOpen, onClose, onDeleted, userEmail }: 
                 className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                {loading ? "Verificando..." : "Confirmar exclusão"}
+                {loading ? "Verificando..." : "Confirmar exclusão permanente"}
               </button>
 
-              <button
-                onClick={() => {
-                  reset();
-                  setStep("confirm");
-                }}
-                className="w-full mt-3 py-2 text-gray-500 hover:text-gray-700 text-sm"
-              >
-                Voltar
-              </button>
+              <div className="flex gap-3 mt-3">
+                <button
+                  onClick={() => {
+                    reset();
+                    setStep("confirm");
+                  }}
+                  className="flex-1 py-2 text-gray-500 hover:text-gray-700 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={handleResendCode}
+                  disabled={resendCooldown > 0 || loading}
+                  className="flex-1 py-2 text-[#2F80D3] hover:text-[#236bb3] text-sm border border-[#2F80D3] rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${resendCooldown > 0 ? "animate-spin" : ""}`} />
+                  {resendCooldown > 0 ? `Reenviar (${resendCooldown}s)` : "Reenviar código"}
+                </button>
+              </div>
             </>
           )}
         </div>

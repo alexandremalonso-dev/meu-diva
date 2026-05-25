@@ -174,7 +174,7 @@ def update_user_role(
     
 
 # ==========================
-# EXCLUSÃO DE CONTA COM CÓDIGO
+# EXCLUSÃO DE CONTA COM CÓDIGO (EXCLUSÃO IMEDIATA + REENVIO)
 # ==========================
 
 def generate_deletion_code() -> str:
@@ -210,21 +210,17 @@ def request_account_deletion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Solicita exclusão da conta - envia código por e-mail"""
+    """Solicita exclusão da conta - envia código por e-mail (ou reenvia)"""
     try:
         print(f"🗑️ DELETE REQUEST - Usuário: {current_user.id} ({current_user.email})")
         
-        if current_user.deletion_status == "pending_deletion":
-            raise HTTPException(status_code=400, detail="Solicitação de exclusão já pendente")
-        
+        # Gerar novo código (sempre gera novo no reenvio)
         code = generate_deletion_code()
         expires_at = datetime.now() + timedelta(minutes=15)
         
         current_user.deletion_code = code
         current_user.deletion_code_expires_at = expires_at
-        current_user.deletion_status = "pending_deletion"
         current_user.deletion_requested_at = datetime.now()
-        current_user.deletion_scheduled_for = datetime.now() + timedelta(days=30)
         
         db.commit()
         
@@ -255,7 +251,7 @@ async def confirm_account_deletion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Confirma exclusão da conta com código recebido por e-mail"""
+    """Confirma exclusão da conta com código recebido por e-mail - EXCLUI IMEDIATAMENTE"""
     try:
         body_bytes = await request.body()
         if not body_bytes:
@@ -269,22 +265,49 @@ async def confirm_account_deletion(
         
         print(f"🗑️ DELETE CONFIRM - Usuário: {current_user.id} ({current_user.email}) - Código: {code}")
         
+        # Verificar se o código é válido
         if current_user.deletion_code != code:
             raise HTTPException(status_code=400, detail="Código de verificação inválido")
         
+        # Verificar se o código expirou
         if current_user.deletion_code_expires_at < datetime.now():
             raise HTTPException(status_code=400, detail="Código expirado. Solicite um novo código.")
         
-        current_user.deletion_confirmed_at = datetime.now()
+        # 🔥 DELETAR perfis associados antes de desativar o usuário
+        from app.models.therapist_profile import TherapistProfile
+        from app.models.patient_profile import PatientProfile
+
+        therapist_profile = db.query(TherapistProfile).filter(
+            TherapistProfile.user_id == current_user.id
+        ).first()
+        if therapist_profile:
+            db.delete(therapist_profile)
+            print(f"🗑️ Perfil terapeuta deletado: user_id={current_user.id}")
+
+        patient_profile = db.query(PatientProfile).filter(
+            PatientProfile.user_id == current_user.id
+        ).first()
+        if patient_profile:
+            db.delete(patient_profile)
+            print(f"🗑️ Perfil paciente deletado: user_id={current_user.id}")
+
+        # 🔥 EXCLUIR A CONTA IMEDIATAMENTE
+        current_user.is_active = False
+        current_user.email = f"deleted_{current_user.id}_{current_user.email}"
+        current_user.full_name = None
+        current_user.password_hash = None
+        
+        # Limpar campos de exclusão
         current_user.deletion_code = None
         current_user.deletion_code_expires_at = None
+        current_user.deletion_requested_at = None
+        current_user.deletion_status = "deleted"
         
         db.commit()
         
         return {
             "success": True,
-            "message": "Confirmação registrada. Sua conta será excluída permanentemente em 30 dias.",
-            "scheduled_for": current_user.deletion_scheduled_for.isoformat()
+            "message": "Sua conta foi excluída permanentemente com sucesso."
         }
         
     except HTTPException:
@@ -296,59 +319,3 @@ async def confirm_account_deletion(
         traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao confirmar exclusão: {str(e)}")
-
-
-@router.post("/me/delete-cancel")
-def cancel_account_deletion(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Cancela a solicitação de exclusão da conta"""
-    try:
-        print(f"🗑️ DELETE CANCEL - Usuário: {current_user.id} ({current_user.email})")
-        
-        if current_user.deletion_status != "pending_deletion":
-            raise HTTPException(status_code=400, detail="Não há solicitação de exclusão pendente")
-        
-        current_user.deletion_status = "active"
-        current_user.deletion_requested_at = None
-        current_user.deletion_scheduled_for = None
-        current_user.deletion_confirmed_at = None
-        current_user.deletion_code = None
-        current_user.deletion_code_expires_at = None
-        
-        db.commit()
-        
-        return {
-            "success": True,
-            "message": "Solicitação de exclusão cancelada. Sua conta está segura."
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Erro em DELETE CANCEL: {str(e)}")
-        traceback.print_exc()
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao cancelar exclusão: {str(e)}")
-
-
-@router.get("/me/delete-status")
-def get_deletion_status(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Verifica o status da solicitação de exclusão"""
-    try:
-        return {
-            "deletion_status": current_user.deletion_status or "active",
-            "deletion_requested_at": current_user.deletion_requested_at.isoformat() if current_user.deletion_requested_at else None,
-            "deletion_scheduled_for": current_user.deletion_scheduled_for.isoformat() if current_user.deletion_scheduled_for else None,
-            "deletion_confirmed_at": current_user.deletion_confirmed_at.isoformat() if current_user.deletion_confirmed_at else None,
-            "code_expires_in": (current_user.deletion_code_expires_at - datetime.now()).seconds // 60 if current_user.deletion_code_expires_at else None
-        }
-        
-    except Exception as e:
-        print(f"❌ Erro em DELETE STATUS: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Erro ao verificar status: {str(e)}")

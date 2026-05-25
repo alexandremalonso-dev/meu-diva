@@ -20,6 +20,8 @@ import {
   Users,
   Filter,
   Loader2,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -75,6 +77,9 @@ function BuscaContent() {
   const searchParams = useSearchParams();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // 🔥 Toggle de visualização: "grid" ou "list"
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
   const [terapeutas, setTerapeutas] = useState<Terapeuta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,13 +257,47 @@ function BuscaContent() {
           </div>
         ) : (
           <>
+            {/* Barra de resultados + toggle de view */}
             <div className="flex justify-between items-center mb-4">
               <p className="text-gray-600">
                 <strong>{totalResultados}</strong> terapeutas encontrados
               </p>
+
+              {/* 🔥 Toggle grid/lista — oculto no mobile */}
+              {!isMobile && (
+                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    title="Visualização em grade"
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === "grid"
+                        ? "bg-[#2F80D3] text-white"
+                        : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    <LayoutGrid size={18} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    title="Visualização em lista"
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === "list"
+                        ? "bg-[#2F80D3] text-white"
+                        : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    <List size={18} />
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-col gap-6">
+            {/* 🔥 Grid ou Lista dependendo do viewMode */}
+            <div className={
+              viewMode === "grid"
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+                : "flex flex-col gap-6"
+            }>
               {terapeutas.map((terapeuta) => (
                 isMobile ? (
                   <MobileCardTerapeuta
@@ -278,6 +317,7 @@ function BuscaContent() {
                       accepts_corporate_sessions: terapeuta.accepts_corporate_sessions,
                     }}
                     isLoggedIn={isLoggedIn}
+                    viewMode={viewMode}
                   />
                 )
               ))}
