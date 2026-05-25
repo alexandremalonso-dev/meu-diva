@@ -29,6 +29,13 @@ workflows:
       - name: Set up code signing settings
         script: |
           xcode-project use-profiles --project $XCODE_PROJECT
+      - name: Increment build number
+        script: |
+          cd $CM_BUILD_DIR/front/ios/App
+          LATEST=$(app-store-connect get-latest-testflight-build-number $BUNDLE_ID 2>/dev/null || echo "1")
+          BUILD_NUMBER=$((LATEST + 1))
+          echo "Setting build number to: $BUILD_NUMBER"
+          agvtool new-version -all $BUILD_NUMBER
       - name: Install and build
         script: |
           cd $CM_BUILD_DIR/front
