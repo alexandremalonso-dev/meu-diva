@@ -32,10 +32,8 @@ workflows:
       - name: Increment build number
         script: |
           cd $CM_BUILD_DIR/front/ios/App
-          LATEST=$(app-store-connect get-latest-testflight-build-number $BUNDLE_ID 2>/dev/null || echo "1")
-          BUILD_NUMBER=$((LATEST + 1))
-          echo "Setting build number to: $BUILD_NUMBER"
-          agvtool new-version -all $BUILD_NUMBER
+          agvtool new-version -all 10
+          agvtool new-marketing-version 1.0.2
       - name: Install and build
         script: |
           cd $CM_BUILD_DIR/front
