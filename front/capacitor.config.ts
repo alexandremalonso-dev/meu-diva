@@ -5,8 +5,12 @@ const config: CapacitorConfig = {
   appName: 'Meu Divã',
   webDir: 'public',
   server: {
-    url: 'https://meudiva-frontend-prod-fobtlq5wja-rj.a.run.app/mobile/splash',
+    url: 'https://meudiva-frontend-prod-fobtlq5wja-rj.a.run.app',
     cleartext: false,
+    allowNavigation: [
+      'api.meudivaonline.com',
+      'meudiva-api-backend-592671373665.southamerica-east1.run.app'
+    ]
   },
   plugins: {
     SplashScreen: {

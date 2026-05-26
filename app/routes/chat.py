@@ -78,7 +78,6 @@ def _build_conversation(thread: ChatThread, current_user_id: int, other_user: Us
         p = db.query(PatientProfile).filter(PatientProfile.user_id == other_user.id).first()
         if p: foto_url = p.foto_url
     elif other_user.role == "admin":
-        # ✅ Busca foto do AdminProfile
         try:
             from app.models.admin_profile import AdminProfile
             p = db.query(AdminProfile).filter(AdminProfile.user_id == other_user.id).first()
@@ -113,7 +112,6 @@ def _build_conversation(thread: ChatThread, current_user_id: int, other_user: Us
 
 # ==========================
 # GET CONVERSAS (paciente / terapeuta)
-# ✅ Inclui threads com admin (patient_id = NULL)
 # ==========================
 @router.get("/conversations", response_model=List[ChatConversationOut])
 def get_conversations(
@@ -125,7 +123,6 @@ def get_conversations(
     seen_thread_ids = set()
 
     if current_user.role == UserRole.therapist:
-        # 1. Threads normais terapeuta ↔ paciente (via appointments)
         appointments = db.query(Appointment).filter(
             and_(
                 Appointment.therapist_user_id == current_user.id,
@@ -162,7 +159,6 @@ def get_conversations(
                 "unread_count": unread,
             })
 
-        # ✅ 2. Threads com admin (patient_id = NULL, therapist_user_id = current_user.id)
         admin_threads = db.query(ChatThread).filter(
             or_(
                 and_(ChatThread.therapist_user_id == current_user.id, ChatThread.patient_id == None),
@@ -218,7 +214,6 @@ def get_conversations(
                 "unread_count": unread,
             })
 
-        # ✅ 2. Threads com admin
         admin_threads = db.query(ChatThread).filter(
             or_(
                 and_(ChatThread.patient_user_id == current_user.id, ChatThread.therapist_id == None),
@@ -290,8 +285,6 @@ def send_message(
     if current_user.id not in [thread.patient_user_id, thread.therapist_user_id]:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
-    # Admin bypassa can_chat
-    # Threads admin têm patient_id = NULL — terapeuta/paciente também bypassa can_chat nesse caso
     is_admin_thread = thread.patient_id is None and thread.therapist_id is None
     if current_user.role != UserRole.admin and not is_admin_thread:
         if current_user.role == UserRole.therapist:
@@ -311,6 +304,35 @@ def send_message(
     thread.updated_at = datetime.now()
     db.commit()
     db.refresh(new_message)
+
+    # 🔥 NOTIFICAÇÃO DE CHAT POR E-MAIL — best-effort, não interrompe o fluxo
+    try:
+        from app.services.email_service import email_service
+
+        recipient_user_id = (
+            thread.patient_user_id
+            if current_user.id == thread.therapist_user_id
+            else thread.therapist_user_id
+        )
+        recipient = db.query(User).filter(User.id == recipient_user_id).first()
+
+        if recipient and recipient.email:
+            recent_msgs = db.query(ChatMessage).filter(
+                ChatMessage.thread_id == thread.id
+            ).order_by(ChatMessage.created_at.desc()).limit(3).all()
+
+            recent_msgs_text = [m.message for m in reversed(recent_msgs)]
+
+            email_service.send_chat_notification(
+                to_email=recipient.email,
+                to_name=recipient.full_name or recipient.email,
+                sender_name=current_user.full_name or current_user.email,
+                messages=recent_msgs_text,
+                thread_id=thread.id,
+            )
+    except Exception as e:
+        print(f"⚠️ Erro ao enviar notificação de chat por e-mail: {e}")
+
     return new_message
 
 
@@ -338,7 +360,27 @@ def mark_as_read(
 
 
 # ==========================
-# ✅ ADMIN: LISTAR CONVERSAS DO ADMIN
+# EXCLUIR MENSAGEM
+# ==========================
+@router.delete("/messages/{message_id}")
+def delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.patient, UserRole.therapist, UserRole.admin]))
+):
+    """Exclui uma mensagem — somente o remetente pode excluir"""
+    message = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada")
+    if message.sender_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Apenas o remetente pode excluir a mensagem")
+    db.delete(message)
+    db.commit()
+    return {"success": True, "message": "Mensagem excluída com sucesso"}
+
+
+# ==========================
+# ADMIN: LISTAR CONVERSAS DO ADMIN
 # ==========================
 @router.get("/admin/conversations", response_model=List[ChatConversationOut])
 def get_admin_conversations(
@@ -384,7 +426,7 @@ def get_admin_conversations(
 
 
 # ==========================
-# ✅ ADMIN: INICIAR/ACESSAR CONVERSA — thread única, sem espelho
+# ADMIN: INICIAR/ACESSAR CONVERSA
 # ==========================
 @router.post("/admin/thread/{target_user_id}")
 def admin_get_or_create_thread(
@@ -396,7 +438,6 @@ def admin_get_or_create_thread(
     if not target:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    # ✅ Busca thread única em qualquer direção
     thread = db.query(ChatThread).filter(
         or_(
             and_(
@@ -411,8 +452,6 @@ def admin_get_or_create_thread(
     ).first()
 
     if not thread:
-        # ✅ Uma única thread — admin como patient_user_id, target como therapist_user_id
-        # O target verá essa mesma thread quando buscar conversas com admin
         thread = ChatThread(
             patient_id=None,
             therapist_id=None,

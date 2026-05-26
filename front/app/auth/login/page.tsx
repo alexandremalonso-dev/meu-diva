@@ -186,7 +186,7 @@ function LoginForm() {
         </form>
 
         <div className="mt-6 text-center">
-          <Link href="/auth/signup" className="text-[#E03673] hover:text-[#c02c5e] text-sm">
+          <Link href="/mobile/signup" className="text-[#E03673] hover:text-[#c02c5e] text-sm">
             Não tem uma conta? Cadastre-se
           </Link>
         </div>

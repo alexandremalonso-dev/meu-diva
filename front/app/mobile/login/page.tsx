@@ -1,337 +1,369 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import Image from "next/image";
-import { Eye, EyeOff, Fingerprint, LogIn } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { getApiBaseUrl } from "@/lib/api";
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
 
-const COLORS = {
-  primary: "#E03673",
-  secondary: "#2F80D3",
-  primaryDark: "#c02c5e",
-  gray: "#F9F5FF",
-  grayBorder: "#E5E7EB",
-  grayText: "#6B7280",
-  dark: "#3A3B21",
-};
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://meudiva-api-backend-592671373665.southamerica-east1.run.app";
+function isNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(window as any).Capacitor?.isNativePlatform?.();
+}
 
-export default function MobileLogin() {
+// ─── Componente principal ────────────────────────────────────────────────────
+
+function LoginForm() {
   const { login } = useAuth();
-  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setError("Preencha e-mail e senha.");
-      return;
-    }
-    setLoading(true);
+  // Biometria
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricPromptShown, setBiometricPromptShown] = useState(false);
+  const biometricChecked = useRef(false);
+
+  // ── Verifica biometria e dispara automaticamente se houver sessão salva ──
+  useEffect(() => {
+    if (!isNativeApp() || biometricChecked.current) return;
+    biometricChecked.current = true;
+
+    const hasSavedSession =
+      !!localStorage.getItem("refresh_token") &&
+      !!localStorage.getItem("biometric_email");
+
+    if (!hasSavedSession) return;
+
+    import("@aparajita/capacitor-biometric-auth")
+      .then(({ BiometricAuth }) =>
+        BiometricAuth.checkBiometry().then((result) => {
+          if (result.isAvailable) {
+            setBiometricAvailable(true);
+            // Dispara automaticamente ao abrir o app
+            triggerBiometric(BiometricAuth);
+          }
+        })
+      )
+      .catch(() => {});
+  }, []);
+
+  const triggerBiometric = async (BiometricAuth: any) => {
+    if (biometricPromptShown) return;
+    setBiometricPromptShown(true);
     setError("");
+
+    try {
+      await BiometricAuth.authenticate({
+        reason: "Confirme sua identidade para entrar no Meu Divã",
+        cancelTitle: "Usar senha",
+        allowDeviceCredential: true,
+        iosFallbackTitle: "Usar senha",
+        androidTitle: "Meu Divã",
+        androidSubtitle: "Confirme sua identidade",
+      });
+
+      // Autenticação biométrica aprovada — renova sessão via refresh token
+      const refreshToken = localStorage.getItem("refresh_token");
+      if (!refreshToken) throw new Error("Sessão expirada");
+
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!res.ok) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const data = await res.json();
+      if (data.access_token)
+        localStorage.setItem("access_token", data.access_token);
+      if (data.refresh_token)
+        localStorage.setItem("refresh_token", data.refresh_token);
+
+      setSuccess("Identidade confirmada! Entrando...");
+      setTimeout(() => (window.location.href = "/mobile/dashboard"), 800);
+    } catch (err: any) {
+      // Usuário cancelou — silencioso, mostra formulário normal
+      setBiometricPromptShown(false);
+      if (
+        err.message &&
+        !err.message.includes("cancel") &&
+        !err.message.includes("Cancel") &&
+        !err.message.includes("UserCancel")
+      ) {
+        // Sessão expirada ou erro real — limpa e pede login manual
+        localStorage.removeItem("refresh_token");
+        setError("Sessão expirada. Faça login com email e senha.");
+      }
+    }
+  };
+
+  // ── Ao clicar em "Entrar" — tenta biometria primeiro se disponível ──────
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    // Se tem biometria disponível e o campo email já está preenchido
+    // (usuário digitou), vai direto sem biometria
+    setLoading(true);
     try {
       await login(email, password);
-      localStorage.setItem('biometric_email', email);
-      localStorage.setItem('biometric_password', password);
-      router.replace("/mobile/dashboard");
-    } catch (e: any) {
-      setError(e?.message || "E-mail ou senha incorretos.");
+      setSuccess("Login realizado! Redirecionando...");
+    } catch (err: any) {
+      setError(err.message || "Erro ao fazer login");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleBiometric = async () => {
+  const handleSocialLogin = (provider: "google" | "microsoft") => {
+    setSocialLoading(true);
+    setError("");
+    const baseUrl = getApiBaseUrl();
+    window.location.href = `${baseUrl}/api/auth/${provider}/login`;
+  };
+
+  const handleAppleLogin = async () => {
+    setAppleLoading(true);
+    setError("");
     try {
-      const savedEmail = localStorage.getItem('biometric_email');
-      const savedPassword = localStorage.getItem('biometric_password');
-
-      if (!savedEmail || !savedPassword) {
-        setError("Faça login com e-mail e senha primeiro para ativar a biometria.");
-        return;
+      // Sempre usa OAuth web redirect — plugin removido por conflito de versões
+      const baseUrl = getApiBaseUrl();
+      window.location.href = `${baseUrl}/api/auth/apple/login`;
+    } catch (err: any) {
+      if (!err.message?.includes("cancel")) {
+        setError("Erro ao fazer login com Apple. Tente outro método.");
       }
-
-      await BiometricAuth.authenticate({
-        reason: "Acesse o Meu Divã",
-        cancelTitle: "Cancelar",
-        allowDeviceCredential: true,
-        iosFallbackTitle: "Usar senha",
-      });
-
-      setLoading(true);
-      await login(savedEmail, savedPassword);
-      router.replace("/mobile/dashboard");
-    } catch (e: any) {
-      if (e?.code !== 'userCancel') {
-        setError("Biometria não disponível. Use e-mail e senha.");
-      }
-    } finally {
-      setLoading(false);
+      setAppleLoading(false);
     }
+    // Sem setAppleLoading(false) — haverá redirect
   };
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      backgroundColor: COLORS.gray,
-      display: "flex",
-      flexDirection: "column",
-    }}>
-
-      {/* HEADER ROSA */}
-      <div style={{
-        backgroundColor: COLORS.primary,
-        padding: "48px 24px 40px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 12,
-      }}>
-        <div style={{
-          background: "white",
-          borderRadius: 20,
-          padding: "14px 20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}>
-          <Image src="/logo.png" alt="Meu Divã" width={180} height={72} style={{ objectFit: "contain" }} priority />
-        </div>
-        <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 14, marginTop: 4 }}>
-          Cuidado que Acolhe
-        </div>
-      </div>
-
-      {/* FORM */}
-      <div style={{
-        flex: 1,
-        padding: "32px 24px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}>
-        <div style={{ fontSize: 20, fontWeight: 500, color: COLORS.dark, marginBottom: 4 }}>
-          Entrar na sua conta
-        </div>
-
-        {/* E-MAIL */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 13, color: COLORS.grayText, fontWeight: 500 }}>E-mail</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="seu@email.com"
-            style={{
-              padding: "14px 16px",
-              borderRadius: 12,
-              border: `1px solid ${COLORS.grayBorder}`,
-              fontSize: 15,
-              backgroundColor: "white",
-              outline: "none",
-              color: COLORS.dark,
-            }}
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#f7f0f5" }}>
+      {/* Header rosa */}
+      <div
+        className="flex flex-col items-center justify-center pt-14 pb-10 px-6"
+        style={{ backgroundColor: "#E03673" }}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-lg p-4 mb-4"
+          style={{ width: 120, height: 120 }}
+        >
+          <Image
+            src="/logo.png"
+            alt="Meu Divã"
+            width={104}
+            height={104}
+            className="w-full h-full object-contain"
+            priority
           />
         </div>
+        <p className="text-white text-base font-light tracking-wide">
+          Cuidado que Acolhe
+        </p>
+      </div>
 
-        {/* SENHA */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: 13, color: COLORS.grayText, fontWeight: 500 }}>Senha</label>
-          <div style={{ position: "relative" }}>
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••"
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              style={{
-                width: "100%",
-                padding: "14px 48px 14px 16px",
-                borderRadius: 12,
-                border: `1px solid ${COLORS.grayBorder}`,
-                fontSize: 15,
-                backgroundColor: "white",
-                outline: "none",
-                color: COLORS.dark,
-                boxSizing: "border-box",
-              }}
-            />
-            <button
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: "absolute",
-                right: 14,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                color: COLORS.grayText,
-              }}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-        </div>
+      {/* Card de login */}
+      <div className="flex-1 bg-white rounded-t-3xl -mt-4 px-6 pt-8 pb-10">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">
+          Entrar na sua conta
+        </h1>
 
-        {/* ERRO */}
         {error && (
-          <div style={{
-            background: "#FEE2E2",
-            color: "#991B1B",
-            padding: "10px 14px",
-            borderRadius: 10,
-            fontSize: 13,
-          }}>
+          <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </div>
         )}
 
-        {/* BOTÃO ENTRAR */}
-        <button
-          onClick={handleLogin}
-          disabled={loading}
-          style={{
-            backgroundColor: loading ? "#f472a8" : COLORS.primary,
-            color: "white",
-            border: "none",
-            borderRadius: 12,
-            padding: "16px",
-            fontSize: 16,
-            fontWeight: 500,
-            cursor: loading ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            marginTop: 4,
-          }}
-        >
-          <LogIn size={18} />
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
+        {success && (
+          <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-xl border border-green-200 flex items-center gap-2 text-sm">
+            <CheckCircle className="w-4 h-4 shrink-0" />
+            {success}
+          </div>
+        )}
 
-        {/* BOTÃO BIOMETRIA */}
-        <button
-          onClick={handleBiometric}
-          disabled={loading}
-          style={{
-            backgroundColor: "white",
-            color: COLORS.secondary,
-            border: `1.5px solid ${COLORS.secondary}`,
-            borderRadius: 12,
-            padding: "14px",
-            fontSize: 15,
-            fontWeight: 500,
-            cursor: loading ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-          }}
-        >
-          <Fingerprint size={20} color={COLORS.secondary} />
-          Entrar com Digital / Face ID
-        </button>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* E-mail */}
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              E-mail
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none bg-gray-50 text-gray-800"
+              placeholder="seu@email.com"
+              required
+              disabled={loading || socialLoading}
+              autoComplete="email"
+            />
+          </div>
 
-        {/* DIVISOR */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ flex: 1, height: 1, background: COLORS.grayBorder }} />
-          <span style={{ fontSize: 12, color: COLORS.grayText }}>ou continue com</span>
-          <div style={{ flex: 1, height: 1, background: COLORS.grayBorder }} />
-        </div>
+          {/* Senha */}
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              Senha
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none bg-gray-50 text-gray-800 pr-12"
+                placeholder="••••••••••"
+                required
+                disabled={loading || socialLoading}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
 
-        {/* BOTÕES SOCIAL */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Botão Entrar
+              — Se há biometria disponível, mostra ícone de digital junto ao texto
+                para indicar que ele pode usar biometria ao clicar */}
           <button
-            onClick={() => {
-              sessionStorage.setItem('oauth_from_mobile', 'true');
-              window.location.href = `${API_URL}/api/auth/google`;
-            }}
-            style={{
-              backgroundColor: "white",
-              color: "#374151",
-              border: `1.5px solid ${COLORS.grayBorder}`,
-              borderRadius: 12,
-              padding: "14px",
-              fontSize: 15,
-              fontWeight: 500,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-            }}
+            type="submit"
+            disabled={loading || socialLoading}
+            className="w-full py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-opacity disabled:opacity-50"
+            style={{ backgroundColor: "#E03673" }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Entrar com Google
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                {/* Ícone de digital aparece sutilmente se biometria disponível */}
+                {biometricAvailable ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                  </svg>
+                )}
+                Entrar
+              </>
+            )}
           </button>
+        </form>
 
-          <button
-            onClick={() => {
-              sessionStorage.setItem('oauth_from_mobile', 'true');
-              window.location.href = `${API_URL}/api/auth/microsoft`;
-            }}
-            style={{
-              backgroundColor: "white",
-              color: "#374151",
-              border: `1.5px solid ${COLORS.grayBorder}`,
-              borderRadius: 12,
-              padding: "14px",
-              fontSize: 15,
-              fontWeight: 500,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24">
-              <path fill="#F25022" d="M1 1h10v10H1z"/>
-              <path fill="#00A4EF" d="M13 1h10v10H13z"/>
-              <path fill="#7FBA00" d="M1 13h10v10H1z"/>
-              <path fill="#FFB900" d="M13 13h10v10H13z"/>
-            </svg>
-            Entrar com Microsoft
-          </button>
-        </div>
-
-        {/* LINKS */}
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginTop: 8,
-        }}>
-          <button
-            onClick={() => router.push("/auth/forgot-password")}
-            style={{ background: "none", border: "none", color: COLORS.grayText, fontSize: 13, cursor: "pointer" }}
+        {/* Links */}
+        <div className="flex justify-between mt-4 mb-6">
+          <Link
+            href="/auth/forgot-password"
+            className="text-sm text-gray-500 hover:text-[#E03673]"
           >
             Esqueci minha senha
-          </button>
-          <button
-            onClick={() => router.push("/auth/signup")}
-            style={{ background: "none", border: "none", color: COLORS.primary, fontSize: 13, fontWeight: 500, cursor: "pointer" }}
+          </Link>
+          <Link
+            href="/auth/signup"
+            className="text-sm font-medium"
+            style={{ color: "#E03673" }}
           >
             Criar conta
+          </Link>
+        </div>
+
+        {/* Divisor */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-xs text-gray-400">ou continue com</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        {/* Sign in with Apple — SEMPRE VISÍVEL (Guideline 4.8) */}
+        <button
+          onClick={handleAppleLogin}
+          disabled={appleLoading}
+          className="w-full flex items-center justify-center gap-3 py-3.5 mb-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-900 transition-colors disabled:opacity-50"
+        >
+          {appleLoading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="white">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+            </svg>
+          )}
+          {appleLoading ? "Entrando..." : "Continuar com Apple"}
+        </button>
+
+        {/* Google e Microsoft */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => handleSocialLogin("google")}
+            disabled={loading || socialLoading}
+            className="flex-1 flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+            <span className="text-sm text-gray-600 font-medium">Google</span>
+          </button>
+
+          <button
+            onClick={() => handleSocialLogin("microsoft")}
+            disabled={loading || socialLoading}
+            className="flex-1 flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 23 23">
+              <path fill="#f35325" d="M1 1h10v10H1z" />
+              <path fill="#81bc06" d="M12 1h10v10H12z" />
+              <path fill="#05a6f0" d="M1 12h10v10H1z" />
+              <path fill="#ffba08" d="M12 12h10v10H12z" />
+            </svg>
+            <span className="text-sm text-gray-600 font-medium">Microsoft</span>
           </button>
         </div>
+
+        {socialLoading && (
+          <p className="text-xs text-center text-gray-400 mt-3 flex items-center justify-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Redirecionando para o provedor...
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <AuthProvider>
+      <LoginForm />
+    </AuthProvider>
   );
 }

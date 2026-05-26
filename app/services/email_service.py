@@ -291,6 +291,145 @@ class EmailService:
         
         return self._send_email(to_email, subject, body_html)
 
+# ==========================
+# ADICIONAR em email_service.py — método send_chat_notification
+# Adicionar dentro da classe EmailService, antes da linha "# Instância global"
+# ==========================
+
+    def send_chat_notification(
+        self,
+        to_email: str,
+        to_name: str,
+        sender_name: str,
+        messages: list,  # lista de strings com as mensagens recentes
+        thread_id: int,
+        app_url: str = "https://app.meudivaonline.com"
+    ) -> bool:
+        """
+        Envia notificação de nova mensagem no chat por e-mail.
+        Similar ao ZenKlub — mostra as mensagens recentes e link para responder.
+        """
+        logo_url = "https://meudivaonline.com/wp-content/uploads/favicon-meudiva.png"
+        chat_url = f"{app_url}/chat?thread={thread_id}"
+
+        # Monta as bolhas de mensagem
+        mensagens_html = ""
+        for msg in messages[-3:]:  # mostra no máximo as últimas 3
+            if msg.startswith('[IMAGE]'):
+                mensagens_html += """
+                <div style="background:#2F80D3;color:white;padding:10px 16px;border-radius:20px;margin-bottom:8px;display:inline-block;max-width:80%;">
+                    📷 Imagem
+                </div><br>"""
+            else:
+                mensagens_html += f"""
+                <div style="background:#2F80D3;color:white;padding:10px 16px;border-radius:20px;margin-bottom:8px;display:inline-block;max-width:80%;">
+                    {msg}
+                </div><br>"""
+
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"></head>
+        <body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
+            <div style="max-width:600px;margin:32px auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+                <!-- Header com logo -->
+                <div style="background:#2F80D3;padding:20px 24px;display:flex;align-items:center;gap:12px;">
+                    <img src="{logo_url}" alt="Meu Divã" style="width:40px;height:40px;border-radius:8px;object-fit:contain;background:white;padding:2px;">
+                    <span style="color:white;font-size:1.2rem;font-weight:700;">Meu Divã</span>
+                </div>
+
+                <!-- Corpo -->
+                <div style="padding:28px 24px;">
+                    <p style="font-size:1rem;color:#333;margin:0 0 8px;">
+                        <strong>{sender_name}</strong> quer conversar com você via Meu Divã
+                    </p>
+                    <p style="font-size:0.85rem;color:#888;margin:0 0 24px;">
+                        --- Acesse o app para responder ---
+                    </p>
+
+                    <p style="color:#555;margin:0 0 16px;">Olá, <strong>{to_name}</strong></p>
+                    <p style="color:#555;margin:0 0 20px;">
+                        Você recebeu novas mensagens de <strong>{sender_name}</strong>,
+                        visualize em "Chat" no app Meu Divã.
+                    </p>
+
+                    <!-- Mensagens -->
+                    <div style="margin-bottom:24px;">
+                        {mensagens_html}
+                    </div>
+
+                    <!-- Botão responder -->
+                    <a href="{chat_url}"
+                       style="display:inline-block;background:#E03673;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:600;font-size:0.95rem;">
+                        Responder agora
+                    </a>
+
+                    <p style="margin-top:28px;color:#888;font-size:0.85rem;">
+                        Em nome de {sender_name},<br>
+                        <strong>Time Meu Divã</strong>
+                    </p>
+                </div>
+
+                <!-- Footer -->
+                <div style="border-top:1px solid #eee;padding:16px 24px;text-align:center;">
+                    <img src="{logo_url}" alt="Meu Divã" style="width:28px;height:28px;border-radius:6px;object-fit:contain;vertical-align:middle;margin-right:8px;">
+                    <span style="color:#aaa;font-size:0.78rem;">Meu Divã · contato@meudivaonline.com</span>
+                    <br>
+                    <a href="{app_url}/chat/unsubscribe?thread={thread_id}"
+                       style="color:#bbb;font-size:0.75rem;margin-top:8px;display:inline-block;">
+                        Cancelar notificações deste chat
+                    </a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        subject = f"{sender_name} enviou uma mensagem para você - Meu Divã"
+        return self._send_email(to_email, subject, html)
+
+
+# ==========================
+# ADICIONAR em app/routes/chat.py — no endpoint send_message
+# Após db.commit() e db.refresh(new_message), adicionar:
+# ==========================
+
+# 🔥 NOTIFICAÇÃO DE CHAT POR E-MAIL
+# Cole este bloco após o db.refresh(new_message) no endpoint send_message:
+
+"""
+    # Notificar o destinatário por e-mail (em background, não bloqueia a resposta)
+    try:
+        from app.services.email_service import email_service
+
+        # Descobrir quem é o destinatário
+        recipient_user_id = (
+            thread.patient_user_id
+            if current_user.id == thread.therapist_user_id
+            else thread.therapist_user_id
+        )
+        recipient = db.query(User).filter(User.id == recipient_user_id).first()
+
+        if recipient and recipient.email:
+            # Buscar as últimas 3 mensagens da thread para mostrar no e-mail
+            recent_msgs = db.query(ChatMessage).filter(
+                ChatMessage.thread_id == thread.id
+            ).order_by(ChatMessage.created_at.desc()).limit(3).all()
+
+            recent_msgs_text = [m.message for m in reversed(recent_msgs)]
+
+            email_service.send_chat_notification(
+                to_email=recipient.email,
+                to_name=recipient.full_name or recipient.email,
+                sender_name=current_user.full_name or current_user.email,
+                messages=recent_msgs_text,
+                thread_id=thread.id,
+            )
+    except Exception as e:
+        print(f"⚠️ Erro ao enviar notificação de chat por e-mail: {e}")
+        # Não interrompe o fluxo — e-mail é best-effort
+"""
 
 # Instância global do serviço
 email_service = EmailService()

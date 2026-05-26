@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { getFotoSrc } from "@/lib/utils";
 import { 
   User, Star, ChevronLeft, ChevronRight, Calendar, Clock,
-  FileText, Tag, Brain, CheckCircle, Award, Building2, Heart
+  FileText, Tag, Brain, ShieldCheck, Award, Building2, Heart
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -252,24 +252,37 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
             <Heart size={16} style={{ fill: isFavorito ? CORES.rosa : "none", color: isFavorito ? CORES.rosa : "#9CA3AF", transition: "all 0.2s" }} />
           </button>
 
-          {/* Foto */}
-          <div style={{
-            width: "96px", height: "96px", borderRadius: "50%",
-            backgroundColor: "#E0EAF8",
-            backgroundImage: fotoUrl ? `url(${fotoUrl})` : "none",
-            backgroundSize: "cover", backgroundPosition: "center",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: `3px solid ${CORES.branco}`,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-          }}>
-            {!fotoUrl && <User size={40} color={CORES.azul} />}
+          {/* Foto com selo */}
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <div style={{
+              width: "96px", height: "96px", borderRadius: "50%",
+              backgroundColor: "#E0EAF8",
+              backgroundImage: fotoUrl ? `url(${fotoUrl})` : "none",
+              backgroundSize: "cover", backgroundPosition: "center",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: `3px solid ${CORES.branco}`,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+            }}>
+              {!fotoUrl && <User size={40} color={CORES.azul} />}
+            </div>
+            {terapeuta.verified && (
+              <div style={{ position: "absolute", bottom: "2px", right: "2px", backgroundColor: "#16A34A", borderRadius: "50%", width: "26px", height: "26px", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid white", boxShadow: "0 2px 6px rgba(0,0,0,0.25)" }}>
+                <ShieldCheck size={14} color="white" strokeWidth={2.5} />
+              </div>
+            )}
           </div>
 
           {/* Nome */}
           <h3 style={{ fontSize: "15px", fontWeight: "700", color: CORES.azul, textAlign: "center", margin: "12px 0 4px", lineHeight: "1.3" }}>
             {nomeCompleto}
-            {terapeuta.verified && <CheckCircle size={13} color="#16A34A" style={{ marginLeft: "4px", display: "inline", verticalAlign: "middle" }} />}
           </h3>
+
+          {/* Badge verificado abaixo do nome centralizado */}
+          {terapeuta.verified && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", backgroundColor: "#16A34A", color: "white", fontSize: "10px", fontWeight: "700", padding: "2px 8px", borderRadius: "20px", marginBottom: "4px", whiteSpace: "nowrap" }}>
+              <ShieldCheck size={10} strokeWidth={2.5} /> Verificado
+            </span>
+          )}
 
           {/* Especialidade em destaque */}
           {terapeuta.specialties && (
@@ -364,14 +377,30 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
             <Heart size={16} style={{ fill: isFavorito ? CORES.rosa : "none", color: isFavorito ? CORES.rosa : CORES.cinzaTexto, transition: "all 0.2s" }} />
           </button>
 
-          <div style={{ width: "120px", height: "120px", borderRadius: "50%", backgroundColor: CORES.cinzaClaro, backgroundImage: fotoUrl ? `url(${fotoUrl})` : "none", backgroundSize: "cover", backgroundPosition: "center", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px auto" }}>
-            {!fotoUrl && <User size={48} color={CORES.azul} />}
+          {/* Foto com selo */}
+          <div style={{ position: "relative", display: "inline-block", margin: "0 auto 16px auto" }}>
+            <div style={{ width: "120px", height: "120px", borderRadius: "50%", backgroundColor: CORES.cinzaClaro, backgroundImage: fotoUrl ? `url(${fotoUrl})` : "none", backgroundSize: "cover", backgroundPosition: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {!fotoUrl && <User size={48} color={CORES.azul} />}
+            </div>
+            {terapeuta.verified && (
+              <div style={{ position: "absolute", bottom: "4px", right: "4px", backgroundColor: "#16A34A", borderRadius: "50%", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", border: "3px solid white", boxShadow: "0 2px 6px rgba(0,0,0,0.25)" }}>
+                <ShieldCheck size={16} color="white" strokeWidth={2.5} />
+              </div>
+            )}
           </div>
 
-          <h3 style={{ fontSize: "20px", fontWeight: "bold", color: CORES.azul, textAlign: "center", marginBottom: "8px" }}>
+          <h3 style={{ fontSize: "20px", fontWeight: "bold", color: CORES.azul, textAlign: "center", marginBottom: "4px" }}>
             {nomeCompleto}
-            {terapeuta.verified && <CheckCircle size={16} color={CORES.verdeEscuro} style={{ marginLeft: "4px", display: "inline" }} />}
           </h3>
+
+          {/* Badge verificado abaixo do nome centralizado */}
+          {terapeuta.verified && (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "8px" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", backgroundColor: "#16A34A", color: "white", fontSize: "11px", fontWeight: "700", padding: "3px 10px", borderRadius: "20px", whiteSpace: "nowrap" }}>
+                <ShieldCheck size={11} strokeWidth={2.5} /> Verificado
+              </span>
+            </div>
+          )}
 
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", marginBottom: "12px", flexDirection: "column" }}>
             {renderStars()}

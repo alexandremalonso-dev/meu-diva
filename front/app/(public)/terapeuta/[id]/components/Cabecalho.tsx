@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Calendar, Coins, Star } from 'lucide-react';
+import { Calendar, Coins, Star, ShieldCheck } from 'lucide-react';
 import type { TerapeutaPublico } from '../types';
 import { getFotoSrc } from '@/lib/utils';
 
@@ -42,29 +42,54 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
   return (
     <div className="flex flex-col md:flex-row items-center gap-8">
       {/* Foto */}
-      <div className="w-32 h-32 rounded-full overflow-hidden bg-white/20 flex-shrink-0 border-4 border-white">
-        {fotoUrl ? (
-          <img
-            src={fotoUrl}
-            alt={nomeCompleto}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              if (e.currentTarget.parentElement) {
-                e.currentTarget.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center text-white text-4xl font-bold">${nomeCompleto.charAt(0) || '?'}</div>`;
-              }
+      <div className="relative w-32 h-32 flex-shrink-0">
+        <div className="w-32 h-32 rounded-full overflow-hidden bg-white/20 border-4 border-white">
+          {fotoUrl ? (
+            <img
+              src={fotoUrl}
+              alt={nomeCompleto}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                if (e.currentTarget.parentElement) {
+                  e.currentTarget.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center text-white text-4xl font-bold">${nomeCompleto.charAt(0) || '?'}</div>`;
+                }
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
+              {nomeCompleto.charAt(0) || '?'}
+            </div>
+          )}
+        </div>
+
+        {/* 🔥 Selo verificado na foto — círculo verde sólido com ícone branco */}
+        {terapeuta.verified && (
+          <div
+            title="Terapeuta Verificado"
+            style={{
+              position: "absolute",
+              bottom: "4px",
+              right: "4px",
+              backgroundColor: "#16A34A",
+              borderRadius: "50%",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "3px solid white",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
             }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
-            {nomeCompleto.charAt(0) || '?'}
+          >
+            <ShieldCheck size={18} color="white" strokeWidth={2.5} />
           </div>
         )}
       </div>
 
       {/* Informações */}
       <div className="flex-1 text-left">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+        <h1 className="text-3xl md:text-4xl font-bold text-white mb-1">
           {nomeCompleto}
         </h1>
 
@@ -80,14 +105,8 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
           </div>
         )}
 
-        {/* Verificado, avaliações e sessões */}
+        {/* Avaliações e sessões */}
         <div className="flex items-center gap-3 flex-wrap mb-3">
-          {terapeuta.verified && (
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: CORES.verdeEscuro, color: CORES.branco }}>
-              ✓ Verificado
-            </span>
-          )}
-
           <div className="flex items-center gap-1.5">
             <div className="flex gap-0.5">
               {[1, 2, 3, 4, 5].map(star => (
@@ -110,8 +129,8 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
           </span>
         </div>
 
-        {/* Preço e botão Agendar */}
-        <div className="flex items-center gap-4 flex-wrap mt-2">
+        {/* Preço, botão Agendar e badge verificado */}
+        <div className="flex items-center gap-3 flex-wrap mt-2">
           {terapeuta.session_price && (
             <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full">
               <Coins size={16} className="text-white" />
@@ -129,8 +148,30 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = CORES.rosa}
           >
             <Calendar size={16} />
-            {isLoggedIn ? "Agendar sessão" : "Entrar para agendar"}
+            Agendar
           </button>
+
+          {/* 🔥 Badge verificado ao lado do botão */}
+          {terapeuta.verified && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                backgroundColor: "#16A34A",
+                color: "white",
+                fontSize: "12px",
+                fontWeight: "700",
+                padding: "6px 14px",
+                borderRadius: "50px",
+                whiteSpace: "nowrap",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+              }}
+            >
+              <ShieldCheck size={14} strokeWidth={2.5} />
+              Terapeuta Verificado
+            </span>
+          )}
         </div>
       </div>
     </div>

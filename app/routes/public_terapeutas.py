@@ -47,6 +47,14 @@ def _db_weekday_to_python(db_weekday: int) -> int:
     return (db_weekday - 1) % 7
 
 
+def _perfil_completo(t: TherapistProfile) -> bool:
+    """Retorna True se o perfil tem foto, preço e bio preenchidos"""
+    tem_foto = bool(t.foto_url and t.foto_url.strip())
+    tem_preco = bool(t.session_price and t.session_price > 0)
+    tem_bio = bool(t.bio and t.bio.strip())
+    return tem_foto and tem_preco and tem_bio
+
+
 # ==========================
 # LISTAR TERAPEUTAS COM FILTROS
 # ==========================
@@ -65,8 +73,7 @@ def listar_terapeutas_publicos(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
 ):
-    print(f"\n📋 GET /public/terapeutas - Listando terapeutas")
-    print(f"   Filtros: nome={nome}, especialidade={especialidade}, abordagem={abordagem}, genero={genero}")
+    print(f"\n📋 GET /public/terapeutas - limit={limit}")
 
     query = select(TherapistProfile)
 
@@ -95,25 +102,32 @@ def listar_terapeutas_publicos(
     if duracao_50min:
         query = query.where(TherapistProfile.session_duration_50min == True)
 
-    query = query.order_by(
-        TherapistProfile.featured.desc(),
-        TherapistProfile.rating.desc(),
-        TherapistProfile.id
-    )
+    # Busca SEM limit do banco — ordena tudo no Python depois
+    terapeutas = db.execute(query).scalars().all()
 
-    offset = (page - 1) * limit
-    terapeutas = db.execute(query.offset(offset).limit(limit)).scalars().all()
-
-    # 🔥 Mostra TODOS os terapeutas, pagos sempre no topo
     from app.services.plan_priority import get_therapist_plan, PLAN_PRIORITY
 
     def get_plan_priority(therapist):
         plan = get_therapist_plan(therapist.user_id, db)
         return PLAN_PRIORITY.get(plan, 1)
 
-    terapeutas_ordenados = sorted(terapeutas, key=get_plan_priority, reverse=True)
+    is_search = any([nome, especialidade, abordagem, genero, preco_min, preco_max,
+                     lgbtqia_ally, duracao_30min, duracao_50min])
 
-    print(f"✅ Encontrados {len(terapeutas_ordenados)} terapeutas")
+    if is_search:
+        # 🔥 BUSCA: mostra todos, pagos primeiro, sem filtro de perfil completo
+        terapeutas_ordenados = sorted(terapeutas, key=get_plan_priority, reverse=True)
+    else:
+        # 🔥 HOMEPAGE / WORDPRESS: só perfis completos (foto + preço + bio), pagos primeiro, limite 10
+        completos = [t for t in terapeutas if _perfil_completo(t)]
+        terapeutas_ordenados = sorted(completos, key=get_plan_priority, reverse=True)[:10]
+
+    # Paginação para busca
+    if is_search:
+        offset = (page - 1) * limit
+        terapeutas_ordenados = terapeutas_ordenados[offset:offset + limit]
+
+    print(f"✅ Retornando {len(terapeutas_ordenados)} terapeutas (is_search={is_search})")
     return terapeutas_ordenados
 
 
@@ -161,7 +175,6 @@ def get_slots_disponiveis(
     db: Session = Depends(get_db)
 ):
     print(f"\n📢 GET /public/terapeutas/{terapeuta_id}/slots")
-    print(f"   Parâmetros: start_date={start_date}, end_date={end_date}, days={days}")
 
     profile = db.execute(
         select(TherapistProfile).where(TherapistProfile.id == terapeuta_id)
@@ -260,8 +273,6 @@ def get_slots_disponiveis(
     weekdays_available = set()
     for slots_by_wd in periods_with_slots.values():
         weekdays_available.update(slots_by_wd.keys())
-
-    print(f"📅 Dias da semana disponíveis (Python weekday): {weekdays_available}")
 
     for duration in durations_to_generate:
         step = timedelta(minutes=duration)
