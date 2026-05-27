@@ -33,7 +33,7 @@ workflows:
         script: |
           cd $CM_BUILD_DIR/front/ios/App
           agvtool new-version -all 13
-          agvtool new-marketing-version 1.0.2
+          agvtool new-marketing-version 1.0.3
       - name: Install and build
         script: |
           cd $CM_BUILD_DIR/front
