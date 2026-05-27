@@ -126,7 +126,7 @@ function ExcluirContaContent() {
               <li>Histórico de sessões e agendamentos</li>
               <li>Mensagens do chat</li>
               <li>Queixas e anotações terapêuticas</li>
-              <li>Dados de pagamento (tokens Stripe)</li>
+              <li>Dados de pagamento (tokens MercadoPago)</li>
               <li>Notificações e preferências</li>
             </ul>
           </div>
