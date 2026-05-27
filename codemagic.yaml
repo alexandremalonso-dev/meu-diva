@@ -16,47 +16,66 @@ workflows:
       xcode: latest
     scripts:
       - name: Set up keychain
-        script: |
-          keychain initialize
+        script: keychain initialize
+
       - name: Fetch signing files
         script: |
           app-store-connect fetch-signing-files $BUNDLE_ID \
-            --type IOS_APP_STORE \
-            --create
+            --type IOS_APP_STORE --create
+
       - name: Add certificates to keychain
-        script: |
-          keychain add-certificates
+        script: keychain add-certificates
+
       - name: Set up code signing settings
-        script: |
-          xcode-project use-profiles --project $XCODE_PROJECT
+        script: xcode-project use-profiles --project $XCODE_PROJECT
+
       - name: Increment build number
         script: |
           cd $CM_BUILD_DIR/front/ios/App
-          agvtool new-version -all 15
-          agvtool new-marketing-version 1.0.5
-      - name: Install and build
+          agvtool new-version -all 16
+          agvtool new-marketing-version 1.0.6
+
+      - name: Install dependencies
         script: |
           cd $CM_BUILD_DIR/front
           npm install
+
+      - name: Build Next.js
+        script: |
+          cd $CM_BUILD_DIR/front
           npm run build
+
+      # Cap sync DEPOIS do build — garante que o capacitor.config.ts compilado
+      # seja usado, copiando a URL correta (/mobile/splash) para o Xcode
       - name: Sync Capacitor iOS
         script: |
           cd $CM_BUILD_DIR/front
           npx cap sync ios
+
+      - name: Verify Capacitor config
+        script: |
+          echo "=== capacitor.config.ts ==="
+          cat $CM_BUILD_DIR/front/capacitor.config.ts
+          echo ""
+          echo "=== capacitor.config.json (se existir) ==="
+          cat $CM_BUILD_DIR/front/capacitor.config.json 2>/dev/null || echo "Não encontrado"
+
       - name: Resolve Swift packages
         script: |
           cd $CM_BUILD_DIR/front/ios/App
           xcodebuild -resolvePackageDependencies \
             -project App.xcodeproj \
             -scheme App
+
       - name: Build iOS
         script: |
           xcode-project build-ipa \
             --project $XCODE_PROJECT \
             --scheme $XCODE_SCHEME
+
     artifacts:
       - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
+
     publishing:
       app_store_connect:
         auth: integration
