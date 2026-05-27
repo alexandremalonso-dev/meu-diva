@@ -2,7 +2,7 @@
 
 const config: CapacitorConfig = {
   appId: 'com.meudiva.app',
-  appName: 'Meu Divã',
+  appName: 'Meu Div\u00e3',
   webDir: 'public',
   server: {
     url: 'https://meudiva-frontend-prod-fobtlq5wja-rj.a.run.app/mobile/splash',
@@ -25,3 +25,4 @@ const config: CapacitorConfig = {
 };
 
 export default config;
+
