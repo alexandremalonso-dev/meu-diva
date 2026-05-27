@@ -32,7 +32,7 @@ workflows:
       - name: Increment build number
         script: |
           cd $CM_BUILD_DIR/front/ios/App
-          agvtool new-version -all 12
+          agvtool new-version -all 13
           agvtool new-marketing-version 1.0.2
       - name: Install and build
         script: |
