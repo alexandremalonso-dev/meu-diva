@@ -9,7 +9,7 @@ import {
   useCallback,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { api, getApiBaseUrl } from "@/lib/api";
+import { api } from "@/lib/api";
 
 interface User {
   id: number;
@@ -33,31 +33,36 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Helpers de token centralizados
 const TokenStorage = {
   getAccess: () =>
-    typeof window !== "undefined"
-      ? localStorage.getItem("access_token")
-      : null,
+    typeof window !== "undefined" ? localStorage.getItem("access_token") : null,
   getRefresh: () =>
-    typeof window !== "undefined"
-      ? localStorage.getItem("refresh_token")
-      : null,
+    typeof window !== "undefined" ? localStorage.getItem("refresh_token") : null,
   setAccess: (t: string) => localStorage.setItem("access_token", t),
   setRefresh: (t: string) => localStorage.setItem("refresh_token", t),
-  // Salva email para uso na biometria
   setBiometricEmail: (email: string) =>
     localStorage.setItem("biometric_email", email),
   clear: () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
-    // Não limpa biometric_email propositalmente — usuário pode querer
-    // relogar com biometria depois
+    // Mantém biometric_email intencionalmente
   },
 };
 
-function redirectByRole(
-  role: string | undefined,
-  isMobile: boolean
-): string {
-  if (isMobile) return "/mobile/dashboard";
+/**
+ * Retorna true APENAS quando rodando dentro do app Capacitor nativo (iOS/Android).
+ * Acesso via browser — mesmo em rotas /mobile/* — retorna false.
+ */
+function isNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(window as any).Capacitor?.isNativePlatform?.();
+}
+
+/**
+ * Decide para onde redirecionar após login.
+ * - App nativo: sempre /mobile/dashboard
+ * - Web: por role
+ */
+function redirectByRole(role: string | undefined, native: boolean): string {
+  if (native) return "/mobile/dashboard";
   if (role === "therapist") return "/therapist/dashboard";
   if (role === "patient") return "/patient/dashboard";
   if (role === "admin") return "/admin/dashboard";
@@ -87,18 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (data.access_token) TokenStorage.setAccess(data.access_token);
     if (data.refresh_token) TokenStorage.setRefresh(data.refresh_token);
-
-    // Salva email para biometria futura
     TokenStorage.setBiometricEmail(email);
 
     const userData = data.user || (await api("/api/users/me"));
     setUser(userData);
 
-    const isMobile =
-      typeof window !== "undefined" &&
-      window.location.pathname.startsWith("/mobile");
-
-    window.location.href = redirectByRole(userData?.role, isMobile);
+    window.location.href = redirectByRole(userData?.role, isNativeApp());
   }, []);
 
   const logout = useCallback(async () => {
@@ -107,10 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       TokenStorage.clear();
       setUser(null);
-      const isMobile =
-        typeof window !== "undefined" &&
-        window.location.pathname.startsWith("/mobile");
-      window.location.href = isMobile ? "/mobile/login" : "/auth/login";
+      // No logout, usa isNativeApp() — não a URL
+      window.location.href = isNativeApp() ? "/mobile/login" : "/auth/login";
     }
   }, []);
 
@@ -126,21 +123,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "/como-funciona",
       "/precos",
       "/mobile/login",
+      "/mobile/signup",
       "/mobile/splash",
+      "/politica-privacidade",
+      "/termos-uso",
+      "/delete-account",
+      "/excluir-conta",
     ];
+
     const isPublicRoute = publicRoutes.some((r) => pathname?.startsWith(r));
-    const isMobile = pathname?.startsWith("/mobile");
+    const native = isNativeApp();
     const token = TokenStorage.getAccess();
 
     if (!token && !isPublicRoute) {
       setLoading(false);
-      if (isMobile) {
-        router.push("/mobile/login");
-      } else {
-        router.push(
-          `/auth/login?returnUrl=${encodeURIComponent(pathname || "")}`
-        );
-      }
+      // Redireciona para login correto conforme ambiente
+      router.push(
+        native
+          ? "/mobile/login"
+          : `/auth/login?returnUrl=${encodeURIComponent(pathname || "")}`
+      );
       return;
     }
 
@@ -151,23 +153,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     loadMe()
       .then((userData: any) => {
+        // Se já logado e está na tela de login, redireciona para dashboard
         const isLoginPage =
           pathname === "/auth/login" || pathname === "/mobile/login";
         if (isLoginPage && userData) {
-          router.push(redirectByRole(userData.role, !!isMobile));
+          router.push(redirectByRole(userData.role, native));
         }
       })
       .catch(() => {
         TokenStorage.clear();
         setUser(null);
         if (!isPublicRoute) {
-          if (isMobile) {
-            router.push("/mobile/login");
-          } else {
-            router.push(
-              `/auth/login?returnUrl=${encodeURIComponent(pathname || "")}`
-            );
-          }
+          router.push(
+            native
+              ? "/mobile/login"
+              : `/auth/login?returnUrl=${encodeURIComponent(pathname || "")}`
+          );
         }
       })
       .finally(() => setLoading(false));

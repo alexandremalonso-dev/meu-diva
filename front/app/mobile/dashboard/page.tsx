@@ -262,7 +262,7 @@ export default function MobileDashboard() {
           })}
         </div>
 
-        {/* CARDS LARGOS — terapeuta */}
+        {/* CARDS LARGOS — só terapeuta */}
         {role === "therapist" && (
           <>
             {[
@@ -288,40 +288,25 @@ export default function MobileDashboard() {
               );
             })}
 
-            {/* UPGRADE CARD */}
-            <div style={{ background: "linear-gradient(135deg, #2F80D3, #1a5fa8)", borderRadius: 14, padding: 14, marginBottom: 10, color: "white" }}>
-              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2, display: "flex", alignItems: "center", gap: 8 }}>
+            {/* AVISO DE PLANOS — sem preços nem botão de compra (Guideline 3.1.1) */}
+            <div style={{
+              background: "linear-gradient(135deg, #2F80D3, #1a5fa8)",
+              borderRadius: 14,
+              padding: 14,
+              marginBottom: 10,
+              color: "white",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
                 Potencialize sua prática
-                <span style={{ background: "#FB8811", color: "white", fontSize: 9, padding: "2px 6px", borderRadius: 6 }}>Comissões reduzidas</span>
               </div>
-              <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10 }}>Escolha o plano ideal para crescer</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500 }}>Profissional</div>
-                    <span style={{ background: "#FB8811", color: "white", fontSize: 9, padding: "1px 5px", borderRadius: 5 }}>Top</span>
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>R$ 79<span style={{ fontSize: 10, opacity: 0.8 }}>/mês</span></div>
-                  <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>Comissão: 10%</div>
-                </div>
-                <div style={{ background: "rgba(224,54,115,0.4)", borderRadius: 10, padding: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500 }}>Premium</div>
-                    <span style={{ background: "#E03673", color: "white", fontSize: 9, padding: "1px 5px", borderRadius: 5 }}>Melhor</span>
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 500 }}>R$ 149<span style={{ fontSize: 10, opacity: 0.8 }}>/mês</span></div>
-                  <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>Comissão: 3%</div>
-                </div>
-              </div>
-              <div
-                onClick={() => router.push("/planos")}
-                style={{ marginTop: 10, background: "white", color: COLORS.secondary, borderRadius: 8, padding: "8px", fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "center" }}
-              >
-                Upgrade Agora →
+              <div style={{ fontSize: 11, opacity: 0.85 }}>
+                Conheça nossos planos com comissões reduzidas em{" "}
+                <span style={{ fontWeight: 600 }}>meudivaonline.com</span>
               </div>
             </div>
           </>
         )}
+
       </div>
     </div>
   );

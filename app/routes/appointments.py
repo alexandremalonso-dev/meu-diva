@@ -341,9 +341,12 @@ def create_appointment(
             AvailabilityPeriod.end_date >= starts_at_local.date()
         ))).scalars().all()
 
-        # DEPOIS — pula validação se force=True e for terapeuta/admin
+        # 🔥 Pula validação se: force=True (terapeuta/admin) OU terapeuta está disponível agora
         force = getattr(payload, 'force', False)
-        skip_availability = force and (is_therapist or is_admin)
+        is_therapist = current_user.role == UserRole.therapist
+        is_admin = current_user.role == UserRole.admin
+        therapist_available_now = getattr(therapist_profile, 'is_available_now', False)
+        skip_availability = (force and (is_therapist or is_admin)) or therapist_available_now
 
         if not skip_availability:
             if not active_periods:
@@ -381,6 +384,12 @@ def create_appointment(
         saldo_insuficiente = False
         wallet_balance = 0
 
+        # 🔥 Preço proporcional para sessão de 30min: price / 5 * 3
+        duration_minutes = payload.duration_minutes or 50
+        session_price = float(therapist_profile.session_price or 0)
+        if duration_minutes == 30 and therapist_profile.session_duration_30min:
+            session_price = round(session_price / 5 * 3, 2)
+
         if current_user.role == UserRole.patient:
             from app.models.wallet import Wallet
             patient_profile = db.execute(select(PatientProfile).where(PatientProfile.user_id == patient_user_id)).scalar_one_or_none()
@@ -390,11 +399,11 @@ def create_appointment(
             if not wallet:
                 raise HTTPException(status_code=404, detail="Carteira do paciente não encontrada")
             wallet_balance = wallet.balance
-            if wallet.balance < therapist_profile.session_price:
+            if wallet.balance < session_price:
                 saldo_insuficiente = True
                 from app.core.audit import get_audit_service
                 audit = get_audit_service(db, current_user, request)
-                audit.log_insufficient_balance(patient_profile, therapist_profile, therapist_profile.session_price, wallet.balance, {"starts_at": str(starts_at), "therapist_id": payload.therapist_user_id})
+                audit.log_insufficient_balance(patient_profile, therapist_profile, session_price, wallet.balance, {"starts_at": str(starts_at), "therapist_id": payload.therapist_user_id})
 
         appt = Appointment(
             patient_user_id=patient_user_id,
@@ -402,8 +411,8 @@ def create_appointment(
             starts_at=starts_at,
             ends_at=ends_at,
             status=AppointmentStatus.scheduled,  # 🔥 NUNCA confirmado sem pagamento
-            session_price=therapist_profile.session_price or 0,
-            duration_minutes=payload.duration_minutes or 50,
+            session_price=session_price,
+            duration_minutes=duration_minutes,
         )
         db.add(appt)
         db.flush()
@@ -417,7 +426,7 @@ def create_appointment(
         db.commit()
         db.refresh(appt)
 
-        # 🔥 SE NÃO TEM SALDO, AGENDAR CANCELAMENTO AUTOMÁTICO APÓS 2 MINUTOS
+        # 🔥 SE NÃO TEM SALDO, AGENDAR CANCELAMENTO AUTOMÁTICO APÓS 15 MINUTOS
         if saldo_insuficiente:
             import threading
             thread = threading.Thread(target=_schedule_auto_cancel, args=(appt.id, 15))
@@ -468,7 +477,7 @@ def create_appointment(
             "starts_at": appt.starts_at, "ends_at": appt.ends_at, "status": appt.status.value,
             "session_price": appt.session_price, "duration_minutes": appt.duration_minutes,
             "needs_payment": saldo_insuficiente, "insufficient_balance": saldo_insuficiente,
-            "required_amount": therapist_profile.session_price if saldo_insuficiente else 0,
+            "required_amount": session_price if saldo_insuficiente else 0,
             "current_balance": wallet_balance
         }
 

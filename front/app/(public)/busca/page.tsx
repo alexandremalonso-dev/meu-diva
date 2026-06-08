@@ -44,6 +44,9 @@ interface Terapeuta {
   treatment?: string | null;
   is_available_now?: boolean;
   accepts_corporate_sessions?: boolean;
+  session_duration_30min?: boolean;
+  session_duration_50min?: boolean;
+  is_available_now?: boolean;
 }
 
 interface Filtros {
@@ -315,6 +318,9 @@ function BuscaContent() {
                       treatment: terapeuta.treatment,
                       is_available_now: terapeuta.is_available_now,
                       accepts_corporate_sessions: terapeuta.accepts_corporate_sessions,
+                      session_duration_30min: terapeuta.session_duration_30min,
+                      session_duration_50min: terapeuta.session_duration_50min,
+                      is_available_now: terapeuta.is_available_now,
                     }}
                     isLoggedIn={isLoggedIn}
                     viewMode={viewMode}

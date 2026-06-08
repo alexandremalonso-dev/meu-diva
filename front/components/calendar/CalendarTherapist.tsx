@@ -103,8 +103,19 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
     loadAvailabilityStatus();
     const params = new URLSearchParams(window.location.search);
     if (params.get("gcal") === "connected") {
-      showToast("Google Calendar conectado com sucesso! 🎉", "success");
+      showToast("Google Calendar conectado com sucesso!", "success");
       window.history.replaceState({}, "", window.location.pathname);
+      // 🔥 Salvar na central de notificações
+      (async () => {
+        try {
+          await apiCall({
+            url: "/api/notifications/google-calendar-connected",
+            method: "POST",
+            requireAuth: true,
+          });
+          window.dispatchEvent(new Event("notificationCreated"));
+        } catch (_) {}
+      })();
     }
   }, []);
 
@@ -526,7 +537,11 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         {toast && (
-          <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg ${toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+          <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium ${toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+            {toast.type === 'success'
+              ? <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              : <XCircle className="w-4 h-4 flex-shrink-0" />
+            }
             {toast.message}
           </div>
         )}

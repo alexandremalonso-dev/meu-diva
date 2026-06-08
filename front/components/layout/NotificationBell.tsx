@@ -37,6 +37,8 @@ const getIconByType = (type: string) => {
       return <Lock className="w-5 h-5 text-yellow-500" />;
     case 'invite_received':
       return <MessageSquare className="w-5 h-5 text-indigo-500" />;
+    case 'google_calendar_connected':
+      return <Calendar className="w-5 h-5 text-[#2F80D3]" />;
     default:
       return <Bell className="w-5 h-5 text-gray-500" />;
   }
@@ -131,6 +133,13 @@ export function NotificationBell() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // 🔥 Ouvir evento de nova notificação para atualizar o sino
+  useEffect(() => {
+    const handler = () => { loadUnreadCount(); loadNotifications(); };
+    window.addEventListener('notificationCreated', handler);
+    return () => window.removeEventListener('notificationCreated', handler);
+  }, [user]);
 
   const formatTime = (dateStr: string) => {
     try {

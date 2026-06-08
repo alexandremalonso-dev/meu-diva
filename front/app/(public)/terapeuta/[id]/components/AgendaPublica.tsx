@@ -18,9 +18,12 @@ interface AgendaResumida {
 interface AgendaPublicaProps {
   agenda: AgendaResumida | null;
   therapistId: string;
+  therapistUserId?: number;
   sessionPrice?: number;
   isLoggedIn?: boolean;
   onAgendar?: () => void;
+  sessionDuration30min?: boolean;
+  sessionDuration50min?: boolean;
 }
 
 const CORES = {
@@ -52,9 +55,12 @@ const getDateStr = (startsAt: string): string => {
 export function AgendaPublica({
   agenda: agendaInicial,
   therapistId,
+  therapistUserId,
   sessionPrice = 200,
   isLoggedIn = false,
   onAgendar,
+  sessionDuration30min = false,
+  sessionDuration50min = true,
 }: AgendaPublicaProps) {
   const router = useRouter();
 
@@ -64,6 +70,8 @@ export function AgendaPublica({
   const [loadingSlot, setLoadingSlot] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [durationModal, setDurationModal] = useState<{ slot: any } | null>(null);
+  const sessionPrice30 = Math.round((sessionPrice / 5) * 3 * 100) / 100;
 
   const hoje = new Date();
 
@@ -112,6 +120,17 @@ export function AgendaPublica({
   }, [therapistId, processarSlots]);
 
   useEffect(() => { carregarTodosSlots(); }, [carregarTodosSlots]);
+
+  // 🔥 Ouvir evento de agendamento imediato do Cabecalho
+  useEffect(() => {
+    const handler = (e: any) => {
+      const slot = e.detail;
+      if (slot) handleAgendar(slot);
+    };
+    window.addEventListener("agendarImediato", handler);
+    return () => window.removeEventListener("agendarImediato", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionDuration30min, therapistUserId, therapistId, sessionPrice, sessionPrice30, isLoggedIn]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -169,9 +188,15 @@ export function AgendaPublica({
       : `${d1}/${m1} – ${d2}/${m2} · ${mesAnoFmt}`
   })();
 
-  const handleAgendar = async (slot: any) => {
+  const handleAgendar = async (slot: any, durationMinutes?: number) => {
     if (!isLoggedIn) {
       onAgendar?.();
+      return;
+    }
+
+    // 🔥 Se aceita 30min e duração não foi escolhida ainda, abrir modal
+    if (!durationMinutes && sessionDuration30min) {
+      setDurationModal({ slot });
       return;
     }
 
@@ -183,14 +208,15 @@ export function AgendaPublica({
 
       const walletData = await api("/api/wallet/balance");
       const balance = walletData.balance || 0;
-      const duration = slot.duration_minutes || 50;
+      const duration = durationMinutes || 50;
+      const effectivePrice = duration === 30 ? sessionPrice30 : sessionPrice;
 
-      if (balance >= sessionPrice) {
+      if (balance >= effectivePrice) {
         // SALDO SUFICIENTE: cria appointment e confirma direto pela wallet
         const bookingData = await api("/api/appointments", {
           method: "POST",
           body: JSON.stringify({
-            therapist_user_id: Number(therapistId),
+            therapist_user_id: therapistUserId || Number(therapistId),
             starts_at: slot.starts_at,
             ends_at: slot.ends_at,
             duration_minutes: duration,
@@ -223,7 +249,7 @@ export function AgendaPublica({
       const bookingData = await api("/api/appointments", {
         method: "POST",
         body: JSON.stringify({
-          therapist_user_id: Number(therapistId),
+          therapist_user_id: therapistUserId || Number(therapistId),
           starts_at: slot.starts_at,
           ends_at: slot.ends_at,
           duration_minutes: duration,
@@ -246,6 +272,7 @@ export function AgendaPublica({
   };
 
   return (
+    <>
     <div style={{ backgroundColor: CORES.branco, borderRadius: "16px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", overflow: "hidden" }}>
 
       <div style={{ backgroundColor: CORES.azul, padding: isMobile ? "16px" : "24px" }}>
@@ -389,5 +416,31 @@ export function AgendaPublica({
         </div>
       </div>
     </div>
+      {/* 🔥 Modal de seleção de duração */}
+      {durationModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "24px", maxWidth: "320px", width: "90%", boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: CORES.azul, marginBottom: "8px", textAlign: "center" }}>Duração da sessão</h3>
+            <p style={{ fontSize: "13px", color: "#374151", textAlign: "center", marginBottom: "20px" }}>Escolha a duração para esta sessão</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button onClick={() => { setDurationModal(null); handleAgendar(durationModal.slot, 50); }}
+                style={{ padding: "14px", border: `2px solid ${CORES.azul}`, borderRadius: "12px", backgroundColor: "white", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ fontWeight: "700", color: CORES.azul, fontSize: "15px" }}>50 minutos</div>
+                <div style={{ color: "#374151", fontSize: "13px", marginTop: "2px" }}>R$ {sessionPrice.toFixed(2)}</div>
+              </button>
+              <button onClick={() => { setDurationModal(null); handleAgendar(durationModal.slot, 30); }}
+                style={{ padding: "14px", border: `2px solid ${CORES.rosa}`, borderRadius: "12px", backgroundColor: "white", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ fontWeight: "700", color: CORES.rosa, fontSize: "15px" }}>30 minutos</div>
+                <div style={{ color: "#374151", fontSize: "13px", marginTop: "2px" }}>R$ {sessionPrice30.toFixed(2)}</div>
+              </button>
+              <button onClick={() => setDurationModal(null)}
+                style={{ padding: "10px", border: "none", backgroundColor: "#F3F4F6", borderRadius: "10px", cursor: "pointer", color: "#374151", fontSize: "13px" }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

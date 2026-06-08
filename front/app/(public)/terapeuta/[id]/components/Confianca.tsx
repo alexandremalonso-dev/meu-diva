@@ -2,6 +2,7 @@
 
 import type { TerapeutaPublico } from '../types';
 import { ShieldCheck, Video, Lock, Instagram, ExternalLink } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 
 const CORES = {
   azul: "#2F80D3",
@@ -16,13 +17,17 @@ interface ConfiancaProps {
   terapeuta: TerapeutaPublico;
 }
 
-// ✅ Extrai o handle real do Instagram a partir da URL
 function extractInstagramHandle(url: string): string {
-  // Remove trailing slash, query params e hash
   const clean = url.replace(/[?#].*$/, '').replace(/\/$/, '');
   const parts = clean.split('/');
   const handle = parts[parts.length - 1];
   return handle ? `@${handle}` : '@instagram';
+}
+
+function formatWhatsApp(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('55') && digits.length >= 12) return digits;
+  return `55${digits}`;
 }
 
 const trustItems = [
@@ -53,7 +58,7 @@ const trustItems = [
     bg: '#fdf2f8',
     border: '#fbcfe8',
     title: 'Pagamento 100% seguro',
-    description: 'Processado via Stripe com criptografia de ponta a ponta',
+    description: 'Processado via MercadoPago com criptografia de ponta a ponta',
     alwaysShow: true,
   },
 ];
@@ -63,9 +68,12 @@ export function Confianca({ terapeuta }: ConfiancaProps) {
     ? extractInstagramHandle(terapeuta.instagram_url)
     : null;
 
+  const whatsapp = (terapeuta as any).show_phone_to_patients && (terapeuta as any).phone
+    ? formatWhatsApp((terapeuta as any).phone)
+    : null;
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* Header */}
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
         <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-[#E03673]" />
@@ -97,6 +105,32 @@ export function Confianca({ terapeuta }: ConfiancaProps) {
           );
         })}
 
+        {/* 🔥 WhatsApp com ícone real react-icons/fa */}
+        {whatsapp && (
+          <a
+            href={`https://wa.me/${whatsapp}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between gap-3 p-3 rounded-lg border border-green-100 bg-green-50 hover:bg-green-100 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: '#25D366' }}
+              >
+                <FaWhatsapp size={18} color="white" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">WhatsApp</p>
+                <p className="text-sm font-semibold text-gray-800 group-hover:text-green-700 transition-colors">
+                  {(terapeuta as any).phone}
+                </p>
+              </div>
+            </div>
+            <ExternalLink className="w-3.5 h-3.5 text-gray-400 group-hover:text-green-700 transition-colors flex-shrink-0" />
+          </a>
+        )}
+
         {/* Instagram */}
         {handle && (
           <a
@@ -106,14 +140,14 @@ export function Confianca({ terapeuta }: ConfiancaProps) {
             className="flex items-center justify-between gap-3 p-3 rounded-lg border border-pink-100 bg-gradient-to-r from-pink-50 to-purple-50 hover:from-pink-100 hover:to-purple-100 transition-all group"
           >
             <div className="flex items-center gap-3">
-              {/* Ícone Instagram com gradiente */}
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' }}>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' }}
+              >
                 <Instagram className="w-4 h-4 text-white" />
               </div>
               <div>
                 <p className="text-xs text-gray-500">Instagram</p>
-                {/* ✅ Handle real extraído da URL */}
                 <p className="text-sm font-semibold text-gray-800 group-hover:text-[#E03673] transition-colors">
                   {handle}
                 </p>

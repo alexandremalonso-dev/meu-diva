@@ -132,3 +132,25 @@ def update_preferences(
         "email_notifications_enabled": current_user.email_notifications_enabled,
         "email_preferences": current_user.email_preferences
     }
+
+# ==========================
+# ADICIONAR TAMBÉM em app/routes/notifications.py
+# Logo antes do último endpoint
+# ==========================
+ 
+@router.post("/google-calendar-connected")
+def notify_google_calendar_connected(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Cria notificação na central quando Google Calendar é conectado."""
+    service = NotificationService(db)
+    service.create_notification(
+        user_id=current_user.id,
+        type="google_calendar_connected",
+        title="Google Calendar conectado",
+        message="Suas sessões confirmadas serão sincronizadas automaticamente com sua agenda do Google.",
+        action_link="/therapist/dashboard",
+    )
+    # 🔥 Disparar evento para atualizar o sino em tempo real
+    return {"success": True}

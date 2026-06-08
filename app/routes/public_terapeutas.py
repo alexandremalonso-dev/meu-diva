@@ -70,6 +70,8 @@ def listar_terapeutas_publicos(
     lgbtqia_ally: Optional[bool] = Query(None, description="Aliado LGBTQIAPN+"),
     duracao_30min: Optional[bool] = Query(None, description="Sessão de 30 minutos"),
     duracao_50min: Optional[bool] = Query(None, description="Sessão de 50 minutos"),
+    disponivel_agora: Optional[bool] = Query(None, description="Disponível para atendimento imediato"),
+    aceita_corporativo: Optional[bool] = Query(None, description="Aceita plano empresa"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
 ):
@@ -101,6 +103,11 @@ def listar_terapeutas_publicos(
         query = query.where(TherapistProfile.session_duration_30min == True)
     if duracao_50min:
         query = query.where(TherapistProfile.session_duration_50min == True)
+    # 🔥 Filtros adicionados
+    if disponivel_agora:
+        query = query.where(TherapistProfile.is_available_now == True)
+    if aceita_corporativo:
+        query = query.where(TherapistProfile.accepts_corporate_sessions == True)
 
     # Busca SEM limit do banco — ordena tudo no Python depois
     terapeutas = db.execute(query).scalars().all()
@@ -260,11 +267,16 @@ def get_slots_disponiveis(
         for a in busy_appts
     ]
 
-    durations_to_generate = []
+    # 🔥 Granularidade da agenda pública:
+    # - Aceita ambas → slots de 30 em 30 (menor granularidade; paciente escolhe duração no modal)
+    # - Só 30min → slots de 30 em 30
+    # - Só 50min → slots de 50 em 50
     if profile.session_duration_30min:
-        durations_to_generate.append(30)
-    if profile.session_duration_50min:
-        durations_to_generate.append(50)
+        durations_to_generate = [30]
+    elif profile.session_duration_50min:
+        durations_to_generate = [50]
+    else:
+        durations_to_generate = [50]
     if not durations_to_generate:
         durations_to_generate = [50]
 

@@ -53,9 +53,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:8000",
+        # Produção
         "https://app.meudivaonline.com",
-        "https://homologacao.meudivaonline.com",
+        "https://api.meudivaonline.com",
+        # Frontend Cloud Run — ambas as URLs (hashes diferentes)
+        "https://meudiva-frontend-prod-fobtlq5wja-rj.a.run.app",
         "https://meudiva-frontend-prod-592671373665.southamerica-east1.run.app",
+        # Homologação
+        "https://homologacao.meudivaonline.com",
         "https://meudiva-frontend-non-prod-365415900882.southamerica-east1.run.app",
     ],
     allow_credentials=True,
@@ -374,9 +380,9 @@ def start_empresa_credit_scheduler():
     """Inicia o scheduler para renovação mensal de créditos de plano empresa"""
     try:
         from app.services.empresa_credit_scheduler import executar_rotina_mensal
-        
+
         scheduler = BackgroundScheduler()
-        
+
         # Executa no dia 1 de cada mês às 00:01
         scheduler.add_job(
             executar_rotina_mensal,
@@ -387,7 +393,7 @@ def start_empresa_credit_scheduler():
             id='empresa_credit_renewal',
             replace_existing=True
         )
-        
+
         scheduler.start()
         print("✅ Scheduler de créditos empresa iniciado (executa dia 1 às 00:01)")
     except Exception as e:

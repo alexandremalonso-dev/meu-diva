@@ -9,39 +9,10 @@ import { TherapistAddressList } from '@/components/therapist/profile/TherapistAd
 import { EmailChangeModal } from '@/components/ui/EmailChangeModal';
 import { AccountDeletionModal } from "@/components/ui/AccountDeletionModal";
 import { 
-  Loader2, 
-  AlertCircle, 
-  CheckCircle, 
-  User, 
-  Briefcase, 
-  DollarSign, 
-  Instagram,
-  Clock,
-  Shield,
-  Star,
-  Languages,
-  Heart,
-  GraduationCap,
-  Search,
-  Phone,
-  Calendar,
-  PenTool,
-  Video,
-  Building2,
-  CreditCard,
-  QrCode,
-  Eye,
-  EyeOff,
-  Info,
-  IdCard,
-  School,
-  Award,
-  Home,
-  Mail,
-  AlertTriangle,
-  Trash2,
-  ChevronDown,
-  ChevronUp
+  Loader2, AlertCircle, CheckCircle, User, Briefcase, DollarSign, Instagram,
+  Clock, Shield, Star, Languages, Heart, GraduationCap, Search, Phone, Calendar,
+  PenTool, Video, Building2, CreditCard, QrCode, Eye, EyeOff, Info, IdCard,
+  School, Award, Home, Mail, AlertTriangle, Trash2, ChevronDown, ChevronUp
 } from "lucide-react";
 
 type TherapistProfile = {
@@ -107,15 +78,10 @@ type UserData = {
 };
 
 const educationLevelOptions = [
-  "Ensino Fundamental incompleto",
-  "Ensino Fundamental completo",
-  "Ensino Médio incompleto",
-  "Ensino Médio completo",
-  "Ensino Superior incompleto",
-  "Ensino Superior completo",
-  "Pós-graduação (especialização)",
-  "Mestrado",
-  "Doutorado"
+  "Ensino Fundamental incompleto", "Ensino Fundamental completo",
+  "Ensino Médio incompleto", "Ensino Médio completo",
+  "Ensino Superior incompleto", "Ensino Superior completo",
+  "Pós-graduação (especialização)", "Mestrado", "Doutorado"
 ];
 
 const treatmentOptions = [
@@ -138,7 +104,6 @@ export default function TherapistProfilePage() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showDeletionModal, setShowDeletionModal] = useState(false);
   const [showDeletionSection, setShowDeletionSection] = useState(false);
-  
   const [showCpf, setShowCpf] = useState(false);
   const [showCnpj, setShowCnpj] = useState(false);
   
@@ -155,8 +120,14 @@ export default function TherapistProfilePage() {
     "Burnout", "Luto", "Trauma", "Fobias", "TOC", "Pânico", "Dependência Química",
     "Transtornos Alimentares", "Sexualidade", "Gênero", "Abuso", "Violência"
   ];
+  // 🔥 service_types com label correto (texto livre salvo no banco)
   const serviceTypeOptions = [
-    "psicologo", "psicanalista", "coach", "nutricionista", "psiquiatra", "terapeuta"
+    { value: "Psicólogo(a)", label: "Psicólogo(a)" },
+    { value: "Psicanalista", label: "Psicanalista" },
+    { value: "Coach", label: "Coach" },
+    { value: "Nutricionista", label: "Nutricionista" },
+    { value: "Psiquiatra", label: "Psiquiatra" },
+    { value: "Terapeuta", label: "Terapeuta" },
   ];
   const languageOptions = ["Português", "Inglês", "Espanhol", "Francês", "Alemão", "Italiano", "Mandarim", "Japonês"];
   const pixKeyTypeOptions = [
@@ -286,9 +257,7 @@ export default function TherapistProfilePage() {
         });
       }
       setProfile(data);
-      if (data.foto_url) {
-        setFotoUrl(data.foto_url);
-      }
+      if (data.foto_url) setFotoUrl(data.foto_url);
     } catch (error) {
       console.error("Erro ao carregar perfil:", error);
       setError("Erro ao carregar perfil");
@@ -417,12 +386,7 @@ export default function TherapistProfilePage() {
       if (typeof loadMe === 'function') await loadMe();
       await loadProfile();
       setSuccess("Perfil atualizado com sucesso!");
-      window.dispatchEvent(new CustomEvent('refreshProfile')); 
-      
-      
-      // 🔥 DISPARAR EVENTO PARA ATUALIZAR O HEADER
       window.dispatchEvent(new CustomEvent('refreshProfile'));
-      
     } catch (err: any) {
       console.error("❌ Erro ao salvar:", err);
       setError(err.message || "Erro ao salvar perfil");
@@ -607,7 +571,7 @@ export default function TherapistProfilePage() {
                 <textarea value={formData.bio} onChange={(e) => handleChange("bio", e.target.value)} rows={4} className="w-full p-2 border rounded-lg" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Especialidades (texto libre)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Especialidades (texto livre)</label>
                 <input type="text" value={formData.specialties} onChange={(e) => handleChange("specialties", e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Ex: Psicanálise, TCC, Terapia de Casal" />
               </div>
               <div>
@@ -690,18 +654,11 @@ export default function TherapistProfilePage() {
                 </div>
               </div>
 
-              {/* 🔥 CAMPO DO PREÇO CORRIGIDO - step removido */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <DollarSign className="w-4 h-4" />Preço da sessão (R$)
                 </label>
-                <input 
-                  type="number" 
-                  value={formData.session_price} 
-                  onChange={(e) => handleChange("session_price", e.target.value)} 
-                  className="w-full p-2 border rounded-lg" 
-                  min="0" 
-                />
+                <input type="number" value={formData.session_price} onChange={(e) => handleChange("session_price", e.target.value)} className="w-full p-2 border rounded-lg" min="0" />
               </div>
 
               <div>
@@ -806,7 +763,6 @@ export default function TherapistProfilePage() {
               )}
             </div>
 
-            {/* Exclusão de conta — colapsável, dentro do bloco LGPD */}
             <div className="mt-6 pt-4 border-t border-gray-100">
               <button
                 type="button"
@@ -817,10 +773,7 @@ export default function TherapistProfilePage() {
                   <AlertTriangle className="w-4 h-4 text-gray-400" />
                   Exclusão de conta e dados
                 </span>
-                {showDeletionSection
-                  ? <ChevronUp className="w-4 h-4 text-gray-400" />
-                  : <ChevronDown className="w-4 h-4 text-gray-400" />
-                }
+                {showDeletionSection ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
               </button>
 
               {showDeletionSection && (
@@ -916,16 +869,19 @@ export default function TherapistProfilePage() {
                 ))}
               </div>
             </div>
+
+            {/* 🔥 Tipo de profissional — valores corrigidos com acentos */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de profissional</label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {serviceTypeOptions.map(type => (
-                  <label key={type} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={formData.service_types.includes(type)} onChange={() => toggleArrayItem("service_types", type)} className="h-4 w-4 text-[#E03673] rounded" />{type}
+                {serviceTypeOptions.map(opt => (
+                  <label key={opt.value} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={formData.service_types.includes(opt.value)} onChange={() => toggleArrayItem("service_types", opt.value)} className="h-4 w-4 text-[#E03673] rounded" />{opt.label}
                   </label>
                 ))}
               </div>
             </div>
+
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
                 <Languages className="w-4 h-4" />Idiomas
@@ -969,7 +925,6 @@ export default function TherapistProfilePage() {
         </form>
       </div>
 
-      {/* Modal de Exclusão de Conta */}
       <AccountDeletionModal
         isOpen={showDeletionModal}
         onClose={() => setShowDeletionModal(false)}
@@ -977,7 +932,6 @@ export default function TherapistProfilePage() {
         userEmail={userData?.email || user?.email || ""}
       />
 
-      {/* Modal de Alteração de E-mail */}
       <EmailChangeModal
         isOpen={showEmailModal}
         onClose={() => setShowEmailModal(false)}

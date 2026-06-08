@@ -22,6 +22,23 @@ interface CabecalhoProps {
   onAgendar?: () => void;
 }
 
+// 🔥 Calcula o próximo slot arredondado para cima (30min)
+function getNextSlot(): { starts_at: string; ends_at: string; label: string } {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const roundedMinutes = minutes < 30 ? 30 : 0;
+  const hoursAdd = minutes < 30 ? 0 : 1;
+  const next = new Date(now);
+  next.setMinutes(roundedMinutes, 0, 0);
+  next.setHours(next.getHours() + hoursAdd);
+  const label = next.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return {
+    starts_at: next.toISOString(),
+    ends_at: new Date(next.getTime() + 50 * 60000).toISOString(),
+    label,
+  };
+}
+
 export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: CabecalhoProps) {
   const router = useRouter();
   const [isMobile, setIsMobile] = useState(false);
@@ -94,14 +111,15 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
         </h1>
 
         {/* Tipo de profissional */}
-        {terapeuta.service_types && terapeuta.service_types.length > 0 && (
-          <div className="text-white/90 text-lg mb-2">
-            {terapeuta.service_types.map((tipo, i) => (
-              <span key={i} className="text-white">
-                {tipo === 'psicanalista' ? 'Psicanalista' : tipo}
-                {terapeuta.service_types && i < terapeuta.service_types.length - 1 ? ' • ' : ''}
-              </span>
-            ))}
+        {terapeuta.specialties && (
+          <div className="text-white/90 text-lg mb-1">
+            <span className="text-white">{terapeuta.specialties}</span>
+          </div>
+        )}
+        {/* Abordagem — linha separada */}
+        {terapeuta.abordagem && (
+          <div className="text-white/70 text-sm mb-2">
+            <span>{terapeuta.abordagem}</span>
           </div>
         )}
 
@@ -150,6 +168,22 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
             <Calendar size={16} />
             Agendar
           </button>
+
+          {/* 🔥 Badge disponível agora com slot imediato */}
+          {(terapeuta as any).is_available_now && (
+            <button
+              onClick={() => {
+                const slot = getNextSlot();
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("agendarImediato", { detail: slot }));
+                }
+              }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", backgroundColor: "#059669", color: "white", fontSize: "12px", fontWeight: "700", padding: "6px 14px", borderRadius: "50px", whiteSpace: "nowrap", border: "none", cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }}
+            >
+              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#6EE7B7", display: "inline-block" }} />
+              Agendar às {getNextSlot().label}
+            </button>
+          )}
 
           {/* 🔥 Badge verificado ao lado do botão */}
           {terapeuta.verified && (

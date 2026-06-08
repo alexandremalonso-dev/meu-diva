@@ -2,26 +2,57 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import Image from "next/image";
-import { useAuth } from "@/contexts/AuthContext";
 
+// Splash NÃO usa AuthContext — controla o redirect ela mesma
+// Motivo: AuthContext pode redirecionar antes do splash terminar
 export default function MobileSplash() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
+  const redirected = useRef(false);
 
   useEffect(() => {
-    if (loading) return;
-    const timer = setTimeout(() => {
-      if (user) {
-        router.replace("/mobile/dashboard");
-      } else {
-        router.replace("/mobile/login");
+    const timer = setTimeout(async () => {
+      if (redirected.current) return;
+      redirected.current = true;
+
+      // Verifica token diretamente — sem depender do AuthContext
+      const token = localStorage.getItem("access_token");
+
+      if (!token) {
+        window.location.replace("/mobile/login");
+        return;
+      }
+
+      // Tenta validar o token com o backend
+      try {
+        const baseUrl = (() => {
+          const host = window.location.hostname;
+          if (host.includes("app.meudivaonline.com") || host.includes("meudiva-frontend-prod")) {
+            return "https://api.meudivaonline.com";
+          }
+          return "http://localhost:8000";
+        })();
+
+        const res = await fetch(`${baseUrl}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          window.location.replace("/mobile/dashboard");
+        } else {
+          // Token inválido — limpa e vai para login
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+          window.location.replace("/mobile/login");
+        }
+      } catch {
+        // Erro de rede — se tem token, tenta o dashboard mesmo assim
+        window.location.replace("/mobile/dashboard");
       }
     }, 2800);
+
     return () => clearTimeout(timer);
-  }, [user, loading]);
+  }, []);
 
   return (
     <div style={{
@@ -35,15 +66,14 @@ export default function MobileSplash() {
       overflow: "hidden",
       position: "relative",
     }}>
-
-      {/* BOLINHAS DE FUNDO decorativas */}
+      {/* Bolinhas decorativas de fundo */}
       <div style={{ position: "absolute", top: 60, left: 40, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
       <div style={{ position: "absolute", top: 140, right: 20, width: 70, height: 70, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
       <div style={{ position: "absolute", bottom: 120, left: 20, width: 90, height: 90, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
       <div style={{ position: "absolute", bottom: 60, right: 40, width: 130, height: 130, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
       <div style={{ position: "absolute", top: "40%", left: -30, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
 
-      {/* LOGO — sem fundo branco, grande e com drop-shadow */}
+      {/* Logo */}
       <Image
         src="/logo-mobile.png"
         alt="Meu Divã"
@@ -56,20 +86,15 @@ export default function MobileSplash() {
         priority
       />
 
-      {/* TAGLINE */}
+      {/* Tagline */}
       <div style={{ textAlign: "center" }}>
         <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 16, letterSpacing: 0.5 }}>
           Cuidado que Acolhe
         </div>
       </div>
 
-      {/* BOLINHAS SUBINDO */}
-      <div style={{
-        display: "flex",
-        alignItems: "flex-end",
-        gap: 12,
-        height: 44,
-      }}>
+      {/* Bolinhas animadas */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, height: 44 }}>
         {[
           { size: 10, delay: "0s", color: "rgba(255,255,255,0.95)" },
           { size: 14, delay: "0.2s", color: "rgba(255,255,255,0.85)" },

@@ -18,14 +18,14 @@ import {
   CalendarDays,
   Timer,
   TrendingUp,
-  Loader2
+  Loader2,
+  AlertTriangle
 } from "lucide-react";
 
 export default function TherapistAvailabilityPage() {
   const { user } = useAuth();
   const router = useRouter();
   
-  // 🔥 USANDO O HOOK useApi
   const { execute: apiCall, loading: apiLoading, error: apiError } = useApi();
   
   const [periods, setPeriods] = useState<AvailabilityPeriod[]>([]);
@@ -34,16 +34,18 @@ export default function TherapistAvailabilityPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   
-  // Estado para novo período
   const [period, setPeriod] = useState({
     start_date: "",
     end_date: ""
   });
 
-  // Estado para slots do novo período
   const [slots, setSlots] = useState<Omit<AvailabilitySlot, 'id' | 'period_id' | 'created_at'>[]>([
     { weekday: 1, start_time: "07:00", end_time: "08:00" }
   ]);
+
+  // 🔥 Modal de confirmação customizado
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; periodId: number | null }>({ open: false, periodId: null });
+  const [deleting, setDeleting] = useState(false);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
@@ -55,7 +57,6 @@ export default function TherapistAvailabilityPage() {
     return `${d}/${m}/${y}`;
   };
 
-  // 🔥 REFATORADO: USANDO apiCall EM VEZ DE api()
   const loadPeriods = useCallback(async () => {
     try {
       const data = await apiCall({ 
@@ -162,7 +163,6 @@ export default function TherapistAvailabilityPage() {
     return start <= end;
   };
 
-  // 🔥 REFATORADO: USANDO apiCall EM VEZ DE api()
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -215,7 +215,6 @@ export default function TherapistAvailabilityPage() {
         slots: slots
       };
 
-      // 🔥 USANDO apiCall EM VEZ DE api()
       const data = await apiCall({
         url: "/api/therapist/availability/periods",
         method: "POST",
@@ -239,17 +238,18 @@ export default function TherapistAvailabilityPage() {
     }
   }
 
-  // 🔥 REFATORADO: USANDO apiCall EM VEZ DE api()
-  async function deletePeriod(id: number) {
-    if (!confirm("Remover este período e todos os seus horários?")) return;
+  // 🔥 Abre modal customizado em vez de confirm() nativo
+  const handleDeleteClick = (id: number) => {
+    setConfirmModal({ open: true, periodId: id });
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!confirmModal.periodId) return;
+    setDeleting(true);
     try {
-      const numericId = Number(id);
-      if (isNaN(numericId)) {
-        throw new Error("ID inválido");
-      }
+      const numericId = Number(confirmModal.periodId);
+      if (isNaN(numericId)) throw new Error("ID inválido");
 
-      // 🔥 USANDO apiCall EM VEZ DE api()
       await apiCall({
         url: `/api/therapist/availability/periods/${numericId}`,
         method: "DELETE",
@@ -258,14 +258,15 @@ export default function TherapistAvailabilityPage() {
 
       setPeriods(prevPeriods => prevPeriods.filter(p => p.id !== numericId));
       setSuccess("Período removido com sucesso!");
-      
       setTimeout(() => setSuccess(""), 3000);
-      
     } catch (err: any) {
       console.error("Erro ao remover:", err);
       setError(err.message || "Erro ao remover período");
+    } finally {
+      setDeleting(false);
+      setConfirmModal({ open: false, periodId: null });
     }
-  }
+  };
 
   const timeOptions = useCallback(() => {
     const options = [];
@@ -278,7 +279,6 @@ export default function TherapistAvailabilityPage() {
     return options;
   }, []);
 
-  // 🔥 CORREÇÃO: REMOVER MAINLAYOUT
   if (loading) return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex justify-center">
       <Loader2 className="w-8 h-8 text-[#E03673] animate-spin" />
@@ -287,7 +287,6 @@ export default function TherapistAvailabilityPage() {
 
   return (
     <>
-      {/* MENSAGEM DE BOAS-VINDAS */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
         <div className="flex items-center gap-2">
           <Settings className="w-6 h-6 text-[#E03673]" />
@@ -311,7 +310,6 @@ export default function TherapistAvailabilityPage() {
           </div>
         )}
 
-        {/* Formulário para adicionar novo período */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
           <div className="flex items-center gap-2 mb-4">
             <Plus className="w-5 h-5 text-[#E03673]" />
@@ -319,7 +317,6 @@ export default function TherapistAvailabilityPage() {
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Datas do período */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
@@ -349,7 +346,6 @@ export default function TherapistAvailabilityPage() {
               </div>
             </div>
 
-            {/* Slots de horário */}
             <div>
               <div className="flex justify-between items-center mb-3">
                 <label className="block text-sm font-medium text-gray-700 flex items-center gap-1">
@@ -423,7 +419,6 @@ export default function TherapistAvailabilityPage() {
               )}
             </div>
 
-            {/* Botões */}
             <div className="flex justify-end gap-3">
               <button
                 type="button"
@@ -449,7 +444,6 @@ export default function TherapistAvailabilityPage() {
           </form>
         </div>
 
-        {/* Lista de períodos existentes */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
             <CalendarDays className="w-5 h-5 text-[#E03673]" />
@@ -476,8 +470,9 @@ export default function TherapistAvailabilityPage() {
                         {period.slots.length} {period.slots.length === 1 ? 'horário' : 'horários'}
                       </p>
                     </div>
+                    {/* 🔥 Substituído confirm() por modal customizado */}
                     <button
-                      onClick={() => period.id && deletePeriod(period.id)}
+                      onClick={() => period.id && handleDeleteClick(period.id)}
                       className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -502,6 +497,42 @@ export default function TherapistAvailabilityPage() {
           )}
         </div>
       </div>
+
+      {/* 🔥 Modal de confirmação no padrão da plataforma */}
+      {confirmModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full shadow-xl overflow-hidden">
+            <div className="p-5 border-b border-gray-100">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Remover período</h3>
+              </div>
+              <p className="text-gray-600 text-sm">
+                Esta ação removerá o período e <strong>todos os seus horários</strong> cadastrados. Não pode ser desfeita.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 p-4 bg-gray-50">
+              <button
+                onClick={() => setConfirmModal({ open: false, periodId: null })}
+                disabled={deleting}
+                className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deleting ? "Removendo..." : "Confirmar remoção"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

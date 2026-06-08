@@ -624,19 +624,40 @@ async def confirm_account_deletion(
 
 
 # ==========================
-# GOOGLE LOGIN
+# GOOGLE LOGIN — com suporte a contexto mobile via state
 # ==========================
 
 @router.get("/google/login")
-async def google_login(request: Request):
+async def google_login(request: Request, db: Session = Depends(get_db)):
     if not oauth.google:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
     import os
+    from app.models.oauth_state import OAuthState
+
     redirect_uri = os.getenv(
         "GOOGLE_REDIRECT_URI",
         "https://meudiva-api-backend-592671373665.southamerica-east1.run.app/api/auth/google/callback"
     )
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+    is_mobile = request.query_params.get("mobile") == "true"
+    raw_state = secrets.token_urlsafe(32)
+    context = "mobile" if is_mobile else "web"
+    state = f"{raw_state}:{context}"
+
+    db.add(OAuthState(state=state))
+    db.commit()
+
+    google_auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth"
+        f"?client_id={os.getenv('GOOGLE_CLIENT_ID')}"
+        f"&redirect_uri={redirect_uri}"
+        f"&response_type=code"
+        f"&scope=openid%20email%20profile"
+        f"&state={state}"
+        f"&access_type=offline"
+    )
+    return RedirectResponse(url=google_auth_url)
 
 
 @router.get("/google/callback")
@@ -645,8 +666,50 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
     try:
-        token = await oauth.google.authorize_access_token(request)
-        user_info = await get_google_user_info(token["access_token"])
+        from app.models.oauth_state import OAuthState
+        import os
+        import httpx
+
+        state_param = request.query_params.get("state")
+        code = request.query_params.get("code")
+
+        if not state_param or not code:
+            raise HTTPException(status_code=400, detail="Missing state or code")
+
+        stored_state = db.query(OAuthState).filter(OAuthState.state == state_param).first()
+        if not stored_state:
+            raise HTTPException(status_code=400, detail="Invalid state — possible CSRF attack")
+        if stored_state.is_expired:
+            db.delete(stored_state)
+            db.commit()
+            raise HTTPException(status_code=400, detail="State expired, please try again")
+
+        is_mobile = state_param.endswith(":mobile")
+
+        db.delete(stored_state)
+        db.commit()
+
+        redirect_uri = os.getenv(
+            "GOOGLE_REDIRECT_URI",
+            "https://meudiva-api-backend-592671373665.southamerica-east1.run.app/api/auth/google/callback"
+        )
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+            token_data = token_response.json()
+
+        if "access_token" not in token_data:
+            raise HTTPException(status_code=400, detail=f"Token exchange failed: {token_data}")
+
+        user_info = await get_google_user_info(token_data["access_token"])
 
         email = user_info.get("email")
         full_name = user_info.get("name", email)
@@ -662,7 +725,10 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             user = User(email=email, full_name=full_name, role=UserRole.patient, is_active=True, password_hash=None)
             db.add(user)
             db.flush()
-            db.add(PatientProfile(user_id=user.id, full_name=full_name, email=email, timezone="America/Sao_Paulo", preferred_language="pt-BR"))
+            db.add(PatientProfile(
+                user_id=user.id, full_name=full_name, email=email,
+                timezone="America/Sao_Paulo", preferred_language="pt-BR"
+            ))
             db.commit()
             db.refresh(user)
 
@@ -675,22 +741,26 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         if is_new_user:
             NotificationService(db).create_notification(
                 user_id=user.id, notification_type="welcome",
-                title="Welcome to Meu Diva!",
-                message="Your registration was successful via Google. Explore the platform and start your emotional care journey.",
+                title="Bem-vindo ao Meu Divã!",
+                message="Seu cadastro foi realizado com sucesso via Google.",
                 action_link="/dashboard"
             )
 
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}")
+        callback_path = "/mobile/oauth-callback" if is_mobile else "/oauth-callback"
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}{callback_path}?access_token={access_token}&refresh_token={refresh_token}"
+        )
 
-    except OAuthError as e:
-        raise HTTPException(status_code=400, detail=f"Google authentication error: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Unexpected error in Google callback: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal error processing Google login")
 
 
 # ==========================
-# MICROSOFT LOGIN
+# MICROSOFT LOGIN — com suporte a contexto mobile
 # ==========================
 
 @router.get("/microsoft/login")
@@ -724,7 +794,10 @@ async def microsoft_callback(request: Request, db: Session = Depends(get_db)):
             user = User(email=email, full_name=full_name, role=UserRole.patient, is_active=True, password_hash=None)
             db.add(user)
             db.flush()
-            db.add(PatientProfile(user_id=user.id, full_name=full_name, email=email, timezone="America/Sao_Paulo", preferred_language="pt-BR"))
+            db.add(PatientProfile(
+                user_id=user.id, full_name=full_name, email=email,
+                timezone="America/Sao_Paulo", preferred_language="pt-BR"
+            ))
             db.commit()
             db.refresh(user)
 
@@ -737,12 +810,18 @@ async def microsoft_callback(request: Request, db: Session = Depends(get_db)):
         if is_new_user:
             NotificationService(db).create_notification(
                 user_id=user.id, notification_type="welcome",
-                title="Welcome to Meu Diva!",
-                message="Your registration was successful via Microsoft. Explore the platform and start your emotional care journey.",
+                title="Bem-vindo ao Meu Divã!",
+                message="Seu cadastro foi realizado com sucesso via Microsoft.",
                 action_link="/dashboard"
             )
 
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}")
+        state_param = request.query_params.get("state", "")
+        is_mobile = state_param.endswith(":mobile")
+        callback_path = "/mobile/oauth-callback" if is_mobile else "/oauth-callback"
+
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}{callback_path}?access_token={access_token}&refresh_token={refresh_token}"
+        )
 
     except OAuthError as e:
         raise HTTPException(status_code=400, detail=f"Microsoft authentication error: {str(e)}")
@@ -752,7 +831,149 @@ async def microsoft_callback(request: Request, db: Session = Depends(get_db)):
 
 
 # ==========================
-# APPLE LOGIN
+# APPLE LOGIN — OAuth web redirect (NOVO)
+# ==========================
+
+@router.get("/apple/login")
+async def apple_login(request: Request):
+    """
+    Inicia o fluxo OAuth da Apple via web redirect.
+    Usado pelo app mobile e web — não usa plugin nativo.
+    """
+    import os
+
+    is_mobile = request.query_params.get("mobile") == "true"
+    context = "mobile" if is_mobile else "web"
+
+    client_id = os.getenv("APPLE_BUNDLE_ID", "com.meudiva.app")
+    redirect_uri = os.getenv(
+        "APPLE_REDIRECT_URI",
+        "https://meudiva-api-backend-592671373665.southamerica-east1.run.app/api/auth/apple/callback/web"
+    )
+
+    state = f"{secrets.token_urlsafe(32)}:{context}"
+
+    apple_auth_url = (
+        f"https://appleid.apple.com/auth/authorize"
+        f"?client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&response_type=code%20id_token"
+        f"&scope=name%20email"
+        f"&response_mode=form_post"
+        f"&state={state}"
+    )
+    return RedirectResponse(url=apple_auth_url)
+
+
+@router.post("/apple/callback/web")
+async def apple_callback_web(request: Request, db: Session = Depends(get_db)):
+    """
+    Callback do fluxo OAuth web da Apple (form_post).
+    Recebe code e id_token via POST form data.
+    """
+    import base64
+    import json as json_lib
+
+    try:
+        form = await request.form()
+        id_token = form.get("id_token")
+        state = form.get("state", "")
+        user_data_str = form.get("user")  # Só enviado na primeira autenticação
+
+        is_mobile = state.endswith(":mobile")
+
+        given_name = None
+        family_name = None
+        if user_data_str:
+            try:
+                user_data = json_lib.loads(user_data_str)
+                given_name = user_data.get("name", {}).get("firstName")
+                family_name = user_data.get("name", {}).get("lastName")
+            except Exception:
+                pass
+
+        if not id_token:
+            raise HTTPException(status_code=400, detail="id_token not received from Apple")
+
+        parts = id_token.split(".")
+        if len(parts) < 2:
+            raise HTTPException(status_code=400, detail="Invalid id_token")
+
+        payload_b64 = parts[1]
+        payload_b64 += "=" * (4 - len(payload_b64) % 4)
+        apple_payload = json_lib.loads(base64.urlsafe_b64decode(payload_b64))
+
+        email = apple_payload.get("email")
+        apple_user_id = apple_payload.get("sub")
+
+        if not email and not apple_user_id:
+            raise HTTPException(status_code=400, detail="Could not extract user info from Apple token")
+
+        if not email:
+            email = f"apple_{apple_user_id}@privaterelay.appleid.com"
+
+        full_name = None
+        if given_name or family_name:
+            full_name = f"{given_name or ''} {family_name or ''}".strip()
+
+        user = db.query(User).filter(User.email == email).first()
+        is_new_user = False
+
+        if not user:
+            is_new_user = True
+            user = User(
+                email=email,
+                full_name=full_name or email.split("@")[0],
+                role=UserRole.patient,
+                is_active=True,
+                password_hash=None
+            )
+            db.add(user)
+            db.flush()
+            db.add(PatientProfile(
+                user_id=user.id,
+                full_name=full_name or email.split("@")[0],
+                email=email,
+                timezone="America/Sao_Paulo",
+                preferred_language="pt-BR"
+            ))
+            db.commit()
+            db.refresh(user)
+        elif full_name and not user.full_name:
+            user.full_name = full_name
+            db.commit()
+
+        access_token = create_access_token({"sub": str(user.id), "email": user.email})
+        refresh_token_val = create_refresh_token({"sub": str(user.id)})
+
+        _emit_user_login_event(user, db)
+        _notify_online_user_login_sync(user, db)
+
+        if is_new_user:
+            NotificationService(db).create_notification(
+                user_id=user.id,
+                notification_type="welcome",
+                title="Bem-vindo ao Meu Divã!",
+                message="Seu cadastro foi realizado com sucesso via Apple.",
+                action_link="/dashboard"
+            )
+
+        callback_path = "/mobile/oauth-callback" if is_mobile else "/oauth-callback"
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}{callback_path}?access_token={access_token}&refresh_token={refresh_token_val}",
+            status_code=303  # POST → GET redirect
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in Apple web callback: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Internal error processing Apple login")
+
+
+# ==========================
+# APPLE LOGIN — callback nativo (POST, mantido para compatibilidade)
 # ==========================
 
 @router.post("/apple/callback")

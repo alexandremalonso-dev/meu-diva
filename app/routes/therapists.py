@@ -252,9 +252,13 @@ def upsert_profile(
             existing.service_types = payload.service_types
             existing.languages_list = payload.languages_list
             existing.rating_distribution = payload.rating_distribution
-            existing.total_sessions = payload.total_sessions if payload.total_sessions is not None else 0
-            existing.verified = payload.verified if payload.verified is not None else False
-            existing.featured = payload.featured if payload.featured is not None else False
+            if payload.total_sessions is not None:
+                existing.total_sessions = payload.total_sessions
+            # 🔥 verified e featured só atualiza se vier explicitamente (gerenciado pelo admin)
+            if payload.verified is not None:
+                existing.verified = payload.verified
+            if payload.featured is not None:
+                existing.featured = payload.featured
             existing.session_duration_30min = payload.session_duration_30min if payload.session_duration_30min is not None else True
             existing.session_duration_50min = payload.session_duration_50min if payload.session_duration_50min is not None else True
             existing.cancellation_policy = payload.cancellation_policy
@@ -431,6 +435,49 @@ async def upload_therapist_photo(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno ao fazer upload: {str(e)}")
+
+# ==========================
+# ADICIONAR em app/routes/therapists.py
+# Logo após o endpoint upload_therapist_photo
+# ==========================
+
+@router.get("/me/availability-status", response_model=dict)
+def get_availability_status(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
+):
+    """Retorna o status de disponibilidade imediata do terapeuta"""
+    profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado")
+
+    return {"is_available_now": profile.is_available_now or False}
+
+
+@router.patch("/me/availability-status", response_model=dict)
+def update_availability_status(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
+):
+    """Atualiza o status de disponibilidade imediata do terapeuta"""
+    profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado")
+
+    is_available_now = payload.get("is_available_now", False)
+    profile.is_available_now = is_available_now
+    profile.updated_at = datetime.now()
+    db.commit()
+
+    print(f"✅ Disponibilidade imediata: terapeuta {current_user.id} → {is_available_now}")
+    return {"is_available_now": is_available_now}
 
 
 # ==========================

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Security, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
+import os
 from app.db.database import get_db
 from app.core.permissions import require_roles
 from app.core.roles import UserRole
@@ -73,7 +75,6 @@ async def validate_document(
     if not document:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
 
-    # Atualizar documento
     document.validation_status = status
     document.validated_by = current_user.id
     document.validated_at = datetime.now()
@@ -82,7 +83,6 @@ async def validate_document(
 
     db.commit()
 
-    # Verificar se todos os documentos do terapeuta estão aprovados
     therapist = document.therapist
     all_docs = db.query(TherapistDocument).filter(
         TherapistDocument.therapist_id == therapist.id
@@ -92,11 +92,10 @@ async def validate_document(
     has_rejected = any(doc.validation_status == "rejected" for doc in all_docs)
     has_pending = any(doc.validation_status == "pending" for doc in all_docs)
 
-    # Atualizar status geral do terapeuta
     if all_approved:
         therapist.validation_status = "approved"
         therapist.is_verified = True
-        therapist.verified = True  # 🔥 sincroniza com o campo usado no frontend
+        therapist.verified = True
     elif has_rejected:
         therapist.validation_status = "rejected"
         therapist.is_verified = False
@@ -109,7 +108,6 @@ async def validate_document(
 
     db.commit()
 
-    # Notificar terapeuta via sistema de notificações
     therapist_user = db.query(User).filter(User.id == therapist.user_id).first()
     notification_service = NotificationService(db)
 
@@ -123,7 +121,7 @@ async def validate_document(
         title = f"Documento reprovado: {doc_type_name}"
         message = f"Seu documento {doc_type_name} foi reprovado. Motivo: {rejection_reason}"
         action_link = "/therapist/documents/required"
-    else:  # need_reupload
+    else:
         title = f"Reenvio solicitado: {doc_type_name}"
         message = f"Seu documento {doc_type_name} está ilegível. Por favor, envie uma nova cópia."
         action_link = "/therapist/documents/required"
@@ -136,7 +134,6 @@ async def validate_document(
         action_link=action_link
     )
 
-    # 🔥 NOTIFICAÇÃO POR E-MAIL
     if therapist_user and therapist_user.email:
         try:
             nome = therapist.full_name or therapist_user.full_name or "Terapeuta"
@@ -144,8 +141,6 @@ async def validate_document(
             app_url = "https://app.meudivaonline.com"
 
             if status == "approved":
-                # E-mail de aprovação — verde, celebratório
-                # Verifica se TODOS os documentos foram aprovados para o e-mail de perfil completo
                 if all_approved:
                     subject = "✅ Perfil verificado! Você recebeu o selo de Terapeuta Verificado"
                     titulo_email = "Parabéns! Seu perfil foi verificado ✅"
@@ -196,7 +191,7 @@ async def validate_document(
                     </p>
                 """
 
-            else:  # need_reupload
+            else:
                 subject = f"⚠️ Reenvio necessário: {doc_type_name} — Meu Divã"
                 titulo_email = f"Reenvio necessário: {doc_type_name}"
                 cor_header = "#F59E0B"
@@ -219,32 +214,23 @@ async def validate_document(
             <head><meta charset="UTF-8"></head>
             <body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
                 <div style="max-width:600px;margin:32px auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-
-                    <!-- Header -->
                     <div style="background:{cor_header};padding:20px 24px;display:flex;align-items:center;gap:12px;">
                         <img src="{logo_url}" alt="Meu Divã" style="width:40px;height:40px;border-radius:8px;object-fit:contain;background:white;padding:2px;">
                         <span style="color:white;font-size:1.2rem;font-weight:700;">Meu Divã</span>
                     </div>
-
-                    <!-- Corpo -->
                     <div style="padding:28px 24px;">
                         <h2 style="color:#333;margin:0 0 20px;">{titulo_email}</h2>
                         <p style="color:#555;line-height:1.6;margin:0 0 16px;">Olá, <strong>{nome}</strong>!</p>
                         {corpo}
-
-                        <!-- Botão -->
                         <a href="{app_url}/therapist/documents/required"
                            style="display:inline-block;background:#2F80D3;color:white;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:600;font-size:0.95rem;">
                             Ver meus documentos →
                         </a>
-
                         <p style="margin-top:28px;color:#888;font-size:0.85rem;line-height:1.6;">
                             Em caso de dúvidas, entre em contato com nossa equipe.<br>
                             <strong>Time Meu Divã</strong>
                         </p>
                     </div>
-
-                    <!-- Footer -->
                     <div style="border-top:1px solid #eee;padding:16px 24px;text-align:center;">
                         <img src="{logo_url}" alt="Meu Divã" style="width:28px;height:28px;border-radius:6px;object-fit:contain;vertical-align:middle;margin-right:8px;">
                         <span style="color:#aaa;font-size:0.78rem;">Meu Divã · contato@meudivaonline.com</span>
@@ -263,10 +249,48 @@ async def validate_document(
 
         except Exception as e:
             print(f"⚠️ Erro ao enviar e-mail de validação: {e}")
-            # Não interrompe o fluxo
 
     return {
         "success": True,
         "message": f"Documento {doc_type_name} {status} com sucesso.",
         "therapist_status": therapist.validation_status
     }
+
+
+# ==========================
+# SERVIR ARQUIVO PDF COM AUTENTICAÇÃO
+# ==========================
+@router.get("/document-file/{document_id}")
+async def serve_document_file(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.admin, UserRole.therapist]))
+):
+    """Serve o arquivo PDF do documento com autenticação"""
+
+    document = db.query(TherapistDocument).filter(
+        TherapistDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    # Terapeuta só pode ver seus próprios documentos
+    if current_user.role == UserRole.therapist:
+        therapist_profile = db.query(TherapistProfile).filter(
+            TherapistProfile.user_id == current_user.id
+        ).first()
+        if not therapist_profile or document.therapist_id != therapist_profile.id:
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # document.document_url = "/uploads/therapist_documents/arquivo.pdf"
+    file_path = document.document_url.lstrip("/")
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado no servidor")
+
+    return FileResponse(
+        path=file_path,
+        media_type="application/pdf",
+        filename=document.original_filename
+    )

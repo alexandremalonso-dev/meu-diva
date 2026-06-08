@@ -13,6 +13,7 @@ import { InstitucionalFooter } from "@/components/layout/InstitucionalFooter";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { AvaliacoesTerapeuta } from "@/components/AvaliacoesTerapeuta";
+import { api } from "@/lib/api";
 import type { TerapeutaPublico, AgendaResumida } from "./types";
 import {
   Search,
@@ -152,12 +153,53 @@ export default function PaginaPublicaTerapeuta() {
   }, [therapistId]);
 
   const handleAgendar = () => {
-    if (isLoggedIn) {
-      router.push(`/agendar/${therapistId}`);
-    } else {
+    if (!isLoggedIn) {
       router.push(`/auth/login?redirect=/terapeuta/${therapistId}`);
+      return;
     }
+    const agendaEl = document.getElementById("agenda-publica");
+    if (agendaEl) agendaEl.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // 🔥 Agendamento imediato — slot presumido pelo horário atual
+  useEffect(() => {
+    const handler = async (e: any) => {
+      if (!isLoggedIn) {
+        router.push(`/auth/login?redirect=/terapeuta/${therapistId}`);
+        return;
+      }
+      const slot = e.detail;
+      if (!slot || !terapeuta) return;
+      try {
+        const walletData = await api("/api/wallet/balance");
+        const balance = walletData.balance || 0;
+        const price = terapeuta.session_price || 0;
+        const bookingData = await api("/api/appointments", {
+          method: "POST",
+          body: JSON.stringify({
+            therapist_user_id: terapeuta.user_id,
+            starts_at: slot.starts_at,
+            ends_at: slot.ends_at,
+            duration_minutes: 50,
+          }),
+        });
+        if (balance >= price) {
+          await api(`/api/appointments/${bookingData.id}/status`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "confirmed" }),
+          });
+          router.push(`/patient/dashboard?payment_success=true&appointment_id=${bookingData.id}&therapist_name=${encodeURIComponent(terapeuta.full_name)}&time=${encodeURIComponent(slot.label)}&duration=50&price=${price}`);
+        } else {
+          router.push(`/checkout?appointment_id=${bookingData.id}`);
+        }
+      } catch (err: any) {
+        console.error("Erro no agendamento imediato:", err);
+        alert(err.message || "Erro ao agendar");
+      }
+    };
+    window.addEventListener("agendarImediato", handler);
+    return () => window.removeEventListener("agendarImediato", handler);
+  }, [isLoggedIn, terapeuta, therapistId, router]);
 
   const youtubeId = (terapeuta as any)?.video_url ? getYoutubeId((terapeuta as any).video_url) : null;
 
@@ -230,14 +272,18 @@ export default function PaginaPublicaTerapeuta() {
           <Sobre terapeuta={terapeuta} mostrarBioApenas={true} />
         </div>
 
-        <div style={{ marginBottom: "32px" }}>
+        {/* 🔥 id="agenda-publica" para scroll do botão Agendar às X */}
+        <div id="agenda-publica" style={{ marginBottom: "32px" }}>
           {agenda && agenda.slots && agenda.slots.length > 0 ? (
             <AgendaPublica
               agenda={agenda}
               therapistId={therapistId}
+              therapistUserId={terapeuta.user_id}
               sessionPrice={terapeuta.session_price || 200}
               isLoggedIn={isLoggedIn}
               onAgendar={handleAgendar}
+              sessionDuration30min={(terapeuta as any).session_duration_30min}
+              sessionDuration50min={(terapeuta as any).session_duration_50min}
             />
           ) : (
             <div style={{ backgroundColor: CORES.branco, borderRadius: "16px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", padding: "48px", textAlign: "center" }}>

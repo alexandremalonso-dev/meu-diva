@@ -48,6 +48,9 @@ interface CardTerapeutaProps {
     formacao?: string;
     phone?: string;
     accepts_corporate_sessions?: boolean;
+    session_duration_30min?: boolean;
+    session_duration_50min?: boolean;
+    is_available_now?: boolean;
   };
   isLoggedIn?: boolean;
   viewMode?: "list" | "grid";
@@ -64,6 +67,23 @@ const getDateStr = (startsAt: string): string => {
   return new Date(startsAt).toISOString().split('T')[0]
 }
 
+// 🔥 Calcula o próximo slot arredondado para cima (30min)
+function getNextSlot(): { starts_at: string; ends_at: string; label: string } {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const roundedMinutes = minutes < 30 ? 30 : 0;
+  const hoursAdd = minutes < 30 ? 0 : 1;
+  const next = new Date(now);
+  next.setMinutes(roundedMinutes, 0, 0);
+  next.setHours(next.getHours() + hoursAdd);
+  const label = next.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return {
+    starts_at: next.toISOString(),
+    ends_at: new Date(next.getTime() + 50 * 60000).toISOString(),
+    label,
+  };
+}
+
 export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list" }: CardTerapeutaProps) {
   const router = useRouter();
   const hoje = new Date();
@@ -75,6 +95,7 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
   const [isLoading, setIsLoading] = useState(false);
   const [isFavorito, setIsFavorito] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
+  const [durationModal, setDurationModal] = useState<{ slot: any } | null>(null);
 
   const DIAS_POR_PAGINA = 7;
   const nomeCompleto = terapeuta.full_name || "Nome não disponível";
@@ -183,9 +204,17 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
       : `${d1}/${m1}–${d2}/${m2} · ${mesAno}`
   })();
 
-  const handleAgendar = async (slot: any) => {
+  const preco30 = Math.round((preco / 5) * 3 * 100) / 100;
+
+  const handleAgendar = async (slot: any, durationMinutes?: number) => {
     if (!isLoggedIn) { router.push('/auth/login?redirect=/busca'); return; }
     if (isLoading) return;
+    // 🔥 Se aceita 30min e duração não foi escolhida ainda, abrir modal
+    if (!durationMinutes && terapeuta.session_duration_30min) {
+      setDurationModal({ slot });
+      return;
+    }
+    const duration = durationMinutes || 50;
     setIsLoading(true);
     try {
       const walletData = await api('/api/wallet/balance');
@@ -193,17 +222,17 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
       if (balance >= preco) {
         const bookingData = await api('/api/appointments', {
           method: "POST",
-          body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
+          body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: duration })
         });
         const appointmentId = bookingData.id;
         await api(`/api/appointments/${appointmentId}/status`, { method: "PATCH", body: JSON.stringify({ status: "confirmed" }) });
         await carregarSlots();
-        router.push(`/patient/dashboard?payment_success=true&appointment_id=${appointmentId}&therapist_name=${encodeURIComponent(terapeuta.full_name)}&date=${encodeURIComponent(getDiaMes(getDateStr(slot.starts_at)))}&time=${encodeURIComponent(getHorarioStr(slot.starts_at))}&duration=50&price=${preco}`);
+        router.push(`/patient/dashboard?payment_success=true&appointment_id=${appointmentId}&therapist_name=${encodeURIComponent(terapeuta.full_name)}&date=${encodeURIComponent(getDiaMes(getDateStr(slot.starts_at)))}&time=${encodeURIComponent(getHorarioStr(slot.starts_at))}&duration=${duration}&price=${duration === 30 ? preco30 : preco}`);
         return;
       }
       const bookingData = await api('/api/appointments', {
         method: "POST",
-        body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
+        body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: duration })
       });
       router.push(`/checkout?appointment_id=${bookingData.id}`);
     } catch (err: any) {
@@ -283,6 +312,16 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
               <ShieldCheck size={10} strokeWidth={2.5} /> Verificado
             </span>
           )}
+          {/* 🔥 Badge disponível agora com slot imediato */}
+          {terapeuta.is_available_now && (
+            <button
+              onClick={() => { const slot = getNextSlot(); handleAgendar(slot); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "4px", backgroundColor: "#059669", color: "white", fontSize: "10px", fontWeight: "700", padding: "3px 10px", borderRadius: "20px", marginBottom: "4px", whiteSpace: "nowrap", border: "none", cursor: "pointer" }}
+            >
+              <span style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#6EE7B7", display: "inline-block" }} />
+              Agendar às {getNextSlot().label}
+            </button>
+          )}
 
           {/* Especialidade em destaque */}
           {terapeuta.specialties && (
@@ -360,6 +399,7 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
   // MODO LISTA — layout original horizontal com agenda
   // ============================================================
   return (
+    <>
     <div
       style={{ backgroundColor: CORES.branco, borderRadius: "16px", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", transition: "all 0.2s ease" }}
       onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 10px 15px -3px rgba(0,0,0,0.1)"; }}
@@ -399,6 +439,18 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
               <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", backgroundColor: "#16A34A", color: "white", fontSize: "11px", fontWeight: "700", padding: "3px 10px", borderRadius: "20px", whiteSpace: "nowrap" }}>
                 <ShieldCheck size={11} strokeWidth={2.5} /> Verificado
               </span>
+            </div>
+          )}
+          {/* 🔥 Badge disponível agora com slot imediato */}
+          {terapeuta.is_available_now && (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "8px" }}>
+              <button
+                onClick={() => { const slot = getNextSlot(); handleAgendar(slot); }}
+                style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: "#059669", color: "white", fontSize: "11px", fontWeight: "700", padding: "4px 12px", borderRadius: "20px", whiteSpace: "nowrap", border: "none", cursor: "pointer" }}
+              >
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#6EE7B7", display: "inline-block" }} />
+                Agendar às {getNextSlot().label}
+              </button>
             </div>
           )}
 
@@ -523,5 +575,32 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
         </div>
       </div>
     </div>
+
+      {/* 🔥 Modal de seleção de duração */}
+      {durationModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "24px", maxWidth: "320px", width: "90%", boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: CORES.azul, marginBottom: "8px", textAlign: "center" }}>Duração da sessão</h3>
+            <p style={{ fontSize: "13px", color: CORES.cinzaTexto, textAlign: "center", marginBottom: "20px" }}>Escolha a duração para esta sessão</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button onClick={() => { setDurationModal(null); handleAgendar(durationModal.slot, 50); }}
+                style={{ padding: "14px", border: `2px solid ${CORES.azul}`, borderRadius: "12px", backgroundColor: "white", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ fontWeight: "700", color: CORES.azul, fontSize: "15px" }}>50 minutos</div>
+                <div style={{ color: CORES.cinzaTexto, fontSize: "13px", marginTop: "2px" }}>R$ {preco.toFixed(2)}</div>
+              </button>
+              <button onClick={() => { setDurationModal(null); handleAgendar(durationModal.slot, 30); }}
+                style={{ padding: "14px", border: `2px solid ${CORES.rosa}`, borderRadius: "12px", backgroundColor: "white", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ fontWeight: "700", color: CORES.rosa, fontSize: "15px" }}>30 minutos</div>
+                <div style={{ color: CORES.cinzaTexto, fontSize: "13px", marginTop: "2px" }}>R$ {preco30.toFixed(2)}</div>
+              </button>
+              <button onClick={() => setDurationModal(null)}
+                style={{ padding: "10px", border: "none", backgroundColor: CORES.cinza, borderRadius: "10px", cursor: "pointer", color: CORES.cinzaTexto, fontSize: "13px" }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

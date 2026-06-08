@@ -94,6 +94,11 @@ class TherapistProfileBase(BaseModel):
     # ==========================
     cancellation_policy: Optional[str] = None
 
+    # ==========================
+    # 🔥 DISPONIBILIDADE IMEDIATA
+    # ==========================
+    is_available_now: bool = False
+
 
 # ==========================
 # CREATE - Para criação de perfil
@@ -215,6 +220,7 @@ class TherapistProfileOut(TherapistProfileBase):
     pix_key: Optional[str] = None
     lgpd_consent: bool = False
     cancellation_policy: Optional[str] = None
+    # 🔥 is_available_now herdado do TherapistProfileBase
     
     class Config:
         from_attributes = True
