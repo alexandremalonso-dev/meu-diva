@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,13 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { api, getApiBaseUrl } from "@/lib/api";
-import {
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-  User,
-  Briefcase,
-} from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, User, Briefcase } from "lucide-react";
 
 function MobileSignupForm() {
   const router = useRouter();
@@ -73,15 +67,16 @@ function MobileSignupForm() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#f7f0f5" }}>
-      {/* Header rosa */}
-      <div className="flex flex-col items-center justify-center pt-14 pb-10 px-6" style={{ backgroundColor: "#E03673" }}>
+      <div
+        className="flex flex-col items-center justify-center pt-14 pb-10 px-6"
+        style={{ backgroundColor: "#E03673" }}
+      >
         <div className="bg-white rounded-2xl shadow-lg p-4 mb-4" style={{ width: 120, height: 120 }}>
           <Image src="/logo.png" alt="Meu Divã" width={104} height={104} className="w-full h-full object-contain" priority />
         </div>
         <p className="text-white text-base font-light tracking-wide">Cuidado que Acolhe</p>
       </div>
 
-      {/* Card */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-4 px-6 pt-8 pb-10 overflow-y-auto">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">Criar conta</h1>
 
@@ -97,23 +92,30 @@ function MobileSignupForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Tipo de conta */}
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-2">Como você quer acessar o Meu Divã?</label>
+            <label className="block text-sm font-medium text-gray-600 mb-2">
+              Como você quer acessar o Meu Divã?
+            </label>
             <div className="space-y-3">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, role: "patient" })}
                 disabled={loading || socialLoading}
-                className={`w-full p-4 rounded-xl border-2 text-left transition-all ${formData.role === "patient" ? "border-[#E03673] bg-[#E03673]/5" : "border-gray-200"}`}
+                className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                  formData.role === "patient" ? "border-[#E03673] bg-[#E03673]/5" : "border-gray-200"
+                }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-full ${formData.role === "patient" ? "bg-[#E03673]/10" : "bg-gray-100"}`}>
                     <User className={`w-5 h-5 ${formData.role === "patient" ? "text-[#E03673]" : "text-gray-400"}`} />
                   </div>
                   <div className="flex-1">
-                    <p className={`font-semibold ${formData.role === "patient" ? "text-[#E03673]" : "text-gray-800"}`}>Paciente</p>
-                    <p className="text-xs text-gray-500">Quero fazer sessões de terapia e cuidar da minha saúde emocional</p>
+                    <p className={`font-semibold ${formData.role === "patient" ? "text-[#E03673]" : "text-gray-800"}`}>
+                      Paciente
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Quero fazer sessões de terapia e cuidar da minha saúde emocional
+                    </p>
                   </div>
                   {formData.role === "patient" && <CheckCircle className="w-5 h-5 text-[#E03673] shrink-0" />}
                 </div>
@@ -123,15 +125,21 @@ function MobileSignupForm() {
                 type="button"
                 onClick={() => setFormData({ ...formData, role: "therapist" })}
                 disabled={loading || socialLoading}
-                className={`w-full p-4 rounded-xl border-2 text-left transition-all ${formData.role === "therapist" ? "border-[#E03673] bg-[#E03673]/5" : "border-gray-200"}`}
+                className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                  formData.role === "therapist" ? "border-[#E03673] bg-[#E03673]/5" : "border-gray-200"
+                }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-full ${formData.role === "therapist" ? "bg-[#E03673]/10" : "bg-gray-100"}`}>
                     <Briefcase className={`w-5 h-5 ${formData.role === "therapist" ? "text-[#E03673]" : "text-gray-400"}`} />
                   </div>
                   <div className="flex-1">
-                    <p className={`font-semibold ${formData.role === "therapist" ? "text-[#E03673]" : "text-gray-800"}`}>Especialista</p>
-                    <p className="text-xs text-gray-500">Quero atender pacientes online e fazer gestão da minha carreira</p>
+                    <p className={`font-semibold ${formData.role === "therapist" ? "text-[#E03673]" : "text-gray-800"}`}>
+                      Especialista
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Quero atender pacientes online e fazer gestão da minha carreira
+                    </p>
                   </div>
                   {formData.role === "therapist" && <CheckCircle className="w-5 h-5 text-[#E03673] shrink-0" />}
                 </div>
@@ -139,7 +147,6 @@ function MobileSignupForm() {
             </div>
           </div>
 
-          {/* Nome */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Nome completo</label>
             <input type="text" name="full_name" value={formData.full_name} onChange={handleChange}
@@ -147,7 +154,6 @@ function MobileSignupForm() {
               placeholder="Seu nome completo" disabled={loading || socialLoading} autoComplete="name" />
           </div>
 
-          {/* Email */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">E-mail</label>
             <input type="email" name="email" value={formData.email} onChange={handleChange}
@@ -155,7 +161,6 @@ function MobileSignupForm() {
               placeholder="seu@email.com" disabled={loading || socialLoading} autoComplete="email" />
           </div>
 
-          {/* Senha */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Senha</label>
             <input type="password" name="password" value={formData.password} onChange={handleChange}
@@ -163,7 +168,6 @@ function MobileSignupForm() {
               placeholder="••••••" disabled={loading || socialLoading} autoComplete="new-password" />
           </div>
 
-          {/* Confirmar senha */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Confirmar senha</label>
             <input type="password" name="confirm_password" value={formData.confirm_password} onChange={handleChange}
@@ -171,7 +175,6 @@ function MobileSignupForm() {
               placeholder="••••••" disabled={loading || socialLoading} autoComplete="new-password" />
           </div>
 
-          {/* Botão cadastrar */}
           <button type="submit" disabled={loading || socialLoading}
             className="w-full py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-opacity disabled:opacity-50"
             style={{ backgroundColor: "#E03673" }}>
@@ -179,17 +182,13 @@ function MobileSignupForm() {
           </button>
         </form>
 
-        {/* Divisor */}
         <div className="flex items-center gap-3 my-5">
           <div className="flex-1 h-px bg-gray-200" />
           <span className="text-xs text-gray-400">ou cadastre-se com</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        {/* Botões sociais — empilhados, mesmo tamanho (Guideline 4.8) */}
         <div className="flex flex-col gap-3">
-
-          {/* Google */}
           <button onClick={() => handleSocialSignup("google")} disabled={loading || socialLoading}
             className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white">
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -201,7 +200,6 @@ function MobileSignupForm() {
             <span className="text-sm text-gray-600 font-medium">Google</span>
           </button>
 
-          {/* Microsoft */}
           <button onClick={() => handleSocialSignup("microsoft")} disabled={loading || socialLoading}
             className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white">
             <svg className="w-5 h-5" viewBox="0 0 23 23">
@@ -213,7 +211,6 @@ function MobileSignupForm() {
             <span className="text-sm text-gray-600 font-medium">Microsoft</span>
           </button>
 
-          {/* Apple — por último (Guideline 4.8) */}
           <button onClick={() => handleSocialSignup("apple")} disabled={loading || socialLoading}
             className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -221,7 +218,6 @@ function MobileSignupForm() {
             </svg>
             <span className="text-sm text-gray-600 font-medium">Apple</span>
           </button>
-
         </div>
 
         {socialLoading && (
