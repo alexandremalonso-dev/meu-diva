@@ -12,6 +12,15 @@ function isNativeApp(): boolean {
   return !!(window as any).Capacitor?.isNativePlatform?.();
 }
 
+async function openOAuthUrl(url: string) {
+  if (isNativeApp()) {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.open({ url, presentationStyle: "popover" });
+  } else {
+    window.location.href = url;
+  }
+}
+
 function LoginForm() {
   const { login } = useAuth();
 
@@ -115,11 +124,11 @@ function LoginForm() {
     }
   };
 
-  const handleSocialLogin = (provider: "google" | "microsoft") => {
+  const handleSocialLogin = async (provider: "google" | "microsoft") => {
     setSocialLoading(true);
     setError("");
     const baseUrl = getApiBaseUrl();
-    window.location.href = `${baseUrl}/api/auth/${provider}/login?mobile=true`;
+    await openOAuthUrl(`${baseUrl}/api/auth/${provider}/login?mobile=true`);
   };
 
   const handleAppleLogin = async () => {
@@ -127,7 +136,7 @@ function LoginForm() {
     setError("");
     try {
       const baseUrl = getApiBaseUrl();
-      window.location.href = `${baseUrl}/api/auth/apple/login?mobile=true`;
+      await openOAuthUrl(`${baseUrl}/api/auth/apple/login?mobile=true`);
     } catch (err: any) {
       if (!err.message?.includes("cancel")) {
         setError("Erro ao fazer login com Apple. Tente outro método.");
@@ -253,9 +262,7 @@ function LoginForm() {
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        {/* Google → Microsoft → Apple (Guideline 4.8) */}
         <div className="flex flex-col gap-3">
-
           <button
             onClick={() => handleSocialLogin("google")}
             disabled={loading || socialLoading}
@@ -300,7 +307,6 @@ function LoginForm() {
               {appleLoading ? "Entrando..." : "Apple"}
             </span>
           </button>
-
         </div>
 
         {socialLoading && (

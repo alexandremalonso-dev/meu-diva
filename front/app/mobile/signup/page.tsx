@@ -8,6 +8,20 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { api, getApiBaseUrl } from "@/lib/api";
 import { Loader2, AlertCircle, CheckCircle, User, Briefcase } from "lucide-react";
 
+function isNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(window as any).Capacitor?.isNativePlatform?.();
+}
+
+async function openOAuthUrl(url: string) {
+  if (isNativeApp()) {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.open({ url, presentationStyle: "popover" });
+  } else {
+    window.location.href = url;
+  }
+}
+
 function MobileSignupForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -58,11 +72,11 @@ function MobileSignupForm() {
     }
   };
 
-  const handleSocialSignup = (provider: "google" | "microsoft" | "apple") => {
+  const handleSocialSignup = async (provider: "google" | "microsoft" | "apple") => {
     setSocialLoading(true);
     setError("");
     const baseUrl = getApiBaseUrl();
-    window.location.href = `${baseUrl}/api/auth/${provider}/login?mobile=true`;
+    await openOAuthUrl(`${baseUrl}/api/auth/${provider}/login?mobile=true`);
   };
 
   return (
@@ -110,12 +124,8 @@ function MobileSignupForm() {
                     <User className={`w-5 h-5 ${formData.role === "patient" ? "text-[#E03673]" : "text-gray-400"}`} />
                   </div>
                   <div className="flex-1">
-                    <p className={`font-semibold ${formData.role === "patient" ? "text-[#E03673]" : "text-gray-800"}`}>
-                      Paciente
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Quero fazer sessões de terapia e cuidar da minha saúde emocional
-                    </p>
+                    <p className={`font-semibold ${formData.role === "patient" ? "text-[#E03673]" : "text-gray-800"}`}>Paciente</p>
+                    <p className="text-xs text-gray-500">Quero fazer sessões de terapia e cuidar da minha saúde emocional</p>
                   </div>
                   {formData.role === "patient" && <CheckCircle className="w-5 h-5 text-[#E03673] shrink-0" />}
                 </div>
@@ -134,12 +144,8 @@ function MobileSignupForm() {
                     <Briefcase className={`w-5 h-5 ${formData.role === "therapist" ? "text-[#E03673]" : "text-gray-400"}`} />
                   </div>
                   <div className="flex-1">
-                    <p className={`font-semibold ${formData.role === "therapist" ? "text-[#E03673]" : "text-gray-800"}`}>
-                      Especialista
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Quero atender pacientes online e fazer gestão da minha carreira
-                    </p>
+                    <p className={`font-semibold ${formData.role === "therapist" ? "text-[#E03673]" : "text-gray-800"}`}>Especialista</p>
+                    <p className="text-xs text-gray-500">Quero atender pacientes online e fazer gestão da minha carreira</p>
                   </div>
                   {formData.role === "therapist" && <CheckCircle className="w-5 h-5 text-[#E03673] shrink-0" />}
                 </div>
