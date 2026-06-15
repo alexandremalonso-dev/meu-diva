@@ -32,8 +32,8 @@ workflows:
       - name: Increment build number
         script: |
           cd $CM_BUILD_DIR/front/ios/App
-          agvtool new-version -all 26
-          agvtool new-marketing-version 1.2.6
+          agvtool new-version -all 27
+          agvtool new-marketing-version 1.2.7
 
       - name: Install dependencies
         script: |
