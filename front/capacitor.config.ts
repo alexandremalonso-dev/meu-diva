@@ -20,6 +20,11 @@ const config: CapacitorConfig = {
       splashFullScreen: true,
       splashImmersive: true,
     },
+    App: {
+      appUrlOpen: {
+        enabled: true,
+      },
+    },
   },
 };
 

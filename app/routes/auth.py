@@ -746,10 +746,11 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
                 action_link="/dashboard"
             )
 
-        callback_path = "/mobile/oauth-callback" if is_mobile else "/oauth-callback"
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}{callback_path}?access_token={access_token}&refresh_token={refresh_token}"
-        )
+        if is_mobile:
+            redirect_url = f"meudiva://oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
+        else:
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
+        return RedirectResponse(url=redirect_url)
 
     except HTTPException:
         raise
@@ -817,11 +818,12 @@ async def microsoft_callback(request: Request, db: Session = Depends(get_db)):
 
         state_param = request.query_params.get("state", "")
         is_mobile = state_param.endswith(":mobile")
-        callback_path = "/mobile/oauth-callback" if is_mobile else "/oauth-callback"
 
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}{callback_path}?access_token={access_token}&refresh_token={refresh_token}"
-        )
+        if is_mobile:
+            redirect_url = f"meudiva://oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
+        else:
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
+        return RedirectResponse(url=redirect_url)
 
     except OAuthError as e:
         raise HTTPException(status_code=400, detail=f"Microsoft authentication error: {str(e)}")
@@ -845,10 +847,10 @@ async def apple_login(request: Request):
     is_mobile = request.query_params.get("mobile") == "true"
     context = "mobile" if is_mobile else "web"
 
-    client_id = os.getenv("APPLE_BUNDLE_ID", "com.meudiva.app")
+    client_id = os.getenv("APPLE_SERVICE_ID", "com.meudiva.web")
     redirect_uri = os.getenv(
         "APPLE_REDIRECT_URI",
-        "https://meudiva-api-backend-592671373665.southamerica-east1.run.app/api/auth/apple/callback/web"
+        "https://api.meudivaonline.com/api/auth/apple/callback/web"
     )
 
     state = f"{secrets.token_urlsafe(32)}:{context}"
@@ -958,11 +960,11 @@ async def apple_callback_web(request: Request, db: Session = Depends(get_db)):
                 action_link="/dashboard"
             )
 
-        callback_path = "/mobile/oauth-callback" if is_mobile else "/oauth-callback"
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}{callback_path}?access_token={access_token}&refresh_token={refresh_token_val}",
-            status_code=303  # POST → GET redirect
-        )
+        if is_mobile:
+            redirect_url = f"meudiva://oauth-callback?access_token={access_token}&refresh_token={refresh_token_val}"
+        else:
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token_val}"
+        return RedirectResponse(url=redirect_url, status_code=303)
 
     except HTTPException:
         raise
