@@ -19,18 +19,6 @@ function isNativeApp(): boolean {
   return !!(window as any).Capacitor?.isNativePlatform?.();
 }
 
-function dataUrlToFile(dataUrl: string, filename: string): File {
-  const [header, base64] = dataUrl.split(",");
-  const mimeMatch = header.match(/data:(.*?);base64/);
-  const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new File([bytes], filename, { type: mime });
-}
-
 export function PhotoUploadButton({
   currentPhotoUrl,
   endpoint,
@@ -83,7 +71,7 @@ export function PhotoUploadButton({
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", file, file.name);
 
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
@@ -117,7 +105,8 @@ export function PhotoUploadButton({
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
       }
-      onError?.(err.message || "Erro ao fazer upload da foto");
+      const rawMessage = err?.message || "Erro ao fazer upload da foto";
+      onError?.(`${rawMessage} (upload)`);
     } finally {
       setUploading(false);
     }
@@ -137,19 +126,37 @@ export function PhotoUploadButton({
       const photo = await Camera.getPhoto({
         quality: 85,
         allowEditing: false,
-        resultType: CameraResultType.DataUrl,
+        resultType: CameraResultType.Uri,
         source: CameraSource.Prompt,
         promptLabelHeader: "Foto de perfil",
         promptLabelPhoto: "Escolher da galeria",
         promptLabelPicture: "Tirar foto",
       });
 
-      if (!photo.dataUrl) {
+      if (!photo.webPath) {
         onError?.("Nenhuma imagem selecionada");
         return;
       }
 
-      const file = dataUrlToFile(photo.dataUrl, `profile-${Date.now()}.jpeg`);
+      // Lê o arquivo a partir do webPath nativo (file:// ou capacitor://) via fetch,
+      // que é o caminho recomendado pelo Capacitor para CameraResultType.Uri.
+      // Evita a conversao manual base64 -> Uint8Array, que se mostrou instavel
+      // dentro do WKWebView para uploads multipart/form-data.
+      let blob: Blob;
+      try {
+        const fileResponse = await fetch(photo.webPath);
+        blob = await fileResponse.blob();
+      } catch (readErr: any) {
+        console.error("❌ Erro ao ler arquivo da câmera/galeria:", readErr);
+        onError?.(`Não foi possível ler a imagem selecionada (leitura: ${readErr?.message || "desconhecido"})`);
+        return;
+      }
+
+      const ext = photo.format || "jpeg";
+      const file = new File([blob], `profile-${Date.now()}.${ext}`, {
+        type: blob.type || `image/${ext}`,
+      });
+
       await uploadFile(file);
     } catch (err: any) {
       // Usuário cancelou — não é erro
@@ -160,7 +167,7 @@ export function PhotoUploadButton({
         return;
       }
       console.error("❌ Erro ao acessar câmera/galeria:", err);
-      onError?.(err.message || "Erro ao acessar câmera ou galeria");
+      onError?.(`${err?.message || "Erro ao acessar câmera ou galeria"} (captura)`);
     }
   };
 
