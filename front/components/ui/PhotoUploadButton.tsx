@@ -14,6 +14,23 @@ interface PhotoUploadButtonProps {
   avatarBgClass?: string;
 }
 
+function isNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(window as any).Capacitor?.isNativePlatform?.();
+}
+
+function dataUrlToFile(dataUrl: string, filename: string): File {
+  const [header, base64] = dataUrl.split(",");
+  const mimeMatch = header.match(/data:(.*?);base64/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new File([bytes], filename, { type: mime });
+}
+
 export function PhotoUploadButton({
   currentPhotoUrl,
   endpoint,
@@ -47,11 +64,7 @@ export function PhotoUploadButton({
     return name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0].toUpperCase()).join("");
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-
+  const uploadFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       onError?.("Selecione uma imagem (JPG, PNG, GIF, WEBP)");
       return;
@@ -75,7 +88,6 @@ export function PhotoUploadButton({
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
       const url = `${BACKEND_URL}${endpoint}`;
-      console.log('📤 Enviando foto para:', url);
 
       const response = await fetch(url, {
         method: "POST",
@@ -83,9 +95,7 @@ export function PhotoUploadButton({
         body: formData,
       });
 
-      console.log('📥 Status da resposta:', response.status);
       const data = await response.json();
-      console.log('📥 Dados recebidos:', data);
 
       if (!response.ok) {
         throw new Error(data.detail || data.error || "Erro ao fazer upload");
@@ -99,8 +109,7 @@ export function PhotoUploadButton({
       setPreviewUrl(fotoUrl);
 
       onSuccess(fotoUrl);
-      window.dispatchEvent(new Event('refreshProfile'));
-
+      window.dispatchEvent(new Event("refreshProfile"));
     } catch (err: any) {
       console.error("❌ Erro no upload da foto:", err);
       setPreviewUrl(currentPhotoUrl || null);
@@ -114,12 +123,60 @@ export function PhotoUploadButton({
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    await uploadFile(file);
+  };
+
+  const handleNativePhoto = async () => {
+    try {
+      const { Camera, CameraResultType, CameraSource } = await import("@capacitor/camera");
+
+      const photo = await Camera.getPhoto({
+        quality: 85,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Prompt,
+        promptLabelHeader: "Foto de perfil",
+        promptLabelPhoto: "Escolher da galeria",
+        promptLabelPicture: "Tirar foto",
+      });
+
+      if (!photo.dataUrl) {
+        onError?.("Nenhuma imagem selecionada");
+        return;
+      }
+
+      const file = dataUrlToFile(photo.dataUrl, `profile-${Date.now()}.jpeg`);
+      await uploadFile(file);
+    } catch (err: any) {
+      // Usuário cancelou — não é erro
+      if (
+        err?.message?.toLowerCase().includes("cancel") ||
+        err?.message?.toLowerCase().includes("user cancelled")
+      ) {
+        return;
+      }
+      console.error("❌ Erro ao acessar câmera/galeria:", err);
+      onError?.(err.message || "Erro ao acessar câmera ou galeria");
+    }
+  };
+
+  const handleClick = () => {
+    if (isNativeApp()) {
+      handleNativePhoto();
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
   const showImage = previewUrl && !imageError;
 
-  // ✅ Igual ao UploadFoto antigo: suporta blob, http completo, e path relativo
-  const imageUrl = previewUrl?.startsWith('blob:')
+  const imageUrl = previewUrl?.startsWith("blob:")
     ? previewUrl
-    : previewUrl?.startsWith('http')
+    : previewUrl?.startsWith("http")
       ? previewUrl
       : previewUrl
         ? `${BACKEND_URL}${previewUrl}`
@@ -146,17 +203,22 @@ export function PhotoUploadButton({
         )}
       </div>
 
-      <label
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={uploading}
         className={`absolute bottom-0 right-0 p-1.5 rounded-full cursor-pointer transition-colors shadow-md ${
           uploading ? "bg-gray-400 cursor-not-allowed" : "bg-[#E03673] hover:bg-[#c02c5e]"
         }`}
-        style={{ pointerEvents: uploading ? "none" : "auto" }}
       >
         {uploading ? (
           <Loader2 className="text-white animate-spin" style={{ width: size * 0.18, height: size * 0.18 }} />
         ) : (
           <Camera className="text-white" style={{ width: size * 0.18, height: size * 0.18 }} />
         )}
+      </button>
+
+      {!isNativeApp() && (
         <input
           ref={fileInputRef}
           type="file"
@@ -165,7 +227,7 @@ export function PhotoUploadButton({
           onChange={handleFileChange}
           disabled={uploading}
         />
-      </label>
+      )}
     </div>
   );
 }

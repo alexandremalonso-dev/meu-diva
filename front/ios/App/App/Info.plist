@@ -33,6 +33,12 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>O Meu Divã precisa acessar sua câmera para que você possa tirar uma foto de perfil.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Meu Divã precisa acessar suas fotos para que você possa escolher uma imagem de perfil.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>O Meu Divã precisa salvar imagens na sua galeria.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
