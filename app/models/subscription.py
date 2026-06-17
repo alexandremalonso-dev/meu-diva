@@ -17,6 +17,15 @@ class Subscription(Base):
     current_period_start = Column(DateTime, nullable=True)
     current_period_end = Column(DateTime, nullable=True)
     cancel_at_period_end = Column(Boolean, default=False)
+
+    # ✅ NOVO — origem da assinatura: "mercadopago" (padrão/legado) ou "apple_iap"
+    payment_provider = Column(String(20), nullable=False, default="mercadopago")
+
+    # ✅ NOVO — identificador estável da assinatura na Apple (não muda entre renovações,
+    # diferente do transaction_id que muda a cada renovação). Usado para localizar a
+    # assinatura quando chega uma Server Notification.
+    apple_original_transaction_id = Column(String(255), nullable=True, index=True)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 

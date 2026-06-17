@@ -948,3 +948,252 @@ def get_payment_status(
         created_at=payment.created_at,
         paid_at=payment.paid_at,
     )
+
+
+# ============================================
+# ASSINATURAS — Apple In-App Purchase (StoreKit)
+# ============================================
+
+def _activate_apple_subscription(therapist_profile, plan, transaction_info, db):
+    """
+    Cria ou atualiza a Subscription do terapeuta com base numa transacao Apple
+    ja verificada. Reaproveita o mesmo model usado por MP/Stripe, mas marca
+    payment_provider='apple_iap' e guarda o original_transaction_id da Apple.
+    """
+    from app.models.subscription import Subscription
+    from app.services.notification_service import NotificationService
+    from datetime import datetime as dt
+
+    now = dt.now()
+    expires_at = None
+    if transaction_info.expires_date_ms:
+        expires_at = dt.fromtimestamp(transaction_info.expires_date_ms / 1000)
+
+    existing = db.execute(
+        select(Subscription).where(Subscription.therapist_id == therapist_profile.id)
+    ).scalar_one_or_none()
+
+    is_new_activation = True
+
+    if existing:
+        is_new_activation = existing.status != "active" or existing.plan != plan
+        existing.plan = plan
+        existing.status = "active"
+        existing.payment_provider = "apple_iap"
+        existing.apple_original_transaction_id = transaction_info.original_transaction_id
+        existing.stripe_subscription_id = transaction_info.transaction_id
+        existing.current_period_start = now
+        existing.current_period_end = expires_at
+        existing.cancel_at_period_end = False
+        existing.updated_at = now
+    else:
+        db.add(Subscription(
+            therapist_id=therapist_profile.id,
+            plan=plan,
+            status="active",
+            payment_provider="apple_iap",
+            apple_original_transaction_id=transaction_info.original_transaction_id,
+            stripe_subscription_id=transaction_info.transaction_id,
+            current_period_start=now,
+            current_period_end=expires_at,
+            cancel_at_period_end=False,
+        ))
+
+    db.commit()
+
+    if is_new_activation:
+        try:
+            therapist_user = db.get(User, therapist_profile.user_id)
+            if therapist_user:
+                NotificationService(db).notify_subscription_activated(therapist_user, get_plan_name(plan))
+        except Exception as e:
+            print(f"⚠️ Erro notificação Apple IAP: {e}")
+
+
+@router.post("/apple/validate")
+async def validate_apple_purchase(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """
+    Recebe o signedTransaction (JWS) retornado pelo StoreKit apos uma compra
+    no app iOS, valida com a Apple, e ativa o plano correspondente.
+
+    Body esperado: { "signed_transaction": "ey..." }
+    """
+    from app.services.apple_iap_service import verify_transaction
+    from appstoreserverlibrary.signed_data_verifier import VerificationException
+
+    body = await request.json()
+    signed_transaction = body.get("signed_transaction")
+
+    if not signed_transaction:
+        raise HTTPException(status_code=400, detail="signed_transaction é obrigatório")
+
+    try:
+        transaction_info = verify_transaction(signed_transaction)
+    except VerificationException as e:
+        print(f"❌ Falha na verificação da transação Apple: {e}")
+        raise HTTPException(status_code=400, detail=f"Transação inválida: {e}")
+    except Exception as e:
+        print(f"❌ Erro inesperado ao verificar transação Apple: {e}")
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Erro ao validar compra com a Apple")
+
+    plan = transaction_info.plan
+    if not plan:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Product ID não reconhecido: {transaction_info.product_id}"
+        )
+
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if not therapist_profile:
+        raise HTTPException(status_code=404, detail="Perfil do terapeuta não encontrado")
+
+    _activate_apple_subscription(therapist_profile, plan, transaction_info, db)
+
+    print(f"✅ Assinatura Apple IAP ativada: terapeuta {current_user.id} - plano {plan} - tx {transaction_info.transaction_id}")
+
+    return {
+        "status": "active",
+        "plan": plan,
+        "transaction_id": transaction_info.transaction_id,
+        "original_transaction_id": transaction_info.original_transaction_id,
+    }
+
+
+@router.post("/apple/notifications")
+async def apple_server_notifications(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook que recebe App Store Server Notifications V2.
+    Configurado em App Store Connect > App Information > App Store Server Notifications.
+
+    Body esperado: { "signedPayload": "ey..." }
+    """
+    from app.services.apple_iap_service import verify_notification, APPLE_PRODUCT_TO_PLAN
+    from app.models.subscription import Subscription
+    from app.services.notification_service import NotificationService
+    from appstoreserverlibrary.signed_data_verifier import VerificationException
+    from datetime import datetime as dt
+
+    try:
+        body = await request.json()
+        signed_payload = body.get("signedPayload")
+
+        if not signed_payload:
+            return {"status": "ignored", "detail": "signedPayload ausente"}
+
+        try:
+            notification = verify_notification(signed_payload)
+        except VerificationException as e:
+            print(f"❌ Falha na verificação da notificação Apple: {e}")
+            return {"status": "ignored", "detail": "assinatura inválida"}
+
+        notification_type = str(notification.notificationType)
+        subtype = str(notification.subtype) if notification.subtype else None
+
+        print(f"🔔 Apple Server Notification: type={notification_type} | subtype={subtype}")
+
+        transaction_data = None
+        if notification.data and notification.data.signedTransactionInfo:
+            from app.services.apple_iap_service import get_signed_data_verifier
+            verifier = get_signed_data_verifier()
+            transaction_data = verifier.verify_and_decode_signed_transaction(
+                notification.data.signedTransactionInfo
+            )
+
+        if not transaction_data:
+            return {"status": "ignored", "detail": "sem dados de transação"}
+
+        original_transaction_id = transaction_data.originalTransactionId
+        product_id = transaction_data.productId
+        plan = APPLE_PRODUCT_TO_PLAN.get(product_id)
+
+        subscription = db.execute(
+            select(Subscription).where(
+                Subscription.apple_original_transaction_id == original_transaction_id
+            )
+        ).scalar_one_or_none()
+
+        if not subscription:
+            print(f"⚠️ Subscription não encontrada para original_transaction_id={original_transaction_id}")
+            return {"status": "ignored", "detail": "assinatura não encontrada"}
+
+        now = dt.now()
+
+        # Eventos que renovam/mantêm a assinatura ativa
+        if notification_type in ("DID_RENEW", "SUBSCRIBED", "DID_CHANGE_RENEWAL_STATUS"):
+            expires_at = None
+            if getattr(transaction_data, "expiresDate", None):
+                expires_at = dt.fromtimestamp(transaction_data.expiresDate / 1000)
+            subscription.status = "active"
+            if plan:
+                subscription.plan = plan
+            subscription.current_period_end = expires_at
+            subscription.updated_at = now
+            db.commit()
+            print(f"✅ Apple IAP renovado/atualizado: original_tx={original_transaction_id}")
+
+        # Eventos de cancelamento/expiração/reembolso
+        elif notification_type in ("EXPIRED", "REFUND", "REVOKE", "GRACE_PERIOD_EXPIRED"):
+            old_plan = subscription.plan
+            subscription.status = "cancelled"
+            subscription.plan = "essencial"
+            subscription.updated_at = now
+            db.commit()
+            try:
+                therapist_user = db.get(User, subscription.therapist.user_id)
+                if therapist_user:
+                    NotificationService(db).notify_subscription_cancelled(therapist_user, get_plan_name(old_plan))
+            except Exception as e:
+                print(f"⚠️ Erro notificação cancelamento Apple: {e}")
+            print(f"⚠️ Apple IAP cancelado/expirado: original_tx={original_transaction_id} | type={notification_type}")
+
+        # DID_FAIL_TO_RENEW — mantem o status atual, Apple vai tentar de novo (grace period)
+        elif notification_type == "DID_FAIL_TO_RENEW":
+            subscription.status = "past_due"
+            subscription.updated_at = now
+            db.commit()
+            print(f"⚠️ Apple IAP falhou ao renovar: original_tx={original_transaction_id}")
+
+        return {"status": "success"}
+
+    except Exception as e:
+        print(f"❌ ERRO APPLE NOTIFICATIONS WEBHOOK: {e}")
+        import traceback; traceback.print_exc()
+        return {"status": "error", "detail": str(e)}
+
+
+@router.post("/therapist/subscription/apple/cancel-info")
+async def apple_subscription_cancel_info(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """
+    Assinaturas Apple IAP nao podem ser canceladas via API do backend —
+    o cancelamento e sempre feito pelo usuario nas configuracoes do iOS.
+    Este endpoint apenas retorna a URL de gerenciamento para o frontend abrir.
+    """
+    from app.models.subscription import Subscription
+
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if not therapist_profile:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado")
+
+    subscription = db.execute(
+        select(Subscription).where(
+            Subscription.therapist_id == therapist_profile.id,
+            Subscription.payment_provider == "apple_iap",
+        )
+    ).scalar_one_or_none()
+
+    return {
+        "manage_url": "itms-apps://apps.apple.com/account/subscriptions",
+        "has_apple_subscription": subscription is not None and subscription.status == "active",
+    }
