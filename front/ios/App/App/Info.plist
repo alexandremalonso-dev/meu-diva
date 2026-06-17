@@ -33,6 +33,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>itms-apps</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>O Meu Divã precisa acessar sua câmera para que você possa tirar uma foto de perfil.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

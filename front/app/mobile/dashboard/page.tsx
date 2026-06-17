@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import MobileHeader from "@/components/mobile/MobileHeader";
 import { getFotoSrc } from "@/lib/utils";
+import { AppleSubscriptionCards } from "@/components/mobile/AppleSubscriptionCards";
 
 const COLORS = {
   primary: "#E03673",
@@ -288,22 +289,8 @@ export default function MobileDashboard() {
               );
             })}
 
-            {/* AVISO DE PLANOS — sem preços nem botão de compra (Guideline 3.1.1) */}
-            <div style={{
-              background: "linear-gradient(135deg, #2F80D3, #1a5fa8)",
-              borderRadius: 14,
-              padding: 14,
-              marginBottom: 10,
-              color: "white",
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-                Potencialize sua prática
-              </div>
-              <div style={{ fontSize: 11, opacity: 0.85 }}>
-                Conheça nossos planos com comissões reduzidas em{" "}
-                <span style={{ fontWeight: 600 }}>meudivaonline.com</span>
-              </div>
-            </div>
+            {/* Planos via Apple IAP (iOS nativo) ou aviso para Android/web */}
+            <AppleSubscriptionCards />
           </>
         )}
 
