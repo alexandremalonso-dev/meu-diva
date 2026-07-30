@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useApi } from "@/lib/useApi";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getFotoSrc } from '@/lib/utils';
 import {
   Users, Loader2, AlertCircle, Search, ArrowLeft,
-  User, Eye, X, CheckCircle, XCircle, ChevronLeft, ChevronRight
+  MoreVertical, X, CheckCircle, XCircle, ChevronLeft, ChevronRight,
+  Trash2, Power
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -38,8 +39,25 @@ export default function AdminUsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  // 🔥 Menu de ações
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => { loadUsers(); }, []);
   useEffect(() => { filterUsers(); }, [users, searchTerm, roleFilter, statusFilter, monthFilter, yearFilter]);
+
+  // Fecha o menu ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function loadUsers() {
     try {
@@ -117,11 +135,35 @@ export default function AdminUsersPage() {
     setCurrentPage(1);
   }
 
+  // 🔥 CORRIGIDO: endpoint era /api/users/{id}/status (não existe) → /api/admin/users/{id}/status
   async function handleToggleActive(userId: number, current: boolean) {
+    setActionLoading(true);
     try {
-      await apiCall({ url: `/api/users/${userId}/status`, method: "PATCH", body: { is_active: !current }, requireAuth: true });
+      await apiCall({ url: `/api/admin/users/${userId}/status`, method: "PATCH", body: { is_active: !current }, requireAuth: true });
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: !current } : u));
-    } catch { setError("Erro ao alterar status"); setTimeout(() => setError(""), 3000); }
+    } catch {
+      setError("Erro ao alterar status");
+      setTimeout(() => setError(""), 3000);
+    } finally {
+      setActionLoading(false);
+      setOpenMenuId(null);
+    }
+  }
+
+  // 🔥 Excluir (após confirmação)
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    setActionLoading(true);
+    try {
+      await apiCall({ url: `/api/admin/users/${deleteTarget.id}`, method: "DELETE", requireAuth: true });
+      setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch {
+      setError("Erro ao excluir usuário");
+      setTimeout(() => setError(""), 3000);
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   const resetFilters = () => { setSearchTerm(""); setRoleFilter("todos"); setStatusFilter("todos"); setMonthFilter(""); setYearFilter(""); };
@@ -308,21 +350,38 @@ export default function AdminUsersPage() {
                         <td className="p-3">{getRoleBadge(u.role)}</td>
                         <td className="p-3 text-sm text-gray-500">{new Date(u.created_at).toLocaleDateString("pt-BR")}</td>
                         <td className="p-3 text-center">
-                          <button 
-                            onClick={() => handleToggleActive(u.id, u.is_active)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${u.is_active ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
-                          >
-                            {u.is_active ? <><CheckCircle className="w-3 h-3" />Ativo</> : <><XCircle className="w-3 h-3" />Inativo</>}
-                          </button>
+                          {u.is_active
+                            ? <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-green-100 text-green-700"><CheckCircle className="w-3 h-3" />Ativo</span>
+                            : <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-red-100 text-red-700"><XCircle className="w-3 h-3" />Inativo</span>}
                         </td>
-                        <td className="p-3 text-center">
-                          <button 
-                            onClick={() => router.push(`/admin/users/${u.id}`)}
-                            className="p-1.5 text-gray-400 hover:text-[#2F80D3] transition-colors"
-                            title="Ver detalhes"
+                        <td className="p-3 text-center relative">
+                          <button
+                            onClick={() => setOpenMenuId(openMenuId === u.id ? null : u.id)}
+                            className="p-1.5 text-gray-400 hover:text-[#2F80D3] hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Ações"
                           >
-                            <Eye className="w-4 h-4" />
+                            <MoreVertical className="w-4 h-4" />
                           </button>
+                          {openMenuId === u.id && (
+                            <div ref={menuRef} className="absolute right-3 top-10 z-20 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 text-left">
+                              <button
+                                onClick={() => handleToggleActive(u.id, u.is_active)}
+                                disabled={actionLoading}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                <Power className="w-4 h-4" />
+                                {u.is_active ? "Inativar" : "Reativar"}
+                              </button>
+                              <button
+                                onClick={() => { setDeleteTarget(u); setOpenMenuId(null); }}
+                                disabled={actionLoading}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Excluir
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -344,6 +403,40 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {/* 🔥 Modal de confirmação de exclusão */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Excluir usuário</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              Tem certeza que deseja excluir <strong>{deleteTarget.full_name || deleteTarget.email}</strong>? Essa ação anonimiza os dados de identificação e não pode ser desfeita. O histórico relacionado será preservado.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={actionLoading}
+                className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={actionLoading}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -196,10 +196,11 @@ export default function AdminDashboardPage() {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const [appointmentsData, usersData, subscriptionsData] = await Promise.all([
+      const [appointmentsData, usersData, subscriptionsData, revenueReal] = await Promise.all([
         apiCall({ url: "/api/appointments/admin/all", requireAuth: true }),
         apiCall({ url: "/api/users", requireAuth: true }),
         apiCall({ url: "/api/admin/reports/therapists-by-plan", requireAuth: true }).catch(() => []),
+        apiCall({ url: "/api/admin/reports/subscriptions-revenue-real", requireAuth: true }).catch(() => null),
       ]);
 
       setAppointments(appointmentsData);
@@ -251,12 +252,18 @@ export default function AdminDashboardPage() {
       const currentMonthLiquid = currentMonthRevenue * 0.8;
       const currentMonthCommission = currentMonthRevenue * 0.2;
       
-      const activeSubscriptions = (subscriptionsData || []).filter((s: any) => s.subscription_status === "active");
-      const mrr = activeSubscriptions.reduce((sum: number, s: any) => {
+      // 🔥 só contar planos pagos (Profissional + Premium) como "assinantes ativos",
+      // igual ao relatório /admin/reports/assinaturas
+      const activeSubscriptions = (subscriptionsData || []).filter(
+        (s: any) => s.plan !== "essencial" && s.subscription_status === "active"
+      );
+      const mrrEstimado = activeSubscriptions.reduce((sum: number, s: any) => {
         if (s.plan === "profissional") return sum + 79;
         if (s.plan === "premium") return sum + 149;
         return sum;
       }, 0);
+      // 🔥 receita real do MP se disponível, senão fallback para cálculo estimado
+      const mrr = revenueReal?.total_mensal_real ?? mrrEstimado;
       
       const subscriptionDailyData = Array.from({ length: daysInMonth }, (_, i) => ({
         day: i + 1,
@@ -358,7 +365,8 @@ export default function AdminDashboardPage() {
     </div>
   );
 
-  const hasSubscriptionData = subscriptionChartData.some(d => d.subscribers > 0 || d.mrr > 0);
+  // 🔥 baseado no total real de assinantes ativos, não apenas nos criados neste mês
+  const hasSubscriptionData = reportData.assinaturas.subscribers > 0;
 
   return (
     <>

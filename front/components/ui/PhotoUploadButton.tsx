@@ -74,7 +74,6 @@ export function PhotoUploadButton({
       formData.append("file", file, file.name);
 
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-
       const url = `${BACKEND_URL}${endpoint}`;
 
       const response = await fetch(url, {
@@ -123,38 +122,31 @@ export function PhotoUploadButton({
     try {
       const { Camera, CameraResultType, CameraSource } = await import("@capacitor/camera");
 
+      // Usa DataUrl em vez de Uri — mais estável no WKWebView com servidor remoto.
+      // Uri retorna webPath (capacitor:// ou file://) que pode falhar em fetch()
+      // quando a origem da WebView é um domínio externo (app.meudivaonline.com).
       const photo = await Camera.getPhoto({
         quality: 85,
         allowEditing: false,
-        resultType: CameraResultType.Uri,
+        resultType: CameraResultType.DataUrl,
         source: CameraSource.Prompt,
         promptLabelHeader: "Foto de perfil",
         promptLabelPhoto: "Escolher da galeria",
         promptLabelPicture: "Tirar foto",
       });
 
-      if (!photo.webPath) {
+      if (!photo.dataUrl) {
         onError?.("Nenhuma imagem selecionada");
         return;
       }
 
-      // Lê o arquivo a partir do webPath nativo (file:// ou capacitor://) via fetch,
-      // que é o caminho recomendado pelo Capacitor para CameraResultType.Uri.
-      // Evita a conversao manual base64 -> Uint8Array, que se mostrou instavel
-      // dentro do WKWebView para uploads multipart/form-data.
-      let blob: Blob;
-      try {
-        const fileResponse = await fetch(photo.webPath);
-        blob = await fileResponse.blob();
-      } catch (readErr: any) {
-        console.error("❌ Erro ao ler arquivo da câmera/galeria:", readErr);
-        onError?.(`Não foi possível ler a imagem selecionada (leitura: ${readErr?.message || "desconhecido"})`);
-        return;
-      }
-
+      // Converte dataUrl (data:image/jpeg;base64,...) para Blob via fetch
+      const res = await fetch(photo.dataUrl);
+      const blob = await res.blob();
       const ext = photo.format || "jpeg";
+
       const file = new File([blob], `profile-${Date.now()}.${ext}`, {
-        type: blob.type || `image/${ext}`,
+        type: `image/${ext}`,
       });
 
       await uploadFile(file);

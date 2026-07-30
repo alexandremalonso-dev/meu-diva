@@ -240,7 +240,9 @@ export default function EmpresaSidebar() {
   }
   
   return (
-    <div className="w-[420px] h-full bg-white border-l border-gray-200 shadow-lg flex flex-col relative flex-shrink-0">
+    // Sem h-full aqui: o pai (no MainLayout) é um flex container
+    // dedicado a este único filho — flex-1 já estica corretamente.
+    <div className="w-[420px] bg-white border-l border-gray-200 shadow-lg flex flex-col relative flex-1">
       <button onClick={() => setIsMinimized(true)}
         className="absolute -left-3 top-72 bg-[#E03673] hover:bg-[#c02c5e] text-white rounded-full p-2 shadow-md z-20 transition-all hover:scale-105">
         <ChevronRight className="w-4 h-4" />

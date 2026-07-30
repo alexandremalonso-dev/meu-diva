@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { PatientProfile } from '@/types/patient';
-import { PhotoUpload } from './PhotoUpload';
+import { PhotoUploadButton } from '@/components/ui/PhotoUploadButton';
 import { AddressList } from './AddressList';
 import { GoalsManager } from './GoalsManager';
 import { AccountDeletionModal } from "@/components/ui/AccountDeletionModal";
@@ -85,7 +85,14 @@ export function ProfileForm({ initialProfile, onSave, onPhotoUpdate, userEmail }
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave(formData);
+      const payload = {
+        ...formData,
+        birth_date: formData.birth_date || null,
+        cpf: formData.cpf || null,
+        phone: formData.phone || null,
+        education_level: formData.education_level || null,
+      };
+      await onSave(payload);
       setToastType('success');
       setToastMessage('✅ Perfil atualizado com sucesso!');
       window.dispatchEvent(new Event('refreshProfile'));
@@ -132,7 +139,9 @@ export function ProfileForm({ initialProfile, onSave, onPhotoUpdate, userEmail }
   }
 
   const fotoUrlCorrigida = initialProfile.foto_url?.replace('/pages/', '/patients/');
-  const photoUrl = fotoUrlCorrigida ? `${BACKEND_URL}${fotoUrlCorrigida}` : undefined;
+  const photoUrl = fotoUrlCorrigida
+    ? (fotoUrlCorrigida.startsWith('http') ? fotoUrlCorrigida : `${BACKEND_URL}${fotoUrlCorrigida}`)
+    : undefined;
   const formattedBirthDate = formData.birth_date ? new Date(formData.birth_date).toISOString().split('T')[0] : '';
 
   return (
@@ -171,12 +180,13 @@ export function ProfileForm({ initialProfile, onSave, onPhotoUpdate, userEmail }
           <div className="bg-white rounded-lg shadow p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-1">
-                <PhotoUpload
+                <PhotoUploadButton
                   currentPhotoUrl={photoUrl}
                   endpoint="/api/patient/profile/photo"
                   name={initialProfile.full_name}
                   onSuccess={handlePhotoSuccess}
                   onError={handlePhotoError}
+                  size={96}
                 />
               </div>
 

@@ -98,18 +98,18 @@ export function StatsCards({
           <div
             key={card.title}
             onClick={() => card.onClick?.()}
-            className={`bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-sm p-4 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] text-white ${
+            className={`bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-sm p-2.5 sm:p-3 lg:p-4 overflow-hidden min-w-0 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] text-white ${
               isActive ? "ring-2 ring-white/50 ring-offset-2" : ""
             }`}
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-white/80">{card.title}</span>
-              <Icon className="w-5 h-5 text-white/80" />
+            <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+              <span className="text-[11px] sm:text-xs lg:text-sm font-medium text-white/80 truncate">{card.title}</span>
+              <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />
             </div>
-            <p className="text-2xl font-bold">{card.value}</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold truncate">{card.value}</p>
 
             {card.hasPeriod && (
-              <div className="flex gap-1 mt-2 pt-2 border-t border-white/20">
+              <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-white/20">
                 {["week", "month", "year", "all"].map((period) => (
                   <button
                     key={period}
@@ -117,7 +117,7 @@ export function StatsCards({
                       e.stopPropagation();
                       card.onPeriodClick?.(period);
                     }}
-                    className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                    className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-[11px] lg:text-xs transition-colors ${
                       selectedPeriod === period && sessionFilter === card.filter
                         ? "bg-white/30 text-white font-medium"
                         : "bg-white/10 hover:bg-white/20 text-white/80"
@@ -135,17 +135,17 @@ export function StatsCards({
       {/* Card Financeiro */}
       <div
         onClick={() => onFinancialClick?.()}
-        className="bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-sm p-4 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] text-white"
+        className="bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-sm p-2.5 sm:p-3 lg:p-4 overflow-hidden min-w-0 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] text-white"
       >
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-white/80">Receita Total</span>
-          <DollarSign className="w-5 h-5 text-white/80" />
+        <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+          <span className="text-[11px] sm:text-xs lg:text-sm font-medium text-white/80 truncate">Receita Total</span>
+          <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />
         </div>
-        <p className="text-2xl font-bold">{formatCurrency(currentStats.totalRevenue)}</p>
-        <p className="text-xs text-white/70 mt-1">{getValueByPeriod("completed")} sessões realizadas</p>
-        <div className="flex items-center gap-1 mt-2 text-xs text-white/60">
-          <TrendingUp className="w-3 h-3" />
-          <span>Ver relatório</span>
+        <p className="text-xl sm:text-2xl lg:text-3xl font-bold truncate">{formatCurrency(currentStats.totalRevenue)}</p>
+        <p className="text-[10px] sm:text-[11px] lg:text-xs text-white/70 mt-1 truncate">{getValueByPeriod("completed")} sessões realizadas</p>
+        <div className="flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] lg:text-xs text-white/60 min-w-0">
+          <TrendingUp className="w-3 h-3 flex-shrink-0" />
+          <span className="truncate">Ver relatório</span>
         </div>
       </div>
     </div>

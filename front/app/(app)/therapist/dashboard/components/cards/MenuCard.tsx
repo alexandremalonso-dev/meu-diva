@@ -2,27 +2,10 @@
 
 import Link from "next/link";
 import { 
-  LayoutDashboard, 
-  Calendar, 
-  Users, 
-  Wallet, 
-  User, 
-  Search,
-  BarChart2,
-  Send,
-  Settings,
-  Shield,
-  Mail,
-  Clock,
-  TrendingUp,
-  UserPlus,
-  UserCheck,
-  MessageSquare,
-  CreditCard,
-  Activity,
-  Building2,
-  DollarSign,
-  FileCheck
+  LayoutDashboard, Calendar, Users, Wallet, User, Search,
+  BarChart2, Send, Settings, Shield, Clock, TrendingUp,
+  UserPlus, UserCheck, MessageSquare, CreditCard, Activity,
+  Building2, DollarSign, FileCheck
 } from "lucide-react";
 
 interface MenuCardProps {
@@ -30,106 +13,58 @@ interface MenuCardProps {
   icon: string;
   title: string;
   description: string;
-  color?: 'blue' | 'pink'; // Mantido para compatibilidade, mas todos serão azul
+  color?: 'blue' | 'pink';
 }
 
-// Cores da paleta do projeto
-const CORES = {
-  azul: "#2F80D3",
-  rosa: "#E03673",
-};
-
-// Mapeamento de ícones baseado no nome do ícone passado
 const getIcon = (iconName: string) => {
+  const cls = "w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0";
   switch (iconName) {
-    // Dashboard
-    case 'dashboard':
-      return <LayoutDashboard className="w-5 h-5" />;
-    // Usuários
-    case 'users':
-      return <Users className="w-5 h-5" />;
-    // Terapeutas
-    case 'therapists':
-      return <Shield className="w-5 h-5" />;
-    // Pacientes
+    case 'dashboard':     return <LayoutDashboard className={cls} />;
+    case 'users':         return <Users className={cls} />;
+    case 'therapists':    return <Shield className={cls} />;
     case 'patients':
-      return <User className="w-5 h-5" />;
-    // Sessões
+    case 'profile':       return <User className={cls} />;
     case 'sessions':
-    case 'calendar':
-      return <Calendar className="w-5 h-5" />;
-    // Convites
+    case 'calendar':      return <Calendar className={cls} />;
     case 'invites':
-    case 'send':
-      return <Send className="w-5 h-5" />;
-    // Disponibilidade
+    case 'send':          return <Send className={cls} />;
     case 'availability':
-    case 'clock':
-      return <Clock className="w-5 h-5" />;
-    // Relatórios
+    case 'clock':         return <Clock className={cls} />;
     case 'reports':
-    case 'chart':
-      return <BarChart2 className="w-5 h-5" />;
-    // Financeiro
+    case 'chart':         return <BarChart2 className={cls} />;
     case 'financial':
-    case 'trending':
-      return <TrendingUp className="w-5 h-5" />;
-    // Configurações
-    case 'settings':
-      return <Settings className="w-5 h-5" />;
-    // Busca
-    case 'search':
-      return <Search className="w-5 h-5" />;
-    // Carteira
-    case 'wallet':
-      return <Wallet className="w-5 h-5" />;
-    // Perfil
-    case 'profile':
-      return <User className="w-5 h-5" />;
-    // UserPlus
-    case 'userplus':
-      return <UserPlus className="w-5 h-5" />;
-    // UserCheck
-    case 'usercheck':
-      return <UserCheck className="w-5 h-5" />;
-    // MessageSquare
-    case 'messagesquare':
-      return <MessageSquare className="w-5 h-5" />;
-    // CreditCard
-    case 'creditcard':
-      return <CreditCard className="w-5 h-5" />;
-    // Activity
-    case 'activity':
-      return <Activity className="w-5 h-5" />;
-    // Building2
-    case 'building2':
-      return <Building2 className="w-5 h-5" />;
-    // DollarSign
-    case 'dollarsign':
-      return <DollarSign className="w-5 h-5" />;
-    // FileCheck
-    case 'filecheck':
-      return <FileCheck className="w-5 h-5" />;
-    default:
-      return <LayoutDashboard className="w-5 h-5" />;
+    case 'trending':      return <TrendingUp className={cls} />;
+    case 'settings':      return <Settings className={cls} />;
+    case 'search':        return <Search className={cls} />;
+    case 'wallet':        return <Wallet className={cls} />;
+    case 'userplus':      return <UserPlus className={cls} />;
+    case 'usercheck':     return <UserCheck className={cls} />;
+    case 'messagesquare': return <MessageSquare className={cls} />;
+    case 'creditcard':    return <CreditCard className={cls} />;
+    case 'activity':      return <Activity className={cls} />;
+    case 'building2':     return <Building2 className={cls} />;
+    case 'dollarsign':    return <DollarSign className={cls} />;
+    case 'filecheck':     return <FileCheck className={cls} />;
+    default:              return <LayoutDashboard className={cls} />;
   }
 };
 
 export function MenuCard({ href, icon, title, description, color = 'blue' }: MenuCardProps) {
-  // Todas as cores agora usam o azul da paleta #2F80D3
-  // O parâmetro color é mantido para compatibilidade, mas ignorado
-  
   return (
     <Link
       href={href}
-      className="bg-gradient-to-br from-[#2F80D3] to-[#2F80D3]/80 text-white p-4 rounded-xl shadow-md hover:shadow-lg transition-all hover:scale-105 flex items-center gap-3"
+      className="bg-gradient-to-br from-[#2F80D3] to-[#2F80D3]/80 text-white p-2.5 sm:p-3 lg:p-4 rounded-xl shadow-md hover:shadow-lg transition-all hover:scale-105 flex items-center gap-2 sm:gap-3 overflow-hidden min-w-0"
     >
-      <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
         {getIcon(icon)}
       </div>
-      <div>
-        <p className="font-semibold text-sm">{title}</p>
-        <p className="text-xs text-white/80">{description}</p>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-[11px] sm:text-xs lg:text-sm leading-tight truncate">
+          {title}
+        </p>
+        <p className="text-[10px] sm:text-[11px] lg:text-xs text-white/80 leading-tight truncate hidden sm:block">
+          {description}
+        </p>
       </div>
     </Link>
   );

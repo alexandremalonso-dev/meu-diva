@@ -95,7 +95,6 @@ const adminNavItems: NavItem[] = [
   { name: "Preços", href: "/admin/pricing", icon: DollarSign },
   { name: "Planos Empresas", href: "/admin/valor-empresa", icon: Building2 },
   { name: "Gestão de Empresas", href: "/admin/reports/empresas-assinaturas", icon: Store },
-  { name: "Monitor", href: "/admin/monitor", icon: Activity },
   { name: "Chat Admin", href: "/admin/chat", icon: MessageSquare },
   { name: "Permissões", href: "/admin/permissions", icon: Shield },
 ];
@@ -146,7 +145,10 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-16 bg-white border-r border-gray-200 shadow-sm flex flex-col relative" style={{ height: "100%" }}>
+    // Sem height:100% aqui: o pai (no MainLayout) é um flex container
+    // dedicado a este único filho, então align-items:stretch (padrão)
+    // já estica este <aside> pra altura correta automaticamente.
+    <aside className="w-16 bg-white border-r border-gray-200 shadow-sm flex flex-col relative flex-1">
       <div className="h-16 flex items-center justify-center border-b border-gray-200 flex-shrink-0">
         <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center bg-white">
           <Image 
