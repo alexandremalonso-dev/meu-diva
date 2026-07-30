@@ -251,6 +251,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
                 session_duration_50min=True
             )
             db.add(therapist_profile)
+            db.flush()
+            # 🔥 Criar wallet automaticamente para o novo terapeuta
+            from app.models.wallet import Wallet
+            db.add(Wallet(therapist_id=therapist_profile.id, balance=0, currency="BRL"))
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error creating profile: {str(e)}")

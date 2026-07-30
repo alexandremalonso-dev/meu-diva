@@ -166,14 +166,12 @@ export default function MobileTerapeutaPage() {
         return;
       }
 
-      const residual = preco - balance;
-      const successUrl = `${window.location.origin}/mobile/dashboard?payment_success=true&therapist_name=${therapistName}&date=${date}&time=${time}&price=${preco}`;
-      const cancelUrl = `${window.location.origin}/mobile/terapeuta/${therapistId}?cancel=true`;
-      const stripeData = await api('/api/payments/create-checkout', {
+      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout proprio (Mercado Pago)
+      const bookingData = await api('/api/appointments', {
         method: "POST",
-        body: JSON.stringify({ amount: residual, success_url: successUrl, cancel_url: cancelUrl, therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
+        body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
       });
-      window.location.href = stripeData.checkout_url;
+      router.push(`/checkout?appointment_id=${bookingData.id}`);
     } catch (err: any) {
       alert(err.message || "Erro ao agendar");
     } finally {
