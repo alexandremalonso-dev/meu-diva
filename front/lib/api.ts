@@ -6,6 +6,11 @@ function getApiBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
+  // App nativo Capacitor — sempre usa o backend de producao
+  const cap = (window as any).Capacitor;
+  if (cap?.isNativePlatform?.()) {
+    return "https://api.meudivaonline.com";
+  }
   const host = window.location.hostname;
   if (
     host.includes("app.meudivaonline.com") ||
