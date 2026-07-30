@@ -62,6 +62,10 @@ app.add_middleware(
         "https://meudiva-frontend-prod-592671373665.southamerica-east1.run.app",
         # Homologação
         "https://homologacao.meudivaonline.com",
+        # App nativo Capacitor (iOS/Android)
+        "capacitor://localhost",
+        "http://localhost",
+        "ionic://localhost",
         "https://meudiva-frontend-non-prod-365415900882.southamerica-east1.run.app",
     ],
     allow_credentials=True,

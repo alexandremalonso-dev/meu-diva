@@ -1,58 +1,50 @@
 import os
-from google.cloud import storage
-from typing import Optional
 import uuid
+from typing import Optional
+
+UPLOADS_ROOT = "/var/www/meudiva/uploads"
+PUBLIC_BASE_URL = os.getenv("BACKEND_URL", "https://api.meudivaonline.com")
+
 
 class StorageService:
+    """
+    Servico de armazenamento de arquivos. Salva localmente no VPS, em
+    /var/www/meudiva/uploads/<folder>/<filename>, servido pelo Nginx em
+    /uploads/<folder>/<filename> (ver location /uploads/ no nginx config).
+
+    Substitui a versao anterior baseada em Google Cloud Storage, que ficou
+    inoperante apos a migracao para o VPS (recursos GCP foram deletados).
+    """
+
     def __init__(self):
-        self.bucket_name = os.getenv("GCS_BUCKET_NAME", "meudiva-non-prod-fotos")
-        self.client = storage.Client()
-        self.bucket = self.client.bucket(self.bucket_name)
-    
-    def upload_file(
-        self, 
-        file_content: bytes, 
-        folder: str, 
-        filename: Optional[str] = None,
-        content_type: str = "image/jpeg"
-    ) -> str:
-        """
-        Upload um arquivo para o Cloud Storage
-        
-        Args:
-            file_content: Conteúdo do arquivo em bytes
-            folder: Pasta destino (ex: 'patients', 'therapists', 'admins')
-            filename: Nome do arquivo (opcional - gera UUID se não fornecido)
-            content_type: Tipo MIME do arquivo
-        
-        Returns:
-            URL pública do arquivo
-        """
+        os.makedirs(UPLOADS_ROOT, exist_ok=True)
+
+    def upload_file(self, file_content: bytes, folder: str, filename: Optional[str] = None, content_type: str = "image/jpeg") -> str:
         if filename is None:
-            ext = content_type.split('/')[-1] if '/' in content_type else 'jpg'
+            ext = content_type.split("/")[-1] if "/" in content_type else "jpg"
+            if ext == "jpeg":
+                ext = "jpg"
             filename = f"{uuid.uuid4().hex}.{ext}"
-        
-        blob_path = f"{folder}/{filename}"
-        blob = self.bucket.blob(blob_path)
-        blob.upload_from_string(file_content, content_type=content_type)
-        
-        # Retorna a URL pública
-        return f"https://storage.googleapis.com/{self.bucket_name}/{blob_path}"
-    
+        folder_path = os.path.join(UPLOADS_ROOT, folder)
+        os.makedirs(folder_path, exist_ok=True)
+        file_path = os.path.join(folder_path, filename)
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        return f"{PUBLIC_BASE_URL}/uploads/{folder}/{filename}"
+
     def get_url(self, blob_path: str) -> str:
-        """Retorna a URL pública de um arquivo no bucket"""
-        return f"https://storage.googleapis.com/{self.bucket_name}/{blob_path}"
-    
+        return f"{PUBLIC_BASE_URL}/uploads/{blob_path}"
+
     def delete_file(self, blob_path: str) -> bool:
-        """Remove um arquivo do bucket"""
         try:
-            blob = self.bucket.blob(blob_path)
-            blob.delete()
-            return True
+            full_path = os.path.join(UPLOADS_ROOT, blob_path)
+            if os.path.exists(full_path):
+                os.remove(full_path)
+                return True
+            return False
         except Exception:
             return False
-    
+
     def file_exists(self, blob_path: str) -> bool:
-        """Verifica se um arquivo existe no bucket"""
-        blob = self.bucket.blob(blob_path)
-        return blob.exists()
+        full_path = os.path.join(UPLOADS_ROOT, blob_path)
+        return os.path.exists(full_path)

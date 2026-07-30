@@ -47,42 +47,27 @@ router = APIRouter(prefix="/patient", tags=["patient"])
 # HELPERS
 # ============================================
 def get_patient_profile_or_404(db: Session, user_id: int) -> PatientProfile:
-    """Busca o perfil do paciente ou retorna 404"""
     profile = db.execute(
         select(PatientProfile).where(PatientProfile.user_id == user_id)
     ).scalar_one_or_none()
-    
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil de paciente não encontrado")
-    
     return profile
 
 def save_upload_file(upload_file: UploadFile, user_id: int) -> str:
-    """Salva o arquivo de upload e retorna a URL"""
-    
-    # Validar extensão
     file_ext = os.path.splitext(upload_file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Formato de arquivo não permitido. Use JPG, PNG ou WEBP")
-    
-    # Validar tamanho (ler conteúdo para verificar)
     file_content = upload_file.file.read()
     if len(file_content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="Arquivo muito grande. Máximo 5MB")
-    
-    # Resetar o ponteiro do arquivo
     upload_file.file.seek(0)
-    
-    # Gerar nome único
     unique_filename = f"patient_{user_id}_{uuid.uuid4().hex}{file_ext}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    
-    # Salvar arquivo
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(upload_file.file, buffer)
-    
-    # Retornar URL relativa
-    return f"/uploads/patients/{unique_filename}"
+    backend_url = os.getenv("BACKEND_URL", "https://api.meudivaonline.com")
+    return f"{backend_url}/uploads/patients/{unique_filename}"
 
 # ============================================
 # PROFILE ENDPOINTS
@@ -93,25 +78,15 @@ def get_patient_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.patient))
 ):
-    """
-    Retorna o perfil completo do paciente logado
-    Cria automaticamente se não existir (igual ao terapeuta)
-    """
     print(f"\n📋 GET /patient/profile - Usuário: {current_user.id}")
-    
     try:
-        # Buscar perfil
         profile = db.execute(
             select(PatientProfile).where(PatientProfile.user_id == current_user.id)
         ).scalar_one_or_none()
-        
-        # 🔥 SE NÃO EXISTIR, CRIAR AUTOMATICAMENTE
+
         if not profile:
             print("👤 Perfil não encontrado, criando perfil padrão...")
-            
-            # Buscar nome da tabela users
             user_full_name = current_user.full_name
-            
             profile = PatientProfile(
                 user_id=current_user.id,
                 full_name=user_full_name or "",
@@ -122,8 +97,7 @@ def get_patient_profile(
             db.add(profile)
             db.commit()
             db.refresh(profile)
-            
-            # 🔥 Sincronizar: se patient_profile tem nome e users não, atualizar users
+
             if profile.full_name and not current_user.full_name:
                 db.execute(
                     update(User)
@@ -132,23 +106,28 @@ def get_patient_profile(
                 )
                 db.commit()
                 print(f"✅ Nome sincronizado de patient_profile para users: {profile.full_name}")
-            
+
             print(f"✅ Perfil padrão criado: ID {profile.id}")
-        
-        # Buscar endereços
+
+            # 🔥 Criar wallet automaticamente para o novo paciente
+            from app.models.wallet import Wallet
+            existing_wallet = db.execute(select(Wallet).where(Wallet.patient_id == profile.id)).scalar_one_or_none()
+            if not existing_wallet:
+                db.add(Wallet(patient_id=profile.id, balance=0))
+                db.commit()
+                print(f"✅ Wallet criada automaticamente para paciente: {profile.id}")
+
         addresses = db.execute(
             select(PatientAddress).where(PatientAddress.patient_id == profile.id)
         ).scalars().all()
-        
-        # Buscar objetivos ativos
+
         goals = db.execute(
             select(PatientGoal).where(
                 PatientGoal.patient_id == profile.id,
                 PatientGoal.is_active == True
             )
         ).scalars().all()
-        
-        # Montar resultado completo
+
         result = {
             "id": profile.id,
             "user_id": profile.user_id,
@@ -166,10 +145,10 @@ def get_patient_profile(
             "addresses": addresses,
             "goals": goals
         }
-        
+
         print(f"✅ Perfil encontrado/criado: ID {profile.id}")
         return result
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -184,92 +163,46 @@ def update_patient_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.patient))
 ):
-    """
-    Atualiza os dados do perfil do paciente
-    """
     print(f"\n📝 PUT /patient/profile - Usuário: {current_user.id}")
-    print(f"📦 Dados recebidos: {profile_data.model_dump(exclude_unset=True)}")
-    
     try:
-        # Buscar perfil
         profile = get_patient_profile_or_404(db, current_user.id)
-        
-        # 🔥 TRATAMENTO ESPECIAL PARA CPF VAZIO
         update_data = profile_data.model_dump(exclude_unset=True)
-        
-        # Se CPF for string vazia, converter para None para evitar violação de unique
         if 'cpf' in update_data and update_data['cpf'] == '':
             update_data['cpf'] = None
-        
-        # Verificar se está atualizando o nome
         name_updated = False
         new_name = None
-        
         for field, value in update_data.items():
             if hasattr(profile, field):
                 setattr(profile, field, value)
                 if field == 'full_name' and value:
                     name_updated = True
                     new_name = value
-            else:
-                print(f"⚠️ Campo ignorado: {field} não existe no modelo")
-        
         profile.updated_at = datetime.now()
-        
         db.commit()
         db.refresh(profile)
-        
-        # 🔥 Sincronizar nome com a tabela users se foi atualizado
         if name_updated and new_name:
-            db.execute(
-                update(User)
-                .where(User.id == current_user.id)
-                .values(full_name=new_name)
-            )
+            db.execute(update(User).where(User.id == current_user.id).values(full_name=new_name))
             db.commit()
             print(f"✅ Nome sincronizado com tabela users: {new_name}")
-        
-        # Buscar relacionamentos para retornar
-        addresses = db.execute(
-            select(PatientAddress).where(PatientAddress.patient_id == profile.id)
-        ).scalars().all()
-        
-        goals = db.execute(
-            select(PatientGoal).where(
-                PatientGoal.patient_id == profile.id,
-                PatientGoal.is_active == True
-            )
-        ).scalars().all()
-        
-        # Montar resultado completo
+        addresses = db.execute(select(PatientAddress).where(PatientAddress.patient_id == profile.id)).scalars().all()
+        goals = db.execute(select(PatientGoal).where(PatientGoal.patient_id == profile.id, PatientGoal.is_active == True)).scalars().all()
         result = {
-            "id": profile.id,
-            "user_id": profile.user_id,
-            "full_name": profile.full_name,
-            "email": profile.email,
-            "phone": profile.phone,
-            "cpf": profile.cpf,
+            "id": profile.id, "user_id": profile.user_id, "full_name": profile.full_name,
+            "email": profile.email, "phone": profile.phone, "cpf": profile.cpf,
             "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
-            "education_level": profile.education_level,
-            "foto_url": profile.foto_url,
-            "timezone": profile.timezone,
-            "preferred_language": profile.preferred_language,
-            "created_at": profile.created_at,
-            "updated_at": profile.updated_at,
-            "addresses": addresses,
-            "goals": goals
+            "education_level": profile.education_level, "foto_url": profile.foto_url,
+            "timezone": profile.timezone, "preferred_language": profile.preferred_language,
+            "created_at": profile.created_at, "updated_at": profile.updated_at,
+            "addresses": addresses, "goals": goals
         }
-        
         print(f"✅ Perfil atualizado: ID {profile.id}")
         return result
-        
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         print(f"❌ Erro ao atualizar perfil: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno ao atualizar perfil: {str(e)}")
 
 @router.post("/profile/photo", response_model=PatientPhotoResponse)
@@ -278,46 +211,38 @@ async def upload_patient_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.patient))
 ):
-    """
-    Faz upload da foto do paciente
-    """
     print(f"\n📸 POST /patient/profile/photo - Usuário: {current_user.id}")
     print(f"📦 Arquivo: {file.filename}")
-    
     try:
-        # Buscar perfil
+        from app.core.storage import StorageService
+        storage_service = StorageService()
         profile = get_patient_profile_or_404(db, current_user.id)
-        
-        # Remover foto antiga se existir
-        if profile.foto_url:
-            old_file_path = os.path.join(UPLOAD_DIR, os.path.basename(profile.foto_url))
-            if os.path.exists(old_file_path):
-                os.remove(old_file_path)
-                print(f"🗑️ Foto antiga removida: {old_file_path}")
-        
-        # Salvar nova foto
-        foto_url = save_upload_file(file, current_user.id)
-        
-        # Atualizar perfil
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Formato não permitido. Use JPG, PNG ou WEBP")
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="Arquivo muito grande. Máximo 5MB")
+        foto_url = storage_service.upload_file(
+            file_content=file_content,
+            folder="patients",
+            content_type=file.content_type or "image/jpeg"
+        )
         profile.foto_url = foto_url
         profile.updated_at = datetime.now()
-        
         db.commit()
-        
         print(f"✅ Foto salva: {foto_url}")
         return PatientPhotoResponse(foto_url=foto_url)
-        
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         print(f"❌ Erro ao fazer upload: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno ao fazer upload: {str(e)}")
 
 # ============================================
-# COMPLAINT ENDPOINT (QUEIXA DO PACIENTE)
+# COMPLAINT ENDPOINT
 # ============================================
 
 from pydantic import BaseModel
@@ -332,262 +257,99 @@ def save_patient_complaint(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.patient))
 ):
-    """
-    Salva a queixa do paciente para uma sessão
-    """
     print(f"\n📝 POST /patient/sessions/{appointment_id}/complaint - Usuário: {current_user.id}")
-    print(f"📦 Dados recebidos: {complaint_data.complaint}")
-    
     complaint = complaint_data.complaint
-    
     if not complaint or not complaint.strip():
-        print("❌ Nenhuma queixa fornecida no payload")
         raise HTTPException(status_code=400, detail="Queixa é obrigatória")
-    
     try:
-        # Verificar se o appointment existe e pertence ao paciente
         from app.models.appointment import Appointment
-        
         appointment = db.execute(
-            select(Appointment).where(
-                Appointment.id == appointment_id,
-                Appointment.patient_user_id == current_user.id
-            )
+            select(Appointment).where(Appointment.id == appointment_id, Appointment.patient_user_id == current_user.id)
         ).scalar_one_or_none()
-        
         if not appointment:
-            print(f"❌ Sessão {appointment_id} não encontrada ou não pertence ao paciente {current_user.id}")
             raise HTTPException(status_code=404, detail="Sessão não encontrada")
-        
-        print(f"✅ Sessão encontrada: ID {appointment.id}, Terapeuta: {appointment.therapist_user_id}")
-        
-        # Buscar ou criar prontuário
-        medical_record = db.execute(
-            select(MedicalRecord).where(MedicalRecord.appointment_id == appointment_id)
-        ).scalar_one_or_none()
-        
+        medical_record = db.execute(select(MedicalRecord).where(MedicalRecord.appointment_id == appointment_id)).scalar_one_or_none()
         if not medical_record:
-            # Criar prontuário com a queixa
-            medical_record = MedicalRecord(
-                appointment_id=appointment_id,
-                patient_reasons=[complaint.strip()],
-                session_not_occurred=False
-            )
+            medical_record = MedicalRecord(appointment_id=appointment_id, patient_reasons=[complaint.strip()], session_not_occurred=False)
             db.add(medical_record)
-            print(f"✅ Novo prontuário criado para sessão {appointment_id}")
         else:
-            # Atualizar queixa existente
             current_reasons = medical_record.patient_reasons or []
-            if isinstance(current_reasons, str):
-                current_reasons = [current_reasons]
-            elif not isinstance(current_reasons, list):
-                current_reasons = []
-            
-            # Adicionar nova queixa (evitar duplicatas exatas)
-            if complaint.strip() not in current_reasons:
-                current_reasons.append(complaint.strip())
-            
+            if isinstance(current_reasons, str): current_reasons = [current_reasons]
+            elif not isinstance(current_reasons, list): current_reasons = []
+            if complaint.strip() not in current_reasons: current_reasons.append(complaint.strip())
             medical_record.patient_reasons = current_reasons
             medical_record.updated_at = datetime.now()
-            print(f"✅ Prontuário atualizado para sessão {appointment_id}")
-        
         db.commit()
         db.refresh(medical_record)
-        
-        print(f"✅ Queixa salva com sucesso! Total de queixas: {len(medical_record.patient_reasons)}")
-        
-        # Retornar resposta completa
-        return {
-            "success": True,
-            "message": "Queixa registrada com sucesso",
-            "appointment_id": appointment_id,
-            "complaints": medical_record.patient_reasons
-        }
-        
+        return {"success": True, "message": "Queixa registrada com sucesso", "appointment_id": appointment_id, "complaints": medical_record.patient_reasons}
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         print(f"❌ Erro ao salvar queixa: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno ao salvar queixa: {str(e)}")
-    
+
 # ============================================
 # GOALS ENDPOINTS
 # ============================================
 
 @router.get("/goals/types", response_model=List[GoalTypeOut])
-def list_goal_types(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Lista todos os tipos de objetivo disponíveis
-    """
-    print(f"\n📋 GET /patient/goals/types - Usuário: {current_user.id}")
-    
+def list_goal_types(db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
-        # Buscar todos os tipos de objetivo ativos
-        types = db.execute(
-            select(GoalType).where(GoalType.is_active == True)
-        ).scalars().all()
-        
-        print(f"✅ Encontrados {len(types)} tipos de objetivo")
+        types = db.execute(select(GoalType).where(GoalType.is_active == True)).scalars().all()
         return types
-        
     except Exception as e:
-        print(f"❌ Erro ao listar tipos de objetivo: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 @router.get("/goals", response_model=List[PatientGoalOut])
-def list_goals(
-    active_only: bool = True,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Lista os objetivos do paciente
-    """
-    print(f"\n📋 GET /patient/goals - Usuário: {current_user.id}")
-    
+def list_goals(active_only: bool = True, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
         query = select(PatientGoal).where(PatientGoal.patient_id == profile.id)
-        if active_only:
-            query = query.where(PatientGoal.is_active == True)
-        
-        goals = db.execute(query).scalars().all()
-        
-        print(f"✅ Encontrados {len(goals)} objetivos")
-        return goals
-        
-    except HTTPException:
-        raise
+        if active_only: query = query.where(PatientGoal.is_active == True)
+        return db.execute(query).scalars().all()
+    except HTTPException: raise
     except Exception as e:
-        print(f"❌ Erro ao listar objetivos: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao listar objetivos")
 
 @router.post("/goals", response_model=PatientGoalOut, status_code=201)
-def create_goal(
-    goal_data: PatientGoalCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Adiciona um novo objetivo terapêutico
-    """
-    print(f"\n📝 POST /patient/goals - Usuário: {current_user.id}")
-    print(f"📦 Dados: {goal_data.model_dump()}")
-    
+def create_goal(goal_data: PatientGoalCreate, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
-        # Verificar se o tipo de objetivo existe (validação)
-        goal_type_exists = db.execute(
-            select(GoalType).where(GoalType.name == goal_data.goal_type)
-        ).scalar_one_or_none()
-        
-        if not goal_type_exists:
-            print(f"⚠️ Tipo de objetivo '{goal_data.goal_type}' não encontrado na tabela goal_types")
-            # Não vamos bloquear, apenas avisar
-        
-        goal = PatientGoal(
-            patient_id=profile.id,
-            **goal_data.model_dump()
-        )
-        
-        db.add(goal)
-        db.commit()
-        db.refresh(goal)
-        
-        print(f"✅ Objetivo criado: ID {goal.id}, tipo: {goal.goal_type}")
+        goal = PatientGoal(patient_id=profile.id, **goal_data.model_dump())
+        db.add(goal); db.commit(); db.refresh(goal)
         return goal
-        
-    except HTTPException:
-        raise
+    except HTTPException: raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao criar objetivo: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao criar objetivo")
 
 @router.put("/goals/{goal_id}", response_model=PatientGoalOut)
-def update_goal(
-    goal_id: int,
-    goal_data: PatientGoalUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Atualiza um objetivo (ex: marcar como concluído)
-    """
-    print(f"\n📝 PUT /patient/goals/{goal_id} - Usuário: {current_user.id}")
-    print(f"📦 Dados: {goal_data.model_dump(exclude_unset=True)}")
-    
+def update_goal(goal_id: int, goal_data: PatientGoalUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
         goal = db.get(PatientGoal, goal_id)
-        if not goal or goal.patient_id != profile.id:
-            raise HTTPException(status_code=404, detail="Objetivo não encontrado")
-        
-        update_data = goal_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            if hasattr(goal, field):
-                setattr(goal, field, value)
-        
-        db.commit()
-        db.refresh(goal)
-        
-        print(f"✅ Objetivo atualizado: ID {goal.id}")
+        if not goal or goal.patient_id != profile.id: raise HTTPException(status_code=404, detail="Objetivo não encontrado")
+        for field, value in goal_data.model_dump(exclude_unset=True).items():
+            if hasattr(goal, field): setattr(goal, field, value)
+        db.commit(); db.refresh(goal)
         return goal
-        
-    except HTTPException:
-        raise
+    except HTTPException: raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao atualizar objetivo: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao atualizar objetivo")
 
 @router.delete("/goals/{goal_id}", status_code=204)
-def delete_goal(
-    goal_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Remove um objetivo
-    """
-    print(f"\n🗑️ DELETE /patient/goals/{goal_id} - Usuário: {current_user.id}")
-    
+def delete_goal(goal_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
         goal = db.get(PatientGoal, goal_id)
-        if not goal or goal.patient_id != profile.id:
-            raise HTTPException(status_code=404, detail="Objetivo não encontrado")
-        
-        db.delete(goal)
-        db.commit()
-        
-        print(f"✅ Objetivo removido: ID {goal_id}")
-        
-    except HTTPException:
-        raise
+        if not goal or goal.patient_id != profile.id: raise HTTPException(status_code=404, detail="Objetivo não encontrado")
+        db.delete(goal); db.commit()
+    except HTTPException: raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao remover objetivo: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao remover objetivo")
 
 # ============================================
@@ -595,268 +357,92 @@ def delete_goal(
 # ============================================
 
 @router.get("/profile/address", response_model=List[PatientAddressOut])
-def list_addresses(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Lista todos os endereços do paciente
-    """
-    print(f"\n📋 GET /patient/profile/address - Usuário: {current_user.id}")
-    
+def list_addresses(db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
-        addresses = db.execute(
-            select(PatientAddress).where(PatientAddress.patient_id == profile.id)
-        ).scalars().all()
-        
-        print(f"✅ Encontrados {len(addresses)} endereços")
-        return addresses
-        
-    except HTTPException:
-        raise
+        return db.execute(select(PatientAddress).where(PatientAddress.patient_id == profile.id)).scalars().all()
+    except HTTPException: raise
     except Exception as e:
-        print(f"❌ Erro ao listar endereços: {e}")
         raise HTTPException(status_code=500, detail="Erro interno ao listar endereços")
 
 @router.post("/profile/address", response_model=PatientAddressOut, status_code=201)
-def create_address(
-    address_data: PatientAddressCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Adiciona um novo endereço para o paciente
-    """
-    print(f"\n📝 POST /patient/profile/address - Usuário: {current_user.id}")
-    print(f"📦 Dados: {address_data.model_dump()}")
-    
+def create_address(address_data: PatientAddressCreate, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
-        # Se for default, remover default dos outros
         if address_data.is_default:
-            db.execute(
-                update(PatientAddress)
-                .where(PatientAddress.patient_id == profile.id)
-                .values(is_default=False)
-            )
-        
-        # Criar novo endereço
-        address = PatientAddress(
-            patient_id=profile.id,
-            **address_data.model_dump()
-        )
-        
-        db.add(address)
-        db.commit()
-        db.refresh(address)
-        
-        print(f"✅ Endereço criado: ID {address.id}")
+            db.execute(update(PatientAddress).where(PatientAddress.patient_id == profile.id).values(is_default=False))
+        address = PatientAddress(patient_id=profile.id, **address_data.model_dump())
+        db.add(address); db.commit(); db.refresh(address)
         return address
-        
-    except HTTPException:
-        raise
+    except HTTPException: raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao criar endereço: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao criar endereço")
 
 @router.put("/profile/address/{address_id}", response_model=PatientAddressOut)
-def update_address(
-    address_id: int,
-    address_data: PatientAddressUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Atualiza um endereço existente
-    """
-    print(f"\n📝 PUT /patient/profile/address/{address_id} - Usuário: {current_user.id}")
-    print(f"📦 Dados: {address_data.model_dump(exclude_unset=True)}")
-    
+def update_address(address_id: int, address_data: PatientAddressUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
-        # Buscar endereço
         address = db.get(PatientAddress, address_id)
-        if not address or address.patient_id != profile.id:
-            raise HTTPException(status_code=404, detail="Endereço não encontrado")
-        
-        # Se for default, remover default dos outros
+        if not address or address.patient_id != profile.id: raise HTTPException(status_code=404, detail="Endereço não encontrado")
         if address_data.is_default and not address.is_default:
-            db.execute(
-                update(PatientAddress)
-                .where(PatientAddress.patient_id == profile.id)
-                .values(is_default=False)
-            )
-        
-        # Atualizar campos
-        update_data = address_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            if hasattr(address, field):
-                setattr(address, field, value)
-        
-        db.commit()
-        db.refresh(address)
-        
-        print(f"✅ Endereço atualizado: ID {address.id}")
+            db.execute(update(PatientAddress).where(PatientAddress.patient_id == profile.id).values(is_default=False))
+        for field, value in address_data.model_dump(exclude_unset=True).items():
+            if hasattr(address, field): setattr(address, field, value)
+        db.commit(); db.refresh(address)
         return address
-        
-    except HTTPException:
-        raise
+    except HTTPException: raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao atualizar endereço: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao atualizar endereço")
 
 @router.delete("/profile/address/{address_id}", status_code=204)
-def delete_address(
-    address_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """
-    Remove um endereço
-    """
-    print(f"\n🗑️ DELETE /patient/profile/address/{address_id} - Usuário: {current_user.id}")
-    
+def delete_address(address_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     try:
         profile = get_patient_profile_or_404(db, current_user.id)
-        
         address = db.get(PatientAddress, address_id)
-        if not address or address.patient_id != profile.id:
-            raise HTTPException(status_code=404, detail="Endereço não encontrado")
-        
-        db.delete(address)
-        db.commit()
-        
-        print(f"✅ Endereço removido: ID {address_id}")
-        
-    except HTTPException:
-        raise
+        if not address or address.patient_id != profile.id: raise HTTPException(status_code=404, detail="Endereço não encontrado")
+        db.delete(address); db.commit()
+    except HTTPException: raise
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao remover endereço: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao remover endereço")
-    
-# ==========================
-# FAVORITOS — adicionar ao final de app/routes/patient.py
-# ==========================
+
+# ============================================
+# FAVORITOS
+# ============================================
 
 from app.models.patient_favorite import PatientFavorite
 from app.models.therapist_profile import TherapistProfile
 
 @router.post("/favorites/{therapist_profile_id}", status_code=201)
-def add_favorite(
-    therapist_profile_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """Adiciona um terapeuta aos favoritos do paciente"""
+def add_favorite(therapist_profile_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     profile = get_patient_profile_or_404(db, current_user.id)
-
-    # Verifica se o terapeuta existe
     therapist = db.get(TherapistProfile, therapist_profile_id)
-    if not therapist:
-        raise HTTPException(status_code=404, detail="Terapeuta não encontrado")
-
-    # Verifica se já está favoritado
-    existing = db.execute(
-        select(PatientFavorite).where(
-            PatientFavorite.patient_id == profile.id,
-            PatientFavorite.therapist_id == therapist_profile_id
-        )
-    ).scalar_one_or_none()
-
-    if existing:
-        return {"is_favorite": True, "message": "Já está nos favoritos"}
-
-    favorite = PatientFavorite(patient_id=profile.id, therapist_id=therapist_profile_id)
-    db.add(favorite)
-    db.commit()
-
+    if not therapist: raise HTTPException(status_code=404, detail="Terapeuta não encontrado")
+    existing = db.execute(select(PatientFavorite).where(PatientFavorite.patient_id == profile.id, PatientFavorite.therapist_id == therapist_profile_id)).scalar_one_or_none()
+    if existing: return {"is_favorite": True, "message": "Já está nos favoritos"}
+    db.add(PatientFavorite(patient_id=profile.id, therapist_id=therapist_profile_id)); db.commit()
     return {"is_favorite": True, "message": "Adicionado aos favoritos"}
 
-
 @router.delete("/favorites/{therapist_profile_id}", status_code=200)
-def remove_favorite(
-    therapist_profile_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """Remove um terapeuta dos favoritos do paciente"""
+def remove_favorite(therapist_profile_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     profile = get_patient_profile_or_404(db, current_user.id)
-
-    favorite = db.execute(
-        select(PatientFavorite).where(
-            PatientFavorite.patient_id == profile.id,
-            PatientFavorite.therapist_id == therapist_profile_id
-        )
-    ).scalar_one_or_none()
-
-    if not favorite:
-        return {"is_favorite": False, "message": "Não estava nos favoritos"}
-
-    db.delete(favorite)
-    db.commit()
-
+    favorite = db.execute(select(PatientFavorite).where(PatientFavorite.patient_id == profile.id, PatientFavorite.therapist_id == therapist_profile_id)).scalar_one_or_none()
+    if not favorite: return {"is_favorite": False, "message": "Não estava nos favoritos"}
+    db.delete(favorite); db.commit()
     return {"is_favorite": False, "message": "Removido dos favoritos"}
 
-
 @router.get("/favorites/{therapist_profile_id}")
-def check_favorite(
-    therapist_profile_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """Verifica se um terapeuta está nos favoritos do paciente"""
+def check_favorite(therapist_profile_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     profile = get_patient_profile_or_404(db, current_user.id)
-
-    existing = db.execute(
-        select(PatientFavorite).where(
-            PatientFavorite.patient_id == profile.id,
-            PatientFavorite.therapist_id == therapist_profile_id
-        )
-    ).scalar_one_or_none()
-
+    existing = db.execute(select(PatientFavorite).where(PatientFavorite.patient_id == profile.id, PatientFavorite.therapist_id == therapist_profile_id)).scalar_one_or_none()
     return {"is_favorite": existing is not None}
 
-
 @router.get("/favorites")
-def list_favorites(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.patient))
-):
-    """Lista todos os terapeutas favoritados pelo paciente"""
+def list_favorites(db: Session = Depends(get_db), current_user: User = Depends(require_roles(UserRole.patient))):
     profile = get_patient_profile_or_404(db, current_user.id)
-
-    favorites = db.execute(
-        select(PatientFavorite).where(PatientFavorite.patient_id == profile.id)
-    ).scalars().all()
-
+    favorites = db.execute(select(PatientFavorite).where(PatientFavorite.patient_id == profile.id)).scalars().all()
     therapist_ids = [f.therapist_id for f in favorites]
-
-    therapists = db.execute(
-        select(TherapistProfile).where(TherapistProfile.id.in_(therapist_ids))
-    ).scalars().all()
-
-    return [
-        {
-            "id": t.id,
-            "user_id": t.user_id,
-            "full_name": t.full_name,
-            "foto_url": t.foto_url,
-            "specialties": t.specialties,
-            "session_price": t.session_price,
-            "rating": t.rating,
-        }
-        for t in therapists
-    ]
+    therapists = db.execute(select(TherapistProfile).where(TherapistProfile.id.in_(therapist_ids))).scalars().all()
+    return [{"id": t.id, "user_id": t.user_id, "full_name": t.full_name, "foto_url": t.foto_url, "specialties": t.specialties, "session_price": t.session_price, "rating": t.rating} for t in therapists]
