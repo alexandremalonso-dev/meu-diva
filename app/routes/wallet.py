@@ -28,24 +28,39 @@ from app.schemas.wallet import (
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
+# ============================================
+# HELPERS
+# ============================================
+
 def get_patient_wallet_or_404(db: Session, patient_id: int) -> Wallet:
     wallet = db.execute(
         select(Wallet).where(Wallet.patient_id == patient_id)
     ).scalar_one_or_none()
+
     if not wallet:
         raise HTTPException(status_code=404, detail="Carteira não encontrada")
+
     return wallet
+
 
 def get_patient_id_from_user(db: Session, user_id: int) -> int:
     patient = db.execute(
         select(PatientProfile).where(PatientProfile.user_id == user_id)
     ).scalar_one_or_none()
+
     if not patient:
         raise HTTPException(status_code=404, detail="Perfil de paciente não encontrado")
+
     return patient.id
+
 
 def format_currency(amount: Decimal, currency: str = "BRL") -> str:
     return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+# ============================================
+# BALANCE (FONTE DA VERDADE)
+# ============================================
 
 @router.get("/balance", response_model=WalletBalanceResponse)
 def get_wallet_balance(
@@ -53,14 +68,22 @@ def get_wallet_balance(
     current_user: User = Security(require_roles([UserRole.patient]))
 ):
     print(f"\n💰 GET /wallet/balance - User {current_user.id}")
+
     patient_id = get_patient_id_from_user(db, current_user.id)
     wallet = get_patient_wallet_or_404(db, patient_id)
+
     balance = Decimal(wallet.balance)
+
     return WalletBalanceResponse(
         balance=balance,
         currency=wallet.currency,
         formatted=format_currency(balance, wallet.currency)
     )
+
+
+# ============================================
+# WALLET BASE
+# ============================================
 
 @router.get("/", response_model=WalletOut)
 def get_wallet(
@@ -69,7 +92,13 @@ def get_wallet(
 ):
     patient_id = get_patient_id_from_user(db, current_user.id)
     wallet = get_patient_wallet_or_404(db, patient_id)
+
     return wallet
+
+
+# ============================================
+# TRANSACTIONS (LEDGER)
+# ============================================
 
 @router.get("/transactions", response_model=List[LedgerEntryOut])
 def get_transactions(
@@ -81,11 +110,20 @@ def get_transactions(
 ):
     patient_id = get_patient_id_from_user(db, current_user.id)
     wallet = get_patient_wallet_or_404(db, patient_id)
+
     query = select(Ledger).where(Ledger.wallet_id == wallet.id)
+
     if transaction_type:
         query = query.where(Ledger.transaction_type == transaction_type)
+
     query = query.order_by(desc(Ledger.created_at)).limit(limit).offset(offset)
+
     return db.execute(query).scalars().all()
+
+
+# ============================================
+# WALLET COMPLETA
+# ============================================
 
 @router.get("/full", response_model=WalletWithTransactions)
 def get_wallet_with_transactions(
@@ -95,12 +133,14 @@ def get_wallet_with_transactions(
 ):
     patient_id = get_patient_id_from_user(db, current_user.id)
     wallet = get_patient_wallet_or_404(db, patient_id)
+
     transactions = db.execute(
         select(Ledger)
         .where(Ledger.wallet_id == wallet.id)
         .order_by(desc(Ledger.created_at))
         .limit(limit)
     ).scalars().all()
+
     return {
         "id": wallet.id,
         "patient_id": wallet.patient_id,
@@ -111,18 +151,30 @@ def get_wallet_with_transactions(
         "recent_transactions": transactions
     }
 
+
+# ============================================
+# TOP-UP (RECARGA DE CRÉDITOS) - APENAS STRIPE
+# ============================================
+
 @router.post("/topup", response_model=TopUpResponse)
 def create_topup(
     payload: TopUpRequest,
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.patient]))
 ):
+    """
+    Cria uma intenção de pagamento para recarga de créditos via Stripe
+    """
     print(f"\n💰 POST /api/wallet/topup - Usuário: {current_user.id}")
     print(f"   Amount: {payload.amount}")
+
     if payload.amount <= 0:
         raise HTTPException(status_code=400, detail="Valor inválido")
+
     patient_id = get_patient_id_from_user(db, current_user.id)
     wallet = get_patient_wallet_or_404(db, patient_id)
+
+    # Criar payment
     payment = Payment(
         patient_id=patient_id,
         wallet_id=wallet.id,
@@ -130,23 +182,39 @@ def create_topup(
         status="pending",
         payment_method=payload.payment_method
     )
+
     db.add(payment)
     db.commit()
     db.refresh(payment)
+
     print(f"✅ Payment criado: ID {payment.id}")
+
+    # 🔥 APENAS STRIPE - SEM MOCK
     stripe_secret_key = settings.stripe_secret_key or os.getenv("STRIPE_SECRET_KEY", "")
+    
     if not stripe_secret_key:
-        raise HTTPException(status_code=500, detail="Stripe não configurado.")
+        raise HTTPException(
+            status_code=500, 
+            detail="Stripe não configurado. Configure STRIPE_SECRET_KEY no .env"
+        )
+    
     if not stripe_secret_key.startswith("sk_test_") and not stripe_secret_key.startswith("sk_live_"):
-        raise HTTPException(status_code=500, detail="Chave Stripe inválida.")
+        raise HTTPException(
+            status_code=500, 
+            detail="Chave Stripe inválida. A chave deve começar com sk_test_ ou sk_live_"
+        )
+    
     try:
         stripe.api_key = stripe_secret_key
+        
+        print("🔄 Criando sessão no Stripe...")
+        
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             line_items=[{
                 "price_data": {
                     "currency": "brl",
-                    "unit_amount": int(payload.amount * 100),
+                    "unit_amount": int(payload.amount * 100),  # R$ para centavos
                     "product_data": {
                         "name": "Recarga de créditos - Meu Divã",
                         "description": f"Adicionar R$ {payload.amount:.2f} à sua carteira"
@@ -163,17 +231,25 @@ def create_topup(
                 "type": "topup"
             }
         )
+        
         checkout_url = session.url
+        print(f"✅ Checkout Stripe criado com sucesso!")
+        print(f"   URL: {checkout_url}")
+        
     except stripe.error.AuthenticationError as e:
+        print(f"❌ Erro de autenticação Stripe: {e}")
         raise HTTPException(status_code=500, detail=f"Erro de autenticação Stripe: {str(e)}")
     except Exception as e:
+        print(f"❌ Erro ao criar checkout Stripe: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao criar checkout: {str(e)}")
+
     return TopUpResponse(
         payment_id=payment.id,
         checkout_url=checkout_url,
         amount=payment.amount,
         status=payment.status
     )
+
 
 # ============================================
 # TERAPEUTA (VIEW)
@@ -195,26 +271,17 @@ def get_therapist_wallet_balance(
             formatted="R$ 0,00"
         )
 
-    from app.models.commission import Commission
-    from sqlalchemy import func as sqlfunc
+    wallet = db.execute(
+        select(Wallet).where(Wallet.therapist_id == therapist.id)
+    ).scalar_one_or_none()
 
-    result = db.execute(
-        select(sqlfunc.coalesce(sqlfunc.sum(Commission.net_amount), 0))
-        .where(
-            Commission.therapist_id == therapist.id,
-            Commission.is_refund == False
-        )
-    ).scalar()
+    if not wallet:
+        wallet = Wallet(therapist_id=therapist.id, balance=0, currency="BRL")
+        db.add(wallet)
+        db.commit()
+        db.refresh(wallet)
 
-    refunds = db.execute(
-        select(sqlfunc.coalesce(sqlfunc.sum(Commission.net_amount), 0))
-        .where(
-            Commission.therapist_id == therapist.id,
-            Commission.is_refund == True
-        )
-    ).scalar()
-
-    balance = Decimal(str(result)) + Decimal(str(refunds))
+    balance = Decimal(str(wallet.balance))
     formatted = f"R$ {balance:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
     return WalletBalanceResponse(

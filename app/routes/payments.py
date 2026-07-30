@@ -158,6 +158,24 @@ def register_commission(appointment_id, therapist_user_id, patient_user_id, sess
         is_refund=is_refund,
     ))
 
+    # 🔥 Creditar net_amount na wallet real do terapeuta
+    therapist_wallet = db.execute(
+        select(Wallet).where(Wallet.therapist_id == therapist_profile.id)
+    ).scalar_one_or_none()
+    if not therapist_wallet:
+        therapist_wallet = Wallet(therapist_id=therapist_profile.id, balance=0, currency="BRL")
+        db.add(therapist_wallet)
+        db.flush()
+    therapist_wallet.balance = D(therapist_wallet.balance) + D(str(net_amount))
+    db.add(Ledger(
+        wallet_id=therapist_wallet.id,
+        appointment_id=appointment_id,
+        transaction_type="credit_purchase" if not is_refund else "refund",
+        amount=D(str(abs(net_amount))),
+        balance_after=therapist_wallet.balance,
+        description=f"Sessão #{appointment_id} - {'Estorno' if is_refund else 'Recebimento'} líquido"
+    ))
+
 
 def _build_therapist_summary(appointment, db):
     therapist_profile = db.execute(select(TherapistProfile).where(TherapistProfile.user_id == appointment.therapist_user_id)).scalar_one_or_none()
@@ -1197,3 +1215,247 @@ async def apple_subscription_cancel_info(
         "manage_url": "itms-apps://apps.apple.com/account/subscriptions",
         "has_apple_subscription": subscription is not None and subscription.status == "active",
     }
+# ==========================
+# 🔥 GET ASSINATURA DO TERAPEUTA
+# ==========================
+@router.get("/therapist/subscription", response_model=dict)
+async def get_therapist_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """Retorna assinatura atual do terapeuta com detalhes completos"""
+    from app.models.therapist_profile import TherapistProfile
+    from app.models.subscription import Subscription
+    from app.models.commission import Commission
+    from app.models.appointment import Appointment
+    import mercadopago
+    import os
+
+    therapist = db.query(TherapistProfile).filter(
+        TherapistProfile.user_id == current_user.id
+    ).first()
+
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado")
+
+    subscription = db.query(Subscription).filter(
+        Subscription.therapist_id == therapist.id,
+        Subscription.status.in_(["active", "past_due", "paused"])
+    ).first()
+
+    # Histórico de cobranças via MP (últimas 12)
+    billing_history = []
+    if subscription and subscription.stripe_subscription_id:
+        try:
+            mp_access_token = os.getenv("MP_ACCESS_TOKEN", "")
+            if mp_access_token:
+                sdk = mercadopago.SDK(mp_access_token)
+                result = sdk.preapproval().search({
+                    "id": subscription.stripe_subscription_id
+                })
+                if result.get("status") == 200:
+                    payments_result = sdk.authorized_payments().search({
+                        "preapproval_id": subscription.stripe_subscription_id,
+                        "limit": 12
+                    })
+                    if payments_result.get("status") == 200:
+                        for p in payments_result["response"].get("results", []):
+                            billing_history.append({
+                                "id": p.get("id"),
+                                "date": p.get("date_approved") or p.get("date_created"),
+                                "amount": p.get("transaction_amount"),
+                                "status": p.get("status"),
+                                "description": f"Assinatura {subscription.plan.title()} - Meu Divã"
+                            })
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar histórico MP: {e}")
+
+    # Histórico de comissões (ganhos)
+    commissions = db.query(Commission).filter(
+        Commission.therapist_id == therapist.id,
+        Commission.is_refund == False
+    ).order_by(Commission.created_at.desc()).limit(12).all()
+
+    plan_names = {
+        "essencial": "Essencial",
+        "profissional": "Profissional",
+        "premium": "Premium"
+    }
+    plan_commissions = {
+        "essencial": 20,
+        "profissional": 10,
+        "premium": 3
+    }
+
+    current_plan = subscription.plan if subscription else "essencial"
+
+    return {
+        "subscription": {
+            "id": subscription.id if subscription else None,
+            "plan": current_plan,
+            "plan_name": plan_names.get(current_plan, current_plan.title()),
+            "status": subscription.status if subscription else "active",
+            "commission_rate": plan_commissions.get(current_plan, 20),
+            "payment_provider": subscription.payment_provider if subscription else None,
+            "mp_subscription_id": subscription.stripe_subscription_id if subscription else None,
+            "current_period_start": subscription.current_period_start.isoformat() if subscription and subscription.current_period_start else None,
+            "current_period_end": subscription.current_period_end.isoformat() if subscription and subscription.current_period_end else None,
+            "cancel_at_period_end": subscription.cancel_at_period_end if subscription else False,
+            "created_at": subscription.created_at.isoformat() if subscription and subscription.created_at else None,
+        },
+        "billing_history": billing_history,
+        "earnings_summary": {
+            "total_sessions": len(commissions),
+            "total_earned": float(sum(c.net_amount for c in commissions)),
+            "total_commission_paid": float(sum(c.commission_amount for c in commissions)),
+            "recent": [
+                {
+                    "date": c.created_at.isoformat(),
+                    "session_price": float(c.session_price),
+                    "commission_rate": float(c.commission_rate),
+                    "commission_amount": float(c.commission_amount),
+                    "net_amount": float(c.net_amount),
+                }
+                for c in commissions[:6]
+            ]
+        }
+    }
+
+
+# ==========================
+# 🔥 PAUSAR ASSINATURA MP
+# ==========================
+@router.post("/therapist/subscription/pause", response_model=dict)
+async def pause_mp_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """Pausa a assinatura do terapeuta no Mercado Pago"""
+    from app.models.therapist_profile import TherapistProfile
+    from app.models.subscription import Subscription
+    import mercadopago
+    import os
+
+    therapist = db.query(TherapistProfile).filter(
+        TherapistProfile.user_id == current_user.id
+    ).first()
+
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado")
+
+    subscription = db.query(Subscription).filter(
+        Subscription.therapist_id == therapist.id,
+        Subscription.status == "active"
+    ).first()
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Nenhuma assinatura ativa encontrada")
+
+    if subscription.payment_provider == "apple_iap":
+        raise HTTPException(status_code=400, detail="Assinaturas Apple não podem ser pausadas aqui. Gerencie pelo app da Apple.")
+
+    mp_access_token = os.getenv("MP_ACCESS_TOKEN", "")
+    if mp_access_token and subscription.stripe_subscription_id:
+        try:
+            sdk = mercadopago.SDK(mp_access_token)
+            sdk.preapproval().update(
+                subscription.stripe_subscription_id,
+                {"status": "paused"}
+            )
+        except Exception as e:
+            print(f"⚠️ Erro ao pausar no MP: {e}")
+
+    subscription.status = "paused"
+    subscription.updated_at = datetime.now()
+    db.commit()
+
+    return {"success": True, "message": "Assinatura pausada. Você pode reativar a qualquer momento."}
+
+
+# ==========================
+# 🔥 REATIVAR ASSINATURA MP
+# ==========================
+@router.post("/therapist/subscription/resume", response_model=dict)
+async def resume_mp_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """Reativa uma assinatura pausada"""
+    from app.models.therapist_profile import TherapistProfile
+    from app.models.subscription import Subscription
+    import mercadopago
+    import os
+
+    therapist = db.query(TherapistProfile).filter(
+        TherapistProfile.user_id == current_user.id
+    ).first()
+
+    if not therapist:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado")
+
+    subscription = db.query(Subscription).filter(
+        Subscription.therapist_id == therapist.id,
+        Subscription.status == "paused"
+    ).first()
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Nenhuma assinatura pausada encontrada")
+
+    mp_access_token = os.getenv("MP_ACCESS_TOKEN", "")
+    if mp_access_token and subscription.stripe_subscription_id:
+        try:
+            sdk = mercadopago.SDK(mp_access_token)
+            sdk.preapproval().update(
+                subscription.stripe_subscription_id,
+                {"status": "authorized"}
+            )
+        except Exception as e:
+            print(f"⚠️ Erro ao reativar no MP: {e}")
+
+    subscription.status = "active"
+    subscription.updated_at = datetime.now()
+    db.commit()
+
+    return {"success": True, "message": "Assinatura reativada com sucesso!"}
+
+
+@router.get("/therapist/commissions")
+async def get_therapist_commissions(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """Retorna histórico de comissões/recebimentos do terapeuta"""
+    from app.models.commission import Commission
+    from app.models.appointment import Appointment
+
+    therapist_profile = db.execute(
+        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if not therapist_profile:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado")
+
+    commissions = db.execute(
+        select(Commission)
+        .where(Commission.therapist_id == therapist_profile.id)
+        .order_by(Commission.created_at.desc())
+    ).scalars().all()
+
+    result = []
+    for c in commissions:
+        appointment = db.get(Appointment, c.appointment_id)
+        result.append({
+            "id": c.id,
+            "appointment_id": c.appointment_id,
+            "session_price": float(c.session_price),
+            "commission_rate": float(c.commission_rate),
+            "commission_amount": float(c.commission_amount),
+            "net_amount": float(c.net_amount),
+            "is_refund": c.is_refund,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "appointment": {
+                "id": appointment.id,
+                "starts_at": appointment.starts_at.isoformat() if appointment else None,
+            } if appointment else None,
+        })
+
+    return result

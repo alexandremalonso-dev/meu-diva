@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";  // 🔥 ADICIONE ESTA LINHA
 import { useApi } from "@/lib/useApi";
 import { useAuth } from "@/contexts/AuthContext";
-import { Wallet, Filter, Loader2, AlertCircle, TrendingUp, TrendingDown, Tag } from "lucide-react";
+import { Wallet, Filter, Loader2, AlertCircle, TrendingUp, TrendingDown, Crown, Star, Sparkles } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -50,16 +50,16 @@ export default function TherapistWalletPage() {
     try {
       // 🔥 Removido tipo genérico - usando as assertion
       const commissionsData = await apiCall({
-        url: "/api/therapist/commissions",
+        url: "/api/payments/therapist/commissions",
         requireAuth: true
       }) as Commission[];
       setCommissions(commissionsData || []);
       
       const subscriptionData = await apiCall({
-        url: "/api/therapist/subscription",
+        url: "/api/payments/therapist/subscription",
         requireAuth: true
-      }) as Subscription;
-      setSubscription(subscriptionData || null);
+      }) as any;
+      setSubscription(subscriptionData?.subscription || null);
       
     } catch (err: any) {
       console.error("Erro ao carregar dados:", err);
@@ -141,7 +141,7 @@ export default function TherapistWalletPage() {
             </p>
           </div>
           <Link href="/therapist/subscription" className="text-sm text-[#E03673] hover:text-[#c02c5e] flex items-center gap-1">
-            <Tag className="w-4 h-4" />
+            <Crown className="w-4 h-4" />
             Gerenciar plano
           </Link>
         </div>
@@ -190,7 +190,7 @@ export default function TherapistWalletPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[#E03673]/10 flex items-center justify-center">
-                <Tag className="w-5 h-5 text-[#E03673]" />
+                {currentPlan === "premium" ? <Crown className="w-5 h-5 text-[#E03673]" /> : currentPlan === "profissional" ? <Star className="w-5 h-5 text-[#E03673]" /> : <Sparkles className="w-5 h-5 text-[#E03673]" />}
               </div>
               <div>
                 <p className="text-sm text-gray-500">Plano atual</p>
@@ -230,11 +230,11 @@ export default function TherapistWalletPage() {
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-[#E03673] h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${((20 - currentCommissionRate) / 20) * 100}%` }}
+                  style={{ width: `${(currentCommissionRate / 20) * 100}%` }}
                 />
               </div>
-              <p className="text-xs text-green-600 mt-2">
-                ✨ Você economiza {20 - currentCommissionRate}% em comissões por sessão!
+              <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" /> Você economiza {20 - currentCommissionRate}% em comissões por sessão!
               </p>
             </div>
           )}

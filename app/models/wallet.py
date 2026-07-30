@@ -13,9 +13,9 @@ class TransactionTypeEnum(enum.Enum):
 
 class Wallet(Base):
     __tablename__ = "wallets"
-
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patient_profiles.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    patient_id = Column(Integer, ForeignKey("patient_profiles.id", ondelete="CASCADE"), unique=True, nullable=True, index=True)
+    therapist_id = Column(Integer, ForeignKey("therapist_profiles.id", ondelete="CASCADE"), unique=True, nullable=True, index=True)
     balance = Column(Numeric(10, 2), nullable=False, default=0)
     currency = Column(String(3), nullable=False, default="BRL")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -23,7 +23,6 @@ class Wallet(Base):
 
 class Ledger(Base):
     __tablename__ = "ledger"
-
     id = Column(Integer, primary_key=True, index=True)
     wallet_id = Column(Integer, ForeignKey("wallets.id", ondelete="CASCADE"), nullable=False, index=True)
     appointment_id = Column(Integer, ForeignKey("appointments.id", ondelete="SET NULL"), nullable=True)
