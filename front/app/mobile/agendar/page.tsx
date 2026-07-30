@@ -172,24 +172,18 @@ export default function MobileAgendarPage() {
         return;
       }
 
-      // ✅ Saldo insuficiente — vai pro Stripe SEM criar appointment antes
-      const residual = preco - balance;
-      const successUrl = `${window.location.origin}/mobile/dashboard?payment_success=true&therapist_name=${therapistName}&date=${date}&time=${time}&price=${preco}`;
-      const cancelUrl = `${window.location.origin}/mobile/agendar`;
-
-      const stripeData = await api('/api/payments/create-checkout', {
+      // Saldo insuficiente: cria appointment e redireciona para checkout proprio (Mercado Pago)
+      const bookingData = await api('/api/appointments', {
         method: "POST",
         body: JSON.stringify({
-          amount: residual,
-          success_url: successUrl,
-          cancel_url: cancelUrl,
           therapist_user_id: therapistUserId,
           starts_at: slot.starts_at,
           ends_at: slot.ends_at,
           duration_minutes: duration,
         })
       });
-      window.location.href = stripeData.checkout_url;
+      setModalData(null);
+      router.push(`/checkout?appointment_id=${bookingData.id}`);
 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('ocupado') || err.message?.toLowerCase().includes('conflict')) {
