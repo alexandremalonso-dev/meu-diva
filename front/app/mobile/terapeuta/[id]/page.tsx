@@ -166,14 +166,12 @@ export default function MobileTerapeutaPage() {
         return;
       }
 
-      const residual = preco - balance;
-      const successUrl = `${window.location.origin}/mobile/dashboard?payment_success=true&therapist_name=${therapistName}&date=${date}&time=${time}&price=${preco}`;
-      const cancelUrl = `${window.location.origin}/mobile/terapeuta/${therapistId}?cancel=true`;
-      const stripeData = await api('/api/payments/create-checkout', {
+      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout proprio (Mercado Pago)
+      const bookingData = await api('/api/appointments', {
         method: "POST",
-        body: JSON.stringify({ amount: residual, success_url: successUrl, cancel_url: cancelUrl, therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
+        body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
       });
-      window.location.href = stripeData.checkout_url;
+      router.push(`/checkout?appointment_id=${bookingData.id}`);
     } catch (err: any) {
       alert(err.message || "Erro ao agendar");
     } finally {
@@ -467,7 +465,7 @@ export default function MobileTerapeutaPage() {
           <SectionTitle icon={ShieldCheck} title="Confiança e Segurança" />
           {[
             { icon: Video, color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", title: "Atendimento online", desc: "Sessões por videochamada segura e criptografada" },
-            { icon: Lock, color: COLORS.primary, bg: "#fdf2f8", border: "#fbcfe8", title: "Pagamento 100% seguro", desc: "Processado via Stripe com criptografia de ponta a ponta" },
+            { icon: Lock, color: COLORS.primary, bg: "#fdf2f8", border: "#fbcfe8", title: "Pagamento 100% seguro", desc: "Processado via Mercado Pago com criptografia de ponta a ponta" },
             ...(terapeuta.verified ? [{ icon: ShieldCheck, color: COLORS.dark, bg: "#f0fdf4", border: "#bbf7d0", title: "Profissional verificado", desc: "Documentos e formação verificados pela equipe Meu Divã" }] : []),
           ].map(({ icon: Icon, color, bg, border, title, desc }) => (
             <div key={title} style={{ backgroundColor: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8, display: "flex", gap: 10 }}>
