@@ -87,7 +87,12 @@ function MobileBuscaContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [pagina, setPagina] = useState(1);
   const [totalResultados, setTotalResultados] = useState(0);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const limit = 10;
+
+  useEffect(() => {
+    setIsLoggedIn(!!localStorage.getItem('access_token'));
+  }, []);
 
   const buscar = async (f = filtros, p = pagina) => {
     setLoading(true);
@@ -329,7 +334,7 @@ function MobileBuscaContent() {
             </p>
 
             {terapeutas.map((terapeuta) => (
-              <MobileCardTerapeuta key={terapeuta.id} terapeuta={terapeuta} />
+              <MobileCardTerapeuta key={terapeuta.id} terapeuta={terapeuta} isLoggedIn={isLoggedIn} />
             ))}
 
             {totalPaginas > 1 && (
