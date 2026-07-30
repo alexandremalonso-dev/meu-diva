@@ -434,7 +434,7 @@ function CheckoutContent() {
     <main style={{ minHeight: '100vh', background: '#f9f7f8', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', color: '#1a1a2e', paddingBottom: '60px' }}>
       <PublicHeader />
 
-      <div style={{ maxWidth: '900px', margin: '36px auto 0', padding: '0 20px', display: 'grid', gridTemplateColumns: '340px 1fr', gap: '28px', alignItems: 'start' }}>
+      <div className="checkout-grid" style={{ maxWidth: '900px', margin: '36px auto 0', padding: '0 20px', display: 'grid', gridTemplateColumns: '340px 1fr', gap: '28px', alignItems: 'start' }}>
 
         {/* Resumo */}
         <aside style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
