@@ -292,6 +292,16 @@ export function AppleSubscriptionCards() {
           );
         })}
       </div>
+
+      <div style={{ marginTop: 14, textAlign: "center", padding: "0 4px" }}>
+        <p style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.5, margin: 0 }}>
+          Assinaturas com renovação automática mensal, cobradas através da sua conta Apple ID.
+          Cancele quando quiser em "Gerenciar assinatura". Ao assinar, você concorda com nossos{" "}
+          <a href="/termos-uso" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Termos de Uso</a>
+          {" "}e nossa{" "}
+          <a href="/politica-privacidade" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Política de Privacidade</a>.
+        </p>
+      </div>
     </div>
   );
 }
