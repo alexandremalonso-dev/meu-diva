@@ -35,7 +35,7 @@ interface SummaryReport { total_assinantes: number; total_ativos: number; total_
 interface ChartDataPoint { month: string; assinantes: number; receita: number; }
 
 const PLAN_OPTIONS = [
-  { value: "todos", label: "Todos os planos" }, { value: "essencial", label: "Essencial" },
+  { value: "todos", label: "Todos os planos" }, { value: "basico", label: "Básico (gratuito)" }, { value: "essencial", label: "Essencial" },
   { value: "profissional", label: "Profissional" }, { value: "premium", label: "Premium" }
 ];
 const STATUS_OPTIONS = [
@@ -144,7 +144,7 @@ function HistoryModal({ sub, onClose }: { sub: SubscriptionReport; onClose: () =
                     <Receipt className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     <p className="text-sm">Nenhuma cobrança encontrada</p>
                     {sub.payment_provider === "apple_iap" && <p className="text-xs mt-1">Assinatura Apple — histórico no App Store Connect</p>}
-                    {sub.plan === "essencial" && <p className="text-xs mt-1">Plano gratuito — sem cobranças</p>}
+                    {sub.plan === "basico" && <p className="text-xs mt-1">Plano gratuito — sem cobranças</p>}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -241,16 +241,17 @@ export default function AdminAssinaturasReportPage() {
         setSubscriptions(processed);
 
         // 🔥 só contar planos pagos como "assinantes" e "ativos"
-        const pagos = processed.filter(s => s.plan !== "essencial");
-        const ativos = processed.filter(s => s.plan !== "essencial" && s.status === "active" && !s.is_overdue);
+        const pagos = processed.filter(s => s.plan !== "basico");
+        const ativos = processed.filter(s => s.plan !== "basico" && s.status === "active" && !s.is_overdue);
         const atraso = processed.filter(s => s.is_overdue || s.status === "past_due");
         const cancelados = processed.filter(s => s.status === "canceled");
         const renovacoesProximas = processed.filter(s =>
-          s.plan !== "essencial" && s.status === "active" &&
+          s.plan !== "basico" && s.status === "active" &&
           s.days_until_expiration && s.days_until_expiration <= 7 && s.days_until_expiration > 0
         ).length;
 
         const planosMap: Record<string, { quantidade: number; receita_mensal: number; receita_anual: number }> = {
+          basico: { quantidade: 0, receita_mensal: 0, receita_anual: 0 },
           essencial: { quantidade: 0, receita_mensal: 0, receita_anual: 0 },
           profissional: { quantidade: 0, receita_mensal: 0, receita_anual: 0 },
           premium: { quantidade: 0, receita_mensal: 0, receita_anual: 0 }
@@ -459,7 +460,7 @@ export default function AdminAssinaturasReportPage() {
                       </div>
                     </td>
                     <td className="p-3 text-sm text-gray-500">{sub.therapist_email}</td>
-                    <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${getPlanColor(sub.plan)}`}>{sub.plan === "essencial" ? "Essencial" : sub.plan === "profissional" ? "Profissional" : "Premium"}</span></td>
+                    <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${getPlanColor(sub.plan)}`}>{sub.plan === "basico" ? "Básico" : sub.plan === "essencial" ? "Essencial" : sub.plan === "profissional" ? "Profissional" : "Premium"}</span></td>
                     <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(sub.status, sub.is_overdue)}`}>{getStatusLabel(sub.status, sub.is_overdue)}</span></td>
                     <td className="p-3 text-sm text-gray-600">{sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString("pt-BR") : "-"}</td>
                     <td className="p-3 text-center">

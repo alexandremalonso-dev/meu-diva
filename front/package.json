@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build",
+    "build": "next build --webpack",
     "build:non-prod": "dotenv -e .env.non-prod -- next build",
     "build:prod": "dotenv -e .env.prod -- next build",
     "start": "next start",
@@ -43,6 +43,7 @@
     "@schedule-x/theme-default": "^4.3.1",
     "@stripe/react-stripe-js": "^6.3.0",
     "@stripe/stripe-js": "^9.4.0",
+    "@tailwindcss/container-queries": "^0.1.1",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

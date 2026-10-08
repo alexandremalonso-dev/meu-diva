@@ -471,7 +471,6 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
     `.fc-day-today .fc-daygrid-day-number { color: ${CORES.rosa}; font-weight: bold; }`,
     `.fc-timegrid-col.fc-day-today { background-color: ${CORES.rosaClaro} !important; }`,
     `.fc .fc-toolbar-title { font-size: 0.95rem; font-weight: 600; }`,
-    `.fc .fc-timegrid-slot { height: 2.5rem; }`,
     `.fc .fc-timegrid-slot-label { font-size: 0.7rem; color: #9ca3af; vertical-align: top; }`,
     `.fc .fc-col-header-cell { font-size: 0.72rem; }`,
     `.fc .fc-col-header-cell-cushion { padding: 3px 4px; font-weight: 600; }`,
@@ -488,54 +487,8 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
   const isSearching = searchTerm.trim() !== "";
 
   return (
-    <div className="space-y-4 mb-8">
-      {/* Card Google Calendar Integration */}
-      <div className={`rounded-xl border p-4 flex items-center justify-between gap-4 transition-all ${
-        gcalStatus?.connected
-          ? "bg-green-50 border-green-200"
-          : "bg-gradient-to-r from-[#2F80D3]/5 to-[#E03673]/5 border-[#2F80D3]/20"
-      }`}>
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-            gcalStatus?.connected ? "bg-green-100" : "bg-white shadow-sm"
-          }`}>
-            <Calendar className={`w-5 h-5 ${gcalStatus?.connected ? "text-green-600" : "text-[#2F80D3]"}`} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900">
-              {gcalStatus?.connected ? "Google Calendar conectado ✓" : "Integrar com Google Calendar"}
-            </p>
-            <p className="text-xs text-gray-500">
-              {gcalStatus?.connected
-                ? `Sessões sincronizadas automaticamente${gcalStatus.email ? ` · ${gcalStatus.email}` : ""}`
-                : "Receba suas sessões confirmadas diretamente na sua agenda pessoal"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {gcalStatus?.connected ? (
-            <>
-              <button onClick={handleGcalSyncAll} disabled={gcalLoading}
-                className="px-3 py-1.5 text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50">
-                {gcalLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                Sincronizar
-              </button>
-              <button onClick={handleGcalDisconnect} disabled={gcalLoading}
-                className="px-3 py-1.5 text-xs bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors disabled:opacity-50">
-                Desconectar
-              </button>
-            </>
-          ) : (
-            <button onClick={handleGcalConnect} disabled={gcalConnecting}
-              className="px-4 py-2 text-sm bg-[#2F80D3] hover:bg-[#236bb3] text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 shadow-sm">
-              {gcalConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-              {gcalConnecting ? "Conectando..." : "Conectar agenda"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="h-full flex flex-col gap-4">
+      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         {toast && (
           <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium ${toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
             {toast.type === 'success'
@@ -546,21 +499,21 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
           </div>
         )}
 
-        <div className="flex flex-col gap-4 mb-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-[#E03673]" />
-              <h2 className="text-lg font-semibold text-gray-900">Minha Agenda</h2>
+        <div className="flex-shrink-0 flex flex-col gap-2 mb-2 @container">
+          <div className="flex items-center justify-between flex-nowrap gap-1.5 @lg:gap-3">
+            <div className="flex items-center gap-1.5 @lg:gap-2 flex-shrink-0 min-w-0">
+              <Calendar className="w-5 h-5 text-[#E03673] flex-shrink-0" />
+              <h2 className="text-base @lg:text-lg font-semibold text-gray-900 whitespace-nowrap">Minha Agenda</h2>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all ${
+            <div className="flex items-center gap-1.5 @lg:gap-3 flex-shrink-0">
+              <div className={`flex items-center gap-1 @lg:gap-2 px-2 @lg:px-3 py-1 @lg:py-1.5 rounded-full transition-all whitespace-nowrap ${
                 isAvailableNow
                   ? "bg-green-100 border border-green-300"
                   : "bg-gray-100 border border-gray-200"
               }`}>
-                <div className={`w-2 h-2 rounded-full animate-pulse ${isAvailableNow ? "bg-green-500" : "bg-gray-400"}`} />
-                <span className={`text-sm font-medium ${isAvailableNow ? "text-green-700" : "text-gray-500"}`}>
+                <div className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${isAvailableNow ? "bg-green-500" : "bg-gray-400"}`} />
+                <span className={`text-xs @lg:text-sm font-medium whitespace-nowrap ${isAvailableNow ? "text-green-700" : "text-gray-500"}`}>
                   {isAvailableNow ? "Disponível Agora" : "Indisponível"}
                 </span>
               </div>
@@ -568,7 +521,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
               <button
                 onClick={toggleAvailabilityNow}
                 disabled={togglingAvailability}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none flex-shrink-0 ${
                   isAvailableNow ? "bg-green-600" : "bg-gray-300"
                 }`}
               >
@@ -577,17 +530,63 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
                 }`} />
               </button>
 
-              <span className="text-xs text-gray-400 hidden sm:inline">
+              <span className="text-xs text-gray-400 hidden @3xl:inline whitespace-nowrap">
                 {isAvailableNow ? "Aceitando demandas urgentes" : "Ativar plantão"}
               </span>
             </div>
 
             <button
               onClick={() => { setSelectedSlotDate(new Date()); setPersonalEventType('personal'); setPersonalEventTitle(''); setPersonalEventPatientId(null); setShowPersonalEventModal(true); loadPatients(); }}
-              className="bg-[#2F80D3] hover:bg-[#236bb3] text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors">
-              <Plus className="w-4 h-4" />
-              Novo compromisso
+              className="bg-[#2F80D3] hover:bg-[#236bb3] text-white px-2 @lg:px-3 py-1 @lg:py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors flex-shrink-0 whitespace-nowrap">
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              <span className="hidden @lg:inline">Novo compromisso</span>
             </button>
+          </div>
+
+          {/* 🔥 Google Calendar — mesmo padrão visual do CalendarPatient */}
+          <div className={`rounded-xl border p-4 flex items-center justify-between gap-4 transition-all mb-4 ${
+            gcalStatus?.connected
+              ? "bg-green-50 border-green-200"
+              : "bg-gradient-to-r from-[#2F80D3]/5 to-[#E03673]/5 border-[#2F80D3]/20"
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                gcalStatus?.connected ? "bg-green-100" : "bg-white shadow-sm"
+              }`}>
+                <Calendar className={`w-5 h-5 ${gcalStatus?.connected ? "text-green-600" : "text-[#2F80D3]"}`} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  {gcalStatus?.connected ? "Google Calendar conectado ✓" : "Integrar com Google Calendar"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {gcalStatus?.connected
+                    ? `Sessões sincronizadas automaticamente${gcalStatus.email ? ` · ${gcalStatus.email}` : ""}`
+                    : "Receba suas sessões confirmadas diretamente na sua agenda pessoal"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {gcalStatus?.connected ? (
+                <>
+                  <button onClick={handleGcalSyncAll} disabled={gcalLoading}
+                    className="px-3 py-1.5 text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                    {gcalLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    Sincronizar
+                  </button>
+                  <button onClick={handleGcalDisconnect} disabled={gcalLoading}
+                    className="px-3 py-1.5 text-xs bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors disabled:opacity-50">
+                    Desconectar
+                  </button>
+                </>
+              ) : (
+                <button onClick={handleGcalConnect} disabled={gcalConnecting}
+                  className="px-4 py-2 text-sm bg-[#2F80D3] hover:bg-[#236bb3] text-white rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                  {gcalConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />}
+                  {gcalConnecting ? "Conectando..." : "Conectar agenda"}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="relative">
@@ -621,7 +620,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
           )}
         </div>
 
-        <div className="h-auto">
+        <div className="flex-1 min-h-0">
           <FullCalendar
             key={searchTerm}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -629,7 +628,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
             buttonText={{ month: 'Mês', week: 'Semana', day: 'Dia' }}
             locale={ptBRLocale}
             initialView="timeGridWeek"
-            height="auto"
+            height="100%"
             events={filteredEvents}
             slotMinTime={slotMinTime}
             slotMaxTime={slotMaxTime}

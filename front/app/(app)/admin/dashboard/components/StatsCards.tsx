@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CheckCircle, XCircle, Clock, TrendingUp, DollarSign } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, Clock, DollarSign } from "lucide-react";
 
 interface StatsCardsProps {
   stats: {
@@ -30,9 +30,7 @@ export function StatsCards({
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
   const getCurrentStats = () => {
-    if (selectedPeriod === "all") {
-      return stats.all;
-    }
+    if (selectedPeriod === "all") return stats.all;
     return stats[selectedPeriod as keyof typeof stats] || stats.all;
   };
 
@@ -53,71 +51,39 @@ export function StatsCards({
   };
 
   const cards = [
-    {
-      title: "Próximas Sessões",
-      value: currentStats.upcoming,
-      icon: Calendar,
-      filter: "upcoming",
-      onClick: onUpcomingClick,
-      hasPeriod: false,
-    },
-    {
-      title: "Sessões Realizadas",
-      value: getValueByPeriod("completed"),
-      icon: CheckCircle,
-      filter: "completed",
-      hasPeriod: true,
-      onPeriodClick: (period: string) => onPeriodFilter(period, "completed"),
-    },
-    {
-      title: "Cancelamentos",
-      value: getValueByPeriod("cancelled"),
-      icon: XCircle,
-      filter: "cancelled",
-      hasPeriod: true,
-      onPeriodClick: (period: string) => onPeriodFilter(period, "cancelled"),
-    },
-    {
-      title: "Disponibilidade",
-      value: getValueByPeriod("availability"),
-      icon: Clock,
-      filter: "availability",
-      onClick: onAvailabilityClick,
-      hasPeriod: true,
-      onPeriodClick: (period: string) => onPeriodFilter(period, "availability"),
-    },
+    { title: "Próximas Sessões", value: currentStats.upcoming, icon: Calendar, filter: "upcoming", onClick: onUpcomingClick, hasPeriod: false },
+    { title: "Sessões Realizadas", value: getValueByPeriod("completed"), icon: CheckCircle, filter: "completed", hasPeriod: true, onPeriodClick: (p: string) => onPeriodFilter(p, "completed") },
+    { title: "Cancelamentos", value: getValueByPeriod("cancelled"), icon: XCircle, filter: "cancelled", hasPeriod: true, onPeriodClick: (p: string) => onPeriodFilter(p, "cancelled") },
+    { title: "Disponibilidade", value: getValueByPeriod("availability"), icon: Clock, filter: "availability", onClick: onAvailabilityClick, hasPeriod: true, onPeriodClick: (p: string) => onPeriodFilter(p, "availability") },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+    // 🔥 Distribuído uniformemente para preencher a linha do grid (agora
+    // seguro: a altura da linha é limitada pelo grid-rows do page.tsx,
+    // não cresce indefinidamente em monitores grandes).
+    <div className="flex flex-col gap-1.5 h-full">
       {cards.map((card) => {
         const Icon = card.icon;
         const isActive = sessionFilter === card.filter;
-
         return (
           <div
             key={card.title}
             onClick={() => card.onClick?.()}
-            className={`bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-sm p-2.5 sm:p-3 lg:p-4 overflow-hidden min-w-0 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] text-white ${
-              isActive ? "ring-2 ring-white/50 ring-offset-2" : ""
-            }`}
+            className={`flex-1 ${card.hasPeriod ? "min-h-[5.75rem]" : "min-h-[4.75rem]"} flex flex-col justify-center bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-lg shadow-sm px-3 py-2 cursor-pointer transition-all hover:shadow-md hover:scale-[1.01] text-white ${isActive ? "ring-2 ring-white/50 ring-offset-1" : ""}`}
           >
-            <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
-              <span className="text-[11px] sm:text-xs lg:text-sm font-medium text-white/80 truncate">{card.title}</span>
-              <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <span className="text-fluid-2xs font-medium text-white/80 truncate">{card.title}</span>
+              <Icon className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
             </div>
-            <p className="text-xl sm:text-2xl lg:text-3xl font-bold truncate">{card.value}</p>
+            <p className="text-lg sm:text-xl font-bold truncate leading-tight">{card.value}</p>
 
             {card.hasPeriod && (
-              <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-white/20">
+              <div className="flex flex-wrap gap-1 mt-1">
                 {["week", "month", "year", "all"].map((period) => (
                   <button
                     key={period}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      card.onPeriodClick?.(period);
-                    }}
-                    className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-[11px] lg:text-xs transition-colors ${
+                    onClick={(e) => { e.stopPropagation(); card.onPeriodClick?.(period); }}
+                    className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${
                       selectedPeriod === period && sessionFilter === card.filter
                         ? "bg-white/30 text-white font-medium"
                         : "bg-white/10 hover:bg-white/20 text-white/80"
@@ -132,21 +98,16 @@ export function StatsCards({
         );
       })}
 
-      {/* Card Financeiro */}
       <div
         onClick={() => onFinancialClick?.()}
-        className="bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-sm p-2.5 sm:p-3 lg:p-4 overflow-hidden min-w-0 cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] text-white"
+        className="flex-1 min-h-[4.75rem] flex flex-col justify-center bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-lg shadow-sm px-3 py-2 cursor-pointer transition-all hover:shadow-md hover:scale-[1.01] text-white"
       >
-        <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
-          <span className="text-[11px] sm:text-xs lg:text-sm font-medium text-white/80 truncate">Receita Total</span>
-          <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <span className="text-fluid-2xs font-medium text-white/80 truncate">Receita Total</span>
+          <DollarSign className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
         </div>
-        <p className="text-xl sm:text-2xl lg:text-3xl font-bold truncate">{formatCurrency(currentStats.totalRevenue)}</p>
-        <p className="text-[10px] sm:text-[11px] lg:text-xs text-white/70 mt-1 truncate">{getValueByPeriod("completed")} sessões realizadas</p>
-        <div className="flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] lg:text-xs text-white/60 min-w-0">
-          <TrendingUp className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate">Ver relatório</span>
-        </div>
+        <p className="text-lg sm:text-xl font-bold truncate leading-tight">{formatCurrency(currentStats.totalRevenue)}</p>
+        <p className="text-fluid-2xs text-white/70 truncate">{getValueByPeriod("completed")} sessões realizadas</p>
       </div>
     </div>
   );

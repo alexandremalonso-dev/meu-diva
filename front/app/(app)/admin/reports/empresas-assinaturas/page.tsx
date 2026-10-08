@@ -512,8 +512,8 @@ export default function AdminEmpresasAssinaturasPage() {
             <TrendingUp className="w-5 h-5 text-yellow-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900">
-            {subscriptions.length > 0 && summary.total_empresas_ativas > 0
-              ? formatCurrency(summary.receita_total_mensal / summary.total_empresas_ativas)
+            {subscriptions.length > 0 && summary.total_ativas > 0
+              ? formatCurrency(summary.receita_total_mensal / summary.total_ativas)
               : formatCurrency(0)}
           </p>
           <p className="text-sm text-gray-500 mt-1">por empresa ativa</p>

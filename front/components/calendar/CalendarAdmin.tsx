@@ -140,7 +140,7 @@ export function CalendarAdmin({ appointments }: CalendarAdminProps) {
     .reduce((s, a) => s + (a.session_price || 0), 0) || 0;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg ${toast.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}>
           {toast.message}
@@ -148,7 +148,7 @@ export function CalendarAdmin({ appointments }: CalendarAdminProps) {
       )}
 
       {/* Header — idêntico ao CalendarTherapist */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#E03673]" />
           <h2 className="text-lg font-semibold text-gray-900">Agenda da Plataforma</h2>
@@ -171,14 +171,14 @@ export function CalendarAdmin({ appointments }: CalendarAdminProps) {
       </div>
 
       {/* FullCalendar — mesma config do CalendarTherapist */}
-      <div className="h-auto">
+      <div className="flex-1 min-h-0">
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           headerToolbar={{ left: "prev,next", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay" }}
           buttonText={{ month: "Mês", week: "Semana", day: "Dia" }}
           locale={ptBRLocale}
           initialView="timeGridWeek"
-          height="auto"
+          height="100%"
           events={events}
           slotMinTime="07:00:00"
           slotMaxTime="19:00:00"
@@ -301,7 +301,6 @@ export function CalendarAdmin({ appointments }: CalendarAdminProps) {
         .fc-day-today .fc-daygrid-day-number { color: ${CORES.rosa} !important; font-weight: bold !important; }
         .fc-timegrid-col.fc-day-today { background-color: ${CORES.rosaClaro} !important; }
         .fc .fc-toolbar-title { font-size: 0.95rem !important; font-weight: 600 !important; }
-        .fc .fc-timegrid-slot { height: 2.5rem !important; }
         .fc .fc-timegrid-slot-label { font-size: 0.7rem !important; color: #9ca3af !important; vertical-align: top !important; }
         .fc .fc-col-header-cell { font-size: 0.72rem !important; }
         .fc .fc-col-header-cell-cushion { padding: 3px 4px !important; font-weight: 600 !important; }

@@ -13,6 +13,7 @@ from app.core.permissions import require_roles
 from app.core.roles import UserRole
 from app.models.user import User
 from app.schemas.user import UserOut, UserUpdate
+from app.core.text_utils import normalize_full_name
 from app.services.email_service import email_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -50,7 +51,7 @@ def update_current_user(
         print(f"📝 PATCH /users/me - Usuário: {current_user.id}")
         
         if user_update.full_name is not None:
-            current_user.full_name = user_update.full_name
+            current_user.full_name = normalize_full_name(user_update.full_name)
         
         db.commit()
         db.refresh(current_user)
@@ -81,7 +82,10 @@ def list_users(
     try:
         print(f"📋 GET /users - Admin: {current_user.id}")
         
-        query = select(User)
+        # 🔥 Não listar usuários excluídos (anonimizados via admin ou
+        # auto-exclusão) — sem isso eles ficavam pra sempre na lista do
+        # admin, já que a exclusão é soft-delete (anonimiza, não apaga).
+        query = select(User).where(User.deletion_status != "deleted")
         
         if role:
             query = query.where(User.role == role)

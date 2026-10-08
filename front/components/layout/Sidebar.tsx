@@ -92,10 +92,11 @@ const adminNavItems: NavItem[] = [
   { name: "Agendas", href: "/admin/availability", icon: Clock },
   { name: "Relatórios", href: "/admin/reports", icon: BarChart3 },
   { name: "Assinaturas", href: "/admin/reports/assinaturas", icon: CreditCard },
+  { name: "Assinaturas Pacientes", href: "/admin/reports/pacientes-assinaturas", icon: Users },
   { name: "Preços", href: "/admin/pricing", icon: DollarSign },
   { name: "Planos Empresas", href: "/admin/valor-empresa", icon: Building2 },
+  { name: "Planos Pacientes", href: "/admin/valor-pacientes", icon: Users },
   { name: "Gestão de Empresas", href: "/admin/reports/empresas-assinaturas", icon: Store },
-  { name: "Chat Admin", href: "/admin/chat", icon: MessageSquare },
   { name: "Permissões", href: "/admin/permissions", icon: Shield },
 ];
 
@@ -114,6 +115,13 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [userData, setUserData] = useState<any>(null);
+  const [pkgVisible, setPkgVisible] = useState(false);
+  useEffect(() => {
+    if (user?.role !== "patient") return;
+    api('/api/patient/pacotes/config', { silent: true } as any)
+      .then((cfg: any) => setPkgVisible(!!cfg?.visible))
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -130,7 +138,13 @@ export default function Sidebar() {
   if (!user) return null;
 
   const getNavItems = () => {
-    if (user.role === "patient") return patientNavItems;
+    if (user.role === "patient") {
+      if (!pkgVisible) return patientNavItems;
+      const items = [...patientNavItems];
+      const at = items.findIndex((x) => x.href === "/patient/wallet");
+      items.splice(at >= 0 ? at : items.length, 0, { name: "Meus pacotes", href: "/patient/pacotes", icon: CreditCard });
+      return items;
+    }
     if (user.role === "therapist") return therapistNavItems;
     if (user.role === "admin") return adminNavItems;
     if (user.role === "empresa") return empresaNavItems;
@@ -165,7 +179,17 @@ export default function Sidebar() {
       <nav className="flex-1 py-4 flex flex-col items-center gap-2 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+          // 🔥 Prefixo mais específico vence: "/admin/therapists/validation"
+          // não pode deixar "Terapeutas" (/admin/therapists) destacado
+          // também, já que um é prefixo literal do outro.
+          const isActive = pathname === item.href || (
+            pathname?.startsWith(item.href + '/') &&
+            !navItems.some(other =>
+              other.href !== item.href &&
+              other.href.length > item.href.length &&
+              (pathname === other.href || pathname?.startsWith(other.href + '/'))
+            )
+          );
           return (
             <div key={`${item.href}-${item.name}`} className="group relative w-12 h-12">
               <Link

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Settings, Mail, Calendar, Users, ChevronRight } from "lucide-react";
+import { Settings, Mail, Calendar } from "lucide-react";
 
 interface QuickActionsProps {
   onAvailabilityClick: () => void;
@@ -11,43 +11,37 @@ interface QuickActionsProps {
 
 export function QuickActions({ onAvailabilityClick, onInviteClick, showInviteForm }: QuickActionsProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div className="flex flex-col gap-1.5">
       <button
         onClick={onAvailabilityClick}
-        className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 text-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow text-left group"
+        className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 text-white px-3 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all text-left flex items-center gap-2.5"
       >
-        <div className="flex items-start gap-3">
-          <Settings className="w-6 h-6 text-white flex-shrink-0 mt-1" />
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Gerenciar disponibilidade</h3>
-            <p className="text-white/80">Defina seus horários de atendimento</p>
-          </div>
+        <Settings className="w-4 h-4 flex-shrink-0" />
+        <div className="min-w-0">
+          <p className="text-fluid-xs font-semibold leading-tight truncate">Gerenciar disponibilidade</p>
+          <p className="text-fluid-2xs text-white/70 truncate">Defina seus horários</p>
         </div>
       </button>
 
       <button
         onClick={onInviteClick}
-        className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 text-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow text-left group"
+        className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 text-white px-3 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all text-left flex items-center gap-2.5"
       >
-        <div className="flex items-start gap-3">
-          <Mail className="w-6 h-6 text-white flex-shrink-0 mt-1" />
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Enviar convite</h3>
-            <p className="text-white/80">Convide pacientes frequentes</p>
-          </div>
+        <Mail className="w-4 h-4 flex-shrink-0" />
+        <div className="min-w-0">
+          <p className="text-fluid-xs font-semibold leading-tight truncate">Enviar convite</p>
+          <p className="text-fluid-2xs text-white/70 truncate">Convide pacientes frequentes</p>
         </div>
       </button>
-      
+
       <Link
         href="/therapist/sessions/completed"
-        className="block bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 text-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow group"
+        className="block bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 text-white px-3 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2.5"
       >
-        <div className="flex items-start gap-3">
-          <Calendar className="w-6 h-6 text-white flex-shrink-0 mt-1" />
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Sessões Realizadas</h3>
-            <p className="text-white/80">Histórico completo das sessões</p>
-          </div>
+        <Calendar className="w-4 h-4 flex-shrink-0" />
+        <div className="min-w-0">
+          <p className="text-fluid-xs font-semibold leading-tight truncate">Sessões Realizadas</p>
+          <p className="text-fluid-2xs text-white/70 truncate">Histórico completo</p>
         </div>
       </Link>
     </div>

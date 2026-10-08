@@ -71,6 +71,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],
 )
 
 # Criar diretórios de upload
@@ -106,6 +107,12 @@ from app.routes import personal_events
 from app.routes.ai import router as ai_router
 from app.routes import admin_availability
 from app.routes import admin_reports
+from app.routes import admin_pricing
+from app.routes import therapist_onboarding
+from app.routes import admin_patient_plans
+from app.routes import patient_packages_routes
+from app.routes import admin_patient_report
+from app.routes import email_verification_routes
 from app.routes import public_stats
 from app.routes import plans
 from app.routes import admin_permissions
@@ -125,6 +132,9 @@ from app.routes import admin_empresa_planos
 from app.routes import admin_empresas_assinaturas
 from app.routes import empresa_reports
 from app.routes import admin_empresas
+from app.routes import admin_users
+from app.routes import admin_impersonation
+from app.routes import therapist_vanity_url
 from app.routes import empresa_sessions
 from app.routes import empresa_colaboradores_plano
 from app.routes import admin_empresas_cobranca
@@ -164,6 +174,14 @@ try:
 except Exception as e:
     print(f"❌ Erro ao importar chat router: {e}")
     chat_router = None
+
+# 🔥 WEBHOOK DE E-MAIL RECEBIDO (resposta direto pelo Gmail/Outlook)
+try:
+    from app.routes.mail_webhooks import router as mail_webhooks_router
+    print("✅ Mail webhooks router importado com sucesso")
+except Exception as e:
+    print(f"❌ Erro ao importar mail webhooks router: {e}")
+    mail_webhooks_router = None
 
 # 🔥 GOOGLE CALENDAR
 try:
@@ -207,6 +225,12 @@ app.include_router(personal_events.router, prefix="/api")
 app.include_router(ai_router, prefix="/api")
 app.include_router(admin_availability.router, prefix="/api")
 app.include_router(admin_reports.router, prefix="/api")
+app.include_router(admin_pricing.router, prefix="/api")
+app.include_router(therapist_onboarding.router, prefix="/api")
+app.include_router(admin_patient_plans.router, prefix="/api")
+app.include_router(patient_packages_routes.router, prefix="/api")
+app.include_router(admin_patient_report.router, prefix="/api")
+app.include_router(email_verification_routes.router, prefix="/api")
 app.include_router(public_stats.router)
 app.include_router(plans.router, prefix="/api")
 app.include_router(admin_permissions.router, prefix="/api")
@@ -225,6 +249,9 @@ app.include_router(admin_empresa_planos.router, prefix="/api")
 app.include_router(admin_empresas_assinaturas.router, prefix="/api")
 app.include_router(empresa_reports.router, prefix="/api")
 app.include_router(admin_empresas.router, prefix="/api")
+app.include_router(admin_users.router, prefix="/api")
+app.include_router(admin_impersonation.router, prefix="/api")
+app.include_router(therapist_vanity_url.router, prefix="/api")
 app.include_router(empresa_sessions.router, prefix="/api")
 app.include_router(empresa_colaboradores_plano.router, prefix="/api")
 app.include_router(admin_empresas_cobranca.router, prefix="/api")
@@ -265,6 +292,13 @@ if chat_router:
     print("✅ Chat router registrado em /api/chat")
 else:
     print("❌ Chat router NÃO foi registrado")
+
+# 🔥 WEBHOOK DE E-MAIL RECEBIDO
+if mail_webhooks_router:
+    app.include_router(mail_webhooks_router, prefix="/api")
+    print("✅ Mail webhooks router registrado em /api/webhooks/mail")
+else:
+    print("❌ Mail webhooks router NÃO foi registrado")
 
 # 🔥 GOOGLE CALENDAR
 if google_calendar_router:

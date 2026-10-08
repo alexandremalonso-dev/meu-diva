@@ -28,7 +28,11 @@ export default function RequiredDocumentsPage() {
   const [needsReupload, setNeedsReupload] = useState(false);
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://meudiva-api-backend-592671373665.southamerica-east1.run.app";
+  // 🔥 CORRIGIDO: fallback era a URL antiga do Cloud Run (desativada desde a
+  // migração para Hostinger em junho/2026). Uploads caíam nesse endereço morto
+  // sempre que NEXT_PUBLIC_API_URL não estava embutida no build, sem gerar
+  // nenhum log no servidor atual — por isso pareciam "sumir" silenciosamente.
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
     const checkDocuments = async () => {

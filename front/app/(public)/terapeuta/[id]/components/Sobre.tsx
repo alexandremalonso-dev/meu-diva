@@ -61,6 +61,28 @@ export function Sobre({ terapeuta, mostrarBioApenas = false }: SobreProps) {
         )}
       </div>
       
+      {/* 🔥 Especialidades (taxonomia estruturada, substitui texto livre) */}
+      {terapeuta.professional_type && (
+        <div className="mt-6">
+          <h3 className="font-semibold text-gray-900 mb-2" style={{ color: CORES.verdeEscuro }}>
+            Especialidades
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {[terapeuta.professional_type]
+              .filter(Boolean)
+              .map((tag, i) => (
+                <span
+                  key={i}
+                  className="text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ backgroundColor: `${CORES.rosa}15`, color: CORES.rosa }}
+                >
+                  {tag}
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Formação */}
       {terapeuta.experiencia && (
         <div className="mt-6">

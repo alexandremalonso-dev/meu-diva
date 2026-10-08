@@ -108,10 +108,11 @@ export default function PaginaPublicaTerapeuta() {
   useEffect(() => {
     async function carregarDados() {
       try {
-        const numericId = Number(therapistId);
-        if (isNaN(numericId)) throw new Error("ID do terapeuta inválido");
+        // 🔥 Aceita tanto ID numérico quanto slug/URL personalizada —
+        // a validação de qual é qual acontece no backend.
+        if (!therapistId) throw new Error("Identificador do terapeuta inválido");
 
-        const responseTerapeuta = await fetch(`${BACKEND_URL}/public/terapeutas/${numericId}`);
+        const responseTerapeuta = await fetch(`${BACKEND_URL}/public/terapeutas/${therapistId}`);
         if (!responseTerapeuta.ok) {
           let errorMsg = `Erro ${responseTerapeuta.status}`;
           try { const d = await responseTerapeuta.json(); errorMsg = d.detail || d.message || errorMsg; } catch {}
@@ -121,7 +122,10 @@ export default function PaginaPublicaTerapeuta() {
         const dadosTerapeuta = await responseTerapeuta.json();
         setTerapeuta({...dadosTerapeuta});
 
-        const terapeutaIdSlots = dadosTerapeuta.id || dadosTerapeuta.profile_id || numericId;
+        // 🔥 Para os slots, sempre usa o ID numérico real retornado pelo
+        // perfil — não o identificador da URL — então funciona igual
+        // independente de termos entrado por ID ou por slug.
+        const terapeutaIdSlots = dadosTerapeuta.id || dadosTerapeuta.profile_id || therapistId;
         const responseSlots = await fetch(`${BACKEND_URL}/public/terapeutas/${terapeutaIdSlots}/slots?days=30`);
         if (responseSlots.ok) {
           const slots = await responseSlots.json();

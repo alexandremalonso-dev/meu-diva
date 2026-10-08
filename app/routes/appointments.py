@@ -310,6 +310,13 @@ def create_appointment(
         if patient_profile and patient_profile.empresa_id:
             from app.routes import appointments_plano
             return appointments_plano.create_empresa_appointment(payload, request, db, current_user)
+
+        # 🔥 PACOTE DE SESSÕES (plano do paciente): usa o crédito quando há e o terapeuta aceita;
+        # quando não se aplica, devolve None e o fluxo normal segue como sempre.
+        from app.services.patient_package_booking import try_book_with_package
+        _pkg = try_book_with_package(payload, request, db, current_user)
+        if _pkg is not None:
+            return _pkg
     
     # ============================================
     # FLUXO ORIGINAL (PACIENTE COMUM / PRÉ-PAGO)
@@ -527,6 +534,12 @@ def reschedule_appointment(
             AppointmentStatus.rescheduled, AppointmentStatus.no_show
         ):
             raise HTTPException(status_code=400, detail="Appointment já finalizado")
+
+        # 🔥 Sessão marcada com PACOTE: a nova consulta herda o mesmo crédito (nada é cobrado)
+        from sqlalchemy import text as _pkg_text
+        if db.execute(_pkg_text("SELECT 1 FROM patient_session_uses WHERE appointment_id = :a"), {"a": original.id}).first():
+            from app.services.patient_package_booking import reschedule_package_session
+            return reschedule_package_session(original, payload, db, current_user)
 
         starts_at = payload.starts_at
         ends_at = payload.ends_at

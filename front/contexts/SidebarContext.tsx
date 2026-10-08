@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 import { useAuth } from "./AuthContext";
 
-type SidebarTab = "prontuario" | "queixa" | "chat";
+type SidebarTab = "prontuario" | "queixa" | "chat" | "frequentes" | "convites";
 
 interface SidebarContextType {
   isOpen: boolean;
@@ -16,6 +16,8 @@ interface SidebarContextType {
   closeSidebar: () => void;
   openSidebar: () => void;
   setActiveTab: (tab: SidebarTab) => void;
+  isMinimized: boolean;
+  setIsMinimized: (value: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -31,6 +33,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTabState] = useState<SidebarTab>("prontuario");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | undefined>();
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const openProntuario = (appointmentId: number, readOnly: boolean = false) => {
     if (isAdmin) return;
@@ -82,6 +85,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       openSidebar,
       closeSidebar,
       setActiveTab,
+      isMinimized,
+      setIsMinimized,
     }}>
       {children}
     </SidebarContext.Provider>

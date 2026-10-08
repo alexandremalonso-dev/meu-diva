@@ -1,87 +1,54 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Smile, Image } from 'lucide-react';
-
-const EMOJIS = [
-  '😊','😂','❤️','👍','🙏','😢','😍','🔥','✅','💪',
-  '😅','🤔','😎','🥰','😭','👏','🎉','💙','😤','🫂',
-  '🌟','💬','🤗','😇','🙂','😌','🥺','😔','😁','🫶'
-];
+import { Send, Smile, Image as ImageIcon, X, Paperclip } from 'lucide-react';
 
 interface ChatInputProps {
-  onSendMessage: (message: string) => Promise<void>;
-  onSendImage?: (file: File) => Promise<void>;
+  onSendMessage: (message: string) => void;
+  onSendImage?: (file: File) => void;
   disabled?: boolean;
-  placeholder?: string;
+  sending?: boolean;
+  replyTo?: { id: number; message: string } | null;
+  onCancelReply?: () => void;
 }
 
-export function ChatInput({
-  onSendMessage,
-  onSendImage,
-  disabled = false,
-  placeholder = "Digite sua mensagem..."
-}: ChatInputProps) {
+const EMOJIS = ['😊', '😂', '❤️', '👍', '🙏', '😢', '😮', '🤝', '👋', '🎉', '💪', '🌟', '😔', '🤗', '👏', '🙌'];
+
+// 🔥 Arquivos aceitos para anexo: imagens + documentos comuns
+const ACCEPT_TYPES = "image/*,.pdf,.doc,.docx,.txt";
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+export function ChatInput({ onSendMessage, onSendImage, disabled, sending, replyTo, onCancelReply }: ChatInputProps) {
   const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [showEmojis, setShowEmojis] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const emojiRef = useRef<HTMLDivElement>(null);
-
-  // Auto-resize textarea
-  const adjustHeight = () => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
-    }
-  };
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    adjustHeight();
-  }, [message]);
-
-  // Fechar emoji picker ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
-        setShowEmojis(false);
+    if (!showEmojiPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showEmojiPicker]);
 
-  // ✅ Colar imagem do clipboard (Ctrl+V com print/screenshot)
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file && onSendImage) {
-          await onSendImage(file);
-        }
-        return;
-      }
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
-  };
+  }, [message]);
 
-  const handleSend = async () => {
-    if (!message.trim() || sending || disabled) return;
-    setSending(true);
-    try {
-      await onSendMessage(message.trim());
-      setMessage('');
-      if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
-    } finally {
-      setSending(false);
-    }
+  const handleSend = () => {
+    if (!message.trim() || disabled || sending) return;
+    onSendMessage(message.trim());
+    setMessage('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -91,105 +58,124 @@ export function ChatInput({
     }
   };
 
-  const insertEmoji = (emoji: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newMessage = message.slice(0, start) + emoji + message.slice(end);
-    setMessage(newMessage);
-    // Reposicionar cursor após o emoji
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + emoji.length, start + emoji.length);
-    }, 0);
+  const handleEmojiClick = (emoji: string) => {
+    setMessage(prev => prev + emoji);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
   };
 
-  const handleImageClick = () => {
-    fileInputRef.current?.click();
+  const validateAndSendFile = (file: File) => {
+    setFileError(null);
+    if (file.size > MAX_FILE_SIZE) {
+      setFileError('Arquivo muito grande. Máximo 5MB.');
+      setTimeout(() => setFileError(null), 3000);
+      return;
+    }
+    onSendImage?.(file);
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && onSendImage) {
-      await onSendImage(file);
-      e.target.value = '';
+    if (file) validateAndSendFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          validateAndSendFile(file);
+          return;
+        }
+      }
     }
   };
 
   return (
-    <div className="relative">
-      {/* Emoji picker */}
-      {showEmojis && (
-        <div
-          ref={emojiRef}
-          className="absolute bottom-full mb-2 left-0 bg-white border border-gray-200 rounded-xl shadow-lg p-2 z-50 w-64"
-        >
-          <div className="grid grid-cols-10 gap-1">
-            {EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => insertEmoji(emoji)}
-                className="text-lg hover:bg-gray-100 rounded p-0.5 transition-colors leading-none"
-              >
-                {emoji}
-              </button>
-            ))}
+    <div className="border-t border-gray-100 bg-white">
+      {fileError && (
+        <div className="px-4 pt-2 text-xs text-red-600">{fileError}</div>
+      )}
+
+      {replyTo && (
+        <div className="flex items-center justify-between px-4 pt-2 pb-1 bg-gray-50 border-l-2 border-[#E03673] mx-3 mt-2 rounded">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] text-[#E03673] font-medium">Respondendo</p>
+            <p className="text-xs text-gray-600 truncate">{replyTo.message.startsWith('[IMAGE]') || replyTo.message.startsWith('[DOC:') ? '📎 Anexo' : replyTo.message}</p>
           </div>
+          <button onClick={onCancelReply} className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      <div className="flex items-end gap-1.5">
-        {/* Botão emoji */}
-        <button
-          type="button"
-          onClick={() => setShowEmojis(!showEmojis)}
-          disabled={disabled}
-          className="p-2 text-gray-400 hover:text-[#E03673] transition-colors flex-shrink-0 mb-0.5"
-          title="Emojis"
-        >
-          <Smile className="w-5 h-5" />
-        </button>
+      <div className="flex items-end gap-2 p-3">
+        <div className="relative" ref={emojiPickerRef}>
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker(v => !v)}
+            disabled={disabled}
+            className="p-2 text-gray-400 hover:text-[#E03673] hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+            title="Emoji"
+          >
+            <Smile className="w-5 h-5" />
+          </button>
+          {showEmojiPicker && (
+            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2 grid grid-cols-8 gap-1 z-50 w-64">
+              {EMOJIS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => handleEmojiClick(emoji)}
+                  className="text-xl hover:bg-gray-100 rounded p-1 transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* Botão imagem */}
-        <button
-          type="button"
-          onClick={handleImageClick}
-          disabled={disabled || !onSendImage}
-          className="p-2 text-gray-400 hover:text-[#E03673] transition-colors flex-shrink-0 mb-0.5 disabled:opacity-30"
-          title="Enviar imagem"
-        >
-          <Image className="w-5 h-5" />
-        </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
-          className="hidden"
+          accept={ACCEPT_TYPES}
           onChange={handleFileChange}
+          className="hidden"
         />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled || !onSendImage}
+          className="p-2 text-gray-400 hover:text-[#E03673] hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+          title="Enviar imagem ou documento"
+        >
+          <Paperclip className="w-5 h-5" />
+        </button>
 
-        {/* Textarea */}
         <textarea
           ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={placeholder}
-          disabled={disabled || sending}
+          disabled={disabled}
+          placeholder="Digite sua mensagem..."
           rows={1}
-          className="flex-1 py-2 px-3 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-[#E03673] focus:border-transparent outline-none text-sm disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
-          style={{ minHeight: '40px', maxHeight: '120px' }}
+          className="flex-1 resize-none border border-gray-200 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#E03673]/30 focus:border-[#E03673] disabled:bg-gray-50 disabled:text-gray-400 max-h-[120px]"
         />
 
-        {/* Botão enviar */}
         <button
+          type="button"
           onClick={handleSend}
-          disabled={disabled || sending || !message.trim()}
-          className="p-2 bg-[#E03673] text-white rounded-xl hover:bg-[#c02c5e] disabled:opacity-40 transition-colors flex items-center justify-center flex-shrink-0 mb-0.5"
+          disabled={!message.trim() || disabled || sending}
+          className="p-2.5 bg-[#E03673] text-white rounded-full hover:bg-[#c02c5e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+          title="Enviar"
         >
-          {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+          <Send className="w-4 h-4" />
         </button>
       </div>
     </div>

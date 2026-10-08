@@ -62,7 +62,7 @@ const COMMISSION_MAP: Record<string, string> = {
 };
 
 const DESCRIPTION_MAP: Record<string, string> = {
-  essencial: "Para começar sem risco",
+  essencial: "Para começar na plataforma",
   profissional: "Para quem quer consistência",
   premium: "Para quem quer crescer de verdade"
 };
@@ -126,7 +126,7 @@ function PlanosContent() {
         } else throw new Error("Erro ao carregar planos");
       } catch {
         setPlansAPI([
-          { id: "essencial", name: "Essencial", price_cents: 0, price_brl: 0, features: [], is_free: true },
+          { id: "essencial", name: "Essencial", price_cents: 1990, price_brl: 19.9, features: [], is_free: false },
           { id: "profissional", name: "Profissional", price_cents: 7900, price_brl: 79, features: [], is_free: false },
           { id: "premium", name: "Premium", price_cents: 14900, price_brl: 149, features: [], is_free: false }
         ]);
@@ -166,7 +166,7 @@ function PlanosContent() {
 
   const getDefaultFeatures = (planId: string): string[] => {
     switch (planId) {
-      case "essencial": return ["Perfil na plataforma", "Agenda e gestão de sessões", "Videochamada integrada", "Pagamento automático", "Suporte padrão"];
+      case "essencial": return ["Perfil na plataforma", "Agenda e gestão de sessões", "Videochamada integrada", "Pagamento automático", "Relatórios financeiros", "Suporte padrão"];
       case "profissional": return ["Tudo do Essencial", "Comissão reduzida (10%)", "Melhor posicionamento na busca", "Acesso a mais pacientes", "Relatórios básicos", "Prioridade no matching"];
       case "premium": return ["Tudo do Profissional", "Comissão mínima (3%)", "Destaque máximo na plataforma", "Leads prioritários", "Participação em campanhas", "Analytics avançado", "(Futuro) IA para apoio clínico"];
       default: return [];
@@ -179,7 +179,7 @@ function PlanosContent() {
       id: plan.id,
       name: plan.name,
       price: plan.price_brl,
-      priceFormatted: plan.is_free ? "Grátis" : `R$ ${plan.price_brl.toFixed(2)}/mês`,
+      priceFormatted: plan.is_free ? "Grátis" : `R$ ${plan.price_brl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mês`,
       commission: COMMISSION_MAP[plan.id] || "20%",
       description: DESCRIPTION_MAP[plan.id] || "Plano para terapeutas",
       features: plan.features.length > 0 ? plan.features : getDefaultFeatures(plan.id),
@@ -200,7 +200,7 @@ function PlanosContent() {
   };
 
   const handleSubscribe = async (planId: string) => {
-    if (planId === "essencial") { router.push("/auth/signup?role=therapist"); return; }
+    if (planId === "essencial") { const tk = localStorage.getItem("access_token"); router.push(tk ? "/subscription-checkout?plan=essencial" : "/auth/signup?role=therapist&plan=essencial"); return; }
     setLoading(planId);
     setError("");
     try {
@@ -404,7 +404,7 @@ function PlanosContent() {
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-2"><Zap className="w-4 h-4 text-[#E03673]" />Como cancelar?</h3>
-              <p className="text-sm text-gray-600">Você pode cancelar sua assinatura a qualquer momento. O plano continua ativo até o fim do período pago, e você volta automaticamente para o plano Essencial.</p>
+              <p className="text-sm text-gray-600">Você pode cancelar sua assinatura a qualquer momento. O plano continua ativo até o fim do período pago, e você volta automaticamente para o plano gratuito.</p>
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-2"><Headphones className="w-4 h-4 text-[#E03673]" />Precisa de ajuda?</h3>

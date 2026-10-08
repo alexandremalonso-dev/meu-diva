@@ -30,30 +30,35 @@ function useIsCapacitor() {
   return isMobile;
 }
 
-// Usa o maior scrollHeight entre as colunas presentes (sidebar esquerda,
-// conteúdo principal, sidebar direita) como altura mínima da linha central.
-// Isso garante que as colunas fiquem visualmente com a mesma altura e que
-// o footer sempre comece exatamente onde a linha termina — sem depender
-// de nenhum comportamento de stretch/percentual do CSS (que se mostrou
-// ambíguo nessa combinação de min-height + grid/flex aninhado).
-function useEqualRowHeight(refs: React.RefObject<HTMLElement | null>[]) {
+// 🔥 CORRIGIDO: antes usava o MAIOR scrollHeight entre as 3 colunas —
+// isso fazia um sidebar com conteúdo naturalmente alto (ex: lista longa no
+// Monitor) esticar a linha inteira, empurrando o rodapé pra baixo. Agora
+// mede só o CONTEÚDO PRINCIPAL; os sidebars ficam limitados a essa altura
+// e rolam internamente se precisarem de mais espaço (ver maxHeight abaixo).
+function useMainContentHeight(mainRef: React.RefObject<HTMLElement | null>) {
   const [height, setHeight] = useState<number | undefined>(undefined);
 
   useLayoutEffect(() => {
-    const elements = refs.map(r => r.current).filter((el): el is HTMLElement => !!el);
-    if (elements.length === 0) return;
+    const el = mainRef.current;
+    if (!el) return;
 
+    // 🔥 Piso mínimo = altura da viewport até onde a linha começa. Sem
+    // isso, em páginas com pouco conteúdo (ex: dashboard da empresa
+    // quase vazio), a altura medida (scrollHeight natural) fica curta
+    // e as sidebars param bem antes do rodapé, mesmo tendo tela sobrando.
+    // Com o piso, elas sempre esticam até o fim da viewport (o rodapé
+    // fica logo abaixo, revelado ao rolar — mesmo comportamento já
+    // adotado nos dashboards).
     const recompute = () => {
-      const max = Math.max(...elements.map(el => el.scrollHeight));
-      setHeight(max);
+      const rect = el.getBoundingClientRect();
+      const minHeight = window.innerHeight - rect.top;
+      setHeight(Math.max(el.scrollHeight, minHeight));
     };
 
     recompute();
 
     const ro = new ResizeObserver(() => recompute());
-    elements.forEach(el => ro.observe(el));
-
-    // Também recalcula quando a janela muda de tamanho (ex: rotação, resize)
+    ro.observe(el);
     window.addEventListener("resize", recompute);
 
     return () => {
@@ -74,7 +79,7 @@ export function MainLayout({
   userRole: propUserRole
 }: MainLayoutProps) {
   const { user } = useAuth();
-  const { isOpen, closeSidebar, openChat } = useSidebar();
+  const { isOpen, closeSidebar, openChat, isMinimized } = useSidebar();
   const isMobile = useIsCapacitor();
 
   const [adminOpenChat, setAdminOpenChat] = useState(false);
@@ -101,12 +106,7 @@ export function MainLayout({
   const mainRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
 
-  const activeRefs = [
-    mainRef,
-    ...(showLeftSidebar ? [leftRef] : []),
-    ...(showAnyRightColumn ? [rightRef] : []),
-  ];
-  const rowHeight = useEqualRowHeight(activeRefs);
+  const rowHeight = useMainContentHeight(mainRef);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: CORES.cinzaClaro }}>
@@ -129,7 +129,7 @@ export function MainLayout({
           colunas fiquem com a mesma altura visual e que o footer comece
           exatamente onde a linha termina, sem depender de nenhuma
           ambiguidade de cálculo do CSS Grid/Flexbox. */}
-      <div className="flex" style={{ minHeight: rowHeight ? `${rowHeight}px` : undefined }}>
+      <div className="flex items-stretch" style={{ minHeight: rowHeight ? `${rowHeight}px` : undefined }}>
         {/* Sidebar esquerda — oculta no mobile */}
         {showLeftSidebar && (
           <div ref={leftRef} className="w-16 flex-shrink-0 flex">
@@ -143,8 +143,12 @@ export function MainLayout({
         </main>
 
         {/* Sidebars direitas — ocultas no mobile (só uma por vez é exibida) */}
-        {showAdminSidebar && (
-          <div ref={rightRef} className="flex" style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0 }}>
+        {showAdminSidebar && !isMinimized && (
+          <div
+            ref={rightRef}
+            className="flex overflow-y-auto"
+            style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0, height: rowHeight ? `${rowHeight}px` : undefined }}
+          >
             <AdminSidebar
               isOpen={true}
               onClose={() => {}}
@@ -155,20 +159,53 @@ export function MainLayout({
           </div>
         )}
 
-        {showEmpresaSidebar && (
-          <div ref={rightRef} className="flex" style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0 }}>
+        {showAdminSidebar && isMinimized && (
+          <AdminSidebar
+            isOpen={true}
+            onClose={() => {}}
+            openOnChat={adminOpenChat}
+            onChatOpened={() => setAdminOpenChat(false)}
+            onUnreadChange={setAdminUnreadCount}
+          />
+        )}
+
+        {showEmpresaSidebar && !isMinimized && (
+          <div
+            ref={rightRef}
+            className="flex overflow-y-auto"
+            style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0, height: rowHeight ? `${rowHeight}px` : undefined }}
+          >
             <EmpresaSidebar />
           </div>
         )}
 
-        {showRightSidebar && (
-          <div ref={rightRef} className="flex" style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0 }}>
+        {showEmpresaSidebar && isMinimized && (
+          <EmpresaSidebar />
+        )}
+
+        {showRightSidebar && !isMinimized && (
+          <div
+            ref={rightRef}
+            className="flex overflow-y-auto"
+            style={{ width: "420px", minWidth: "420px", maxWidth: "420px", flexShrink: 0, height: rowHeight ? `${rowHeight}px` : undefined }}
+          >
             <SidebarRight
               isOpen={isOpen}
               onClose={closeSidebar}
               userRole={userRole as "therapist" | "patient"}
             />
           </div>
+        )}
+
+        {/* Minimizado: renderiza fora do wrapper de largura fixa, assim o
+            <main> reclama o espaço todo — o componente aqui só devolve o
+            botão flutuante (position:fixed), que não ocupa layout. */}
+        {showRightSidebar && isMinimized && (
+          <SidebarRight
+            isOpen={isOpen}
+            onClose={closeSidebar}
+            userRole={userRole as "therapist" | "patient"}
+          />
         )}
       </div>
 

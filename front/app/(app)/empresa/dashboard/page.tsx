@@ -18,6 +18,7 @@ import {
 
 import { MenuCard } from "@/app/(app)/therapist/dashboard/components/cards/MenuCard";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { AutoFitText } from "@/components/shared/AutoFitText";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -47,6 +48,15 @@ function StatCard({ title, value, subtitle, icon: Icon }: {
       </div>
       <p className="text-2xl font-bold">{value}</p>
       {subtitle && <p className="text-xs text-white/70 mt-1">{subtitle}</p>}
+    </div>
+  );
+}
+
+function ColumnLabel({ label, icon: Icon, gradient }: { label: string; icon: React.ElementType; gradient: string }) {
+  return (
+    <div className={`h-14 flex flex-col items-center justify-center gap-0.5 rounded-lg bg-gradient-to-br ${gradient} text-white text-center px-1`}>
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      <AutoFitText className="text-fluid-2xs font-medium leading-tight">{label}</AutoFitText>
     </div>
   );
 }
@@ -219,29 +229,17 @@ export default function EmpresaDashboardPage() {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
-        <h1 className="text-2xl font-bold text-gray-900">Olá, {user?.full_name || user?.email}!</h1>
-        <p className="text-sm text-gray-600 mt-1">Painel Empresarial — visão geral da sua organização</p>
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-1">
+        <h1 className="text-fluid-xl font-bold text-gray-900">Olá, {user?.full_name || user?.email}!</h1>
+        <p className="text-fluid-xs text-gray-600">Painel Empresarial — visão geral da sua organização</p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Menu Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MenuCard href="/empresa/dashboard" icon="dashboard" title="Dashboard" description="Visão geral" color="blue" />
-          <MenuCard href="/empresa/colaboradores" icon="users" title="Usuários" description="Colaboradores" color="blue" />
-          <MenuCard href="/empresa/sessions" icon="calendar" title="Sessões" description="Histórico" color="blue" />
-          <MenuCard href="/empresa/reports" icon="reports" title="Relatórios" description="Financeiro" color="blue" />
-        </div>
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pb-3">
+        {/* 🔥 GRID PRINCIPAL — 3 colunas, mesma estratégia do admin/terapeuta/paciente */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-3 lg:h-[calc(100vh-9rem)]">
 
-        {/* Cards superiores */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard title="Total de Usuários" value={stats.total_colaboradores} subtitle={`${stats.ativos} ativos`} icon={Users} />
-          <StatCard title="Valor a Faturar" value={formatCurrency(stats.valor_mes)} subtitle="mês atual" icon={TrendingUp} />
-          <StatCard title="Faturado" value={formatCurrency(stats.faturado_total)} subtitle="notas emitidas" icon={Receipt} />
-          <StatCard title="Pago" value={formatCurrency(stats.pago_total)} subtitle="valores recebidos" icon={CheckCircle} />
-        </div>
-
-        {/* Card de Colaboradores */}
+          {/* Coluna A: Colaboradores */}
+          <div className="min-h-0 lg:col-start-1">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -296,8 +294,8 @@ export default function EmpresaDashboardPage() {
           </div>
         </div>
 
-        {/* Cards inferiores com gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Gráficos, dentro da Coluna A, abaixo de Colaboradores */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
           {/* Card Sessões Realizadas */}
           <div className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 rounded-xl shadow-lg p-5 text-white">
             <div className="flex items-center justify-between mb-4">
@@ -375,6 +373,17 @@ export default function EmpresaDashboardPage() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+          </div>
+          </div>
+          </div>
+
+          {/* Coluna B: Stats empilhados */}
+          <div className="flex flex-col gap-2 min-h-0 lg:col-start-2">
+            <ColumnLabel label="Indicadores" icon={BarChart2} gradient="from-[#E03673] to-[#E03673]/80" />
+            <StatCard title="Total de Usuários" value={stats.total_colaboradores} subtitle={`${stats.ativos} ativos`} icon={Users} />
+            <StatCard title="Valor a Faturar" value={formatCurrency(stats.valor_mes)} subtitle="mês atual" icon={TrendingUp} />
+            <StatCard title="Faturado" value={formatCurrency(stats.faturado_total)} subtitle="notas emitidas" icon={Receipt} />
+            <StatCard title="Pago" value={formatCurrency(stats.pago_total)} subtitle="valores recebidos" icon={CheckCircle} />
           </div>
         </div>
       </div>

@@ -46,8 +46,17 @@ export function AdminChatDrawerContent({ userRole }: AdminChatDrawerContentProps
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); };
+  // 🔥 CORRIGIDO DE VEZ: scrollIntoView() rola TODOS os containers
+  // roláveis ancestrais (inclusive a página inteira), não só o chat —
+  // era isso que causava o "bumerangue". Setando scrollTop direto no
+  // container do próprio chat, nada fora dele é afetado.
+  const scrollToBottom = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
 
   useEffect(() => { scrollToBottom(); }, [currentMessages]);
 
@@ -230,7 +239,7 @@ export function AdminChatDrawerContent({ userRole }: AdminChatDrawerContentProps
           )}
 
           {/* 🔥 Mensagens com menu de contexto */}
-          <div className="flex-1 overflow-y-auto space-y-2 mb-3 px-1" style={{ minHeight: 0 }}>
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto space-y-2 mb-3 px-1" style={{ minHeight: 0 }}>
             {loading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="w-6 h-6 text-[#E03673] animate-spin" />

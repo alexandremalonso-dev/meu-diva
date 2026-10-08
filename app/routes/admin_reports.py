@@ -48,7 +48,7 @@ def get_financial_report(
         therapist = db.get(TherapistProfile, c.therapist_id)
         if therapist:
             sub = db.execute(select(Subscription).where(Subscription.therapist_id == therapist.id)).scalar_one_or_none()
-            plan = sub.plan if sub else "essencial"
+            plan = sub.plan if sub else "basico"
             plan_revenue[plan] = plan_revenue.get(plan, 0) + float(c.commission_amount)
     therapist_revenue = {}
     for c in commissions:
@@ -65,6 +65,9 @@ def get_financial_report(
         elif sub.plan == "premium":
             mrr += 149
             subscription_breakdown["premium"] += 149
+        elif sub.plan == "essencial":
+            mrr += 19.9
+            subscription_breakdown["essencial"] += 19.9
     return {
         "period": {"start_date": start.isoformat(), "end_date": end.isoformat()},
         "summary": {"total_gross": total_gross, "total_commission": total_commission, "total_net": total_net, "total_sessions": len(commissions), "mrr": mrr},
@@ -93,7 +96,7 @@ def get_therapists_by_plan(
             "user_id": therapist.user_id,
             "name": therapist.full_name or user.full_name or user.email,
             "email": user.email,
-            "plan": subscription.plan if subscription else "essencial",
+            "plan": subscription.plan if subscription else "basico",
             "subscription_status": subscription.status if subscription else "active",
             "total_commission_paid": float(total_commission),
             "total_sessions": total_sessions,
@@ -151,19 +154,23 @@ def get_subscriptions_report(
     print(f"\n📊 [ADMIN] Relatório de assinaturas")
     subscriptions = db.execute(select(Subscription).where(Subscription.status == "active")).scalars().all()
     total_mrr = 0
-    by_plan = {"essencial": {"count": 0, "mrr": 0}, "profissional": {"count": 0, "mrr": 0}, "premium": {"count": 0, "mrr": 0}}
+    by_plan = {"basico": {"count": 0, "mrr": 0}, "essencial": {"count": 0, "mrr": 0}, "profissional": {"count": 0, "mrr": 0}, "premium": {"count": 0, "mrr": 0}}
     for sub in subscriptions:
         if sub.plan == "profissional":
             by_plan["profissional"]["count"] += 1
             by_plan["profissional"]["mrr"] += 79
-            total_mrr += Giya
+            total_mrr += 79
         elif sub.plan == "premium":
             by_plan["premium"]["count"] += 1
             by_plan["premium"]["mrr"] += 149
             total_mrr += 149
-        else:
+        elif sub.plan == "essencial":
             by_plan["essencial"]["count"] += 1
-    return {"total_active_subscriptions": len(subscriptions), "total_mrr": total_mrr, "by_plan": by_plan, "projected_yearly": total_mrr * 12}
+            by_plan["essencial"]["mrr"] += 19.9
+            total_mrr += 19.9
+        else:
+            by_plan["basico"]["count"] += 1
+    return {"total_active_subscriptions": len([s for s in subscriptions if s.plan != "basico"]), "total_mrr": total_mrr, "by_plan": by_plan, "projected_yearly": total_mrr * 12}
 
 
 @router.get("/platform-revenue")
@@ -603,6 +610,7 @@ def get_relatorio_plataforma(
     
     # Agrupar por plano
     por_plano = {
+        "basico": {"quantidade": 0, "comissao": 0, "sessoes": 0},
         "essencial": {"quantidade": 0, "comissao": 0, "sessoes": 0},
         "profissional": {"quantidade": 0, "comissao": 0, "sessoes": 0},
         "premium": {"quantidade": 0, "comissao": 0, "sessoes": 0},
@@ -840,7 +848,7 @@ def get_payments_summary(
                 "therapist_email": user.email if user else "",
                 "therapist_phone": therapist.phone,
                 "therapist_foto_url": therapist.foto_url,
-                "plan": therapist.subscription.plan if therapist.subscription else "essencial",
+                "plan": therapist.subscription.plan if therapist.subscription else "basico",
                 "pix_key_type": therapist.pix_key_type.value if therapist.pix_key_type else None,
                 "pix_key": therapist.pix_key,
                 "total_pending_amount": pending_amount,
@@ -986,7 +994,7 @@ def get_therapist_payment_detail(
             "name": user.full_name if user else "N/A",
             "email": user.email if user else "N/A",
             "phone": therapist.phone,
-            "plan": subscription.plan if subscription else "essencial",
+            "plan": subscription.plan if subscription else "basico",
             "pix_key_type": therapist.pix_key_type.value if therapist.pix_key_type else None,
             "pix_key": therapist.pix_key,
             "bank_info": {

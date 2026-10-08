@@ -11,6 +11,7 @@ class PlanFeaturesConfig(Base):
     feature_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    available_in_basico: Mapped[bool] = mapped_column(Boolean, default=False)
     available_in_essencial: Mapped[bool] = mapped_column(Boolean, default=False)
     available_in_profissional: Mapped[bool] = mapped_column(Boolean, default=False)
     available_in_premium: Mapped[bool] = mapped_column(Boolean, default=False)

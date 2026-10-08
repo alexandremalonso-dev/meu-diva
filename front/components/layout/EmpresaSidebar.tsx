@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSidebar } from "@/contexts/SidebarContext";
 import {
-  User, LogOut, MessageSquare, Activity,
+  User, LogOut, MessageSquare, Activity, Headphones,
   Loader2, ChevronRight, ChevronLeft, Search, ArrowLeft
 } from "lucide-react";
 import { useApi } from "@/lib/useApi";
@@ -48,8 +49,7 @@ export default function EmpresaSidebar() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const { execute: apiCall } = useApi();
-  
-  const [isMinimized, setIsMinimized] = useState(false);
+  const { isMinimized, setIsMinimized } = useSidebar();
   const [activeTab, setActiveTab] = useState<"monitor" | "chat">("monitor");
   
   // MONITOR
@@ -251,15 +251,15 @@ export default function EmpresaSidebar() {
       {/* Tabs */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between p-3">
-          <div className="flex gap-1">
+          <div className="flex-1 flex gap-1">
             <button onClick={() => setActiveTab("monitor")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "monitor" ? "bg-[#E03673] text-white" : "text-gray-600 hover:bg-gray-100"}`}>
-              <Activity className="w-4 h-4 inline mr-1" />
+              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-colors flex flex-col items-center gap-0.5 ${activeTab === "monitor" ? "bg-[#E03673] text-white" : "text-gray-600 hover:bg-gray-100"}`}>
+              <Activity className="w-4 h-4" />
               Monitor
             </button>
             <button onClick={() => setActiveTab("chat")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "chat" ? "bg-[#E03673] text-white" : "text-gray-600 hover:bg-gray-100"}`}>
-              <MessageSquare className="w-4 h-4 inline mr-1" />
+              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-colors flex flex-col items-center gap-0.5 ${activeTab === "chat" ? "bg-[#E03673] text-white" : "text-gray-600 hover:bg-gray-100"}`}>
+              <MessageSquare className="w-4 h-4" />
               Chat
               {unreadCount > 0 && (
                 <span className="ml-1.5 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{unreadCount}</span>
@@ -450,20 +450,19 @@ export default function EmpresaSidebar() {
           </div>
         )}
       </div>
-      
-      {/* Logout */}
+
+      {/* 🔥 Suporte interno (Huggy.chat) — abre via API, a bolha padrão
+          do widget fica escondida (ver afterLoad em app/(app)/layout.tsx) */}
       <div className="p-2 border-t border-gray-200 flex-shrink-0">
-        <div className="w-12 h-12 flex items-center justify-center mb-2 mx-auto">
-          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-            <User className="w-5 h-5 text-gray-500" />
-          </div>
-        </div>
         <div className="group relative w-12 h-12 mx-auto">
-          <button onClick={handleLogout} className="w-12 h-12 flex items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-500 transition-all duration-200">
-            <LogOut className="w-5 h-5" />
+          <button
+            onClick={() => (window as any).Huggy?.openBox()}
+            className="w-12 h-12 flex items-center justify-center rounded-lg text-gray-500 hover:bg-[#FDE8F0] hover:text-[#E03673] transition-all duration-200"
+          >
+            <Headphones className="w-5 h-5" />
           </button>
           <div className="fixed left-[calc(4rem+0.5rem)] top-auto transform -translate-y-1/2 px-3 py-1.5 bg-gray-900 text-white text-sm font-medium rounded-md whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[9999] shadow-lg pointer-events-none">
-            Sair
+            Suporte
           </div>
         </div>
       </div>

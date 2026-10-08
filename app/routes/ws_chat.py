@@ -126,6 +126,32 @@ async def websocket_chat(
                         },
                         action_link=f"/chat?thread={thread_id}"
                     )
+
+                    # 🔥 NOTIFICAÇÃO DE CHAT POR E-MAIL — best-effort, não
+                    # interrompe o fluxo do WebSocket. Faltava aqui: só
+                    # existia na rota REST send_message (chat.py), mas o
+                    # chat em tempo real usa este WebSocket, então o
+                    # e-mail nunca era disparado de fato.
+                    try:
+                        from app.services.email_service import email_service
+
+                        recipient = db.query(User).filter(User.id == recipient_id).first()
+                        if recipient and recipient.email:
+                            recent_msgs = db.query(ChatMessage).filter(
+                                ChatMessage.thread_id == thread_id
+                            ).order_by(ChatMessage.created_at.desc()).limit(3).all()
+
+                            recent_msgs_text = [m.message for m in reversed(recent_msgs)]
+
+                            email_service.send_chat_notification(
+                                to_email=recipient.email,
+                                to_name=recipient.full_name or recipient.email,
+                                sender_name=user.full_name or user.email,
+                                messages=recent_msgs_text,
+                                thread_id=thread_id,
+                            )
+                    except Exception as e:
+                        print(f"⚠️ Erro ao enviar notificação de chat por e-mail (WS): {e}")
                 
             elif message_type == "typing":
                 is_typing = data.get("is_typing", False)

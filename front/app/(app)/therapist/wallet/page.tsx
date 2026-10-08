@@ -97,6 +97,7 @@ export default function TherapistWalletPage() {
 
   const getPlanLabel = (plan: string) => {
     const labels: Record<string, string> = {
+      basico: "Básico",
       essencial: "Essencial",
       profissional: "Profissional",
       premium: "Premium"
@@ -106,6 +107,7 @@ export default function TherapistWalletPage() {
 
   const getPlanColor = (plan: string) => {
     const colors: Record<string, string> = {
+      basico: "bg-gray-100 text-gray-700",
       essencial: "bg-gray-100 text-gray-700",
       profissional: "bg-blue-100 text-blue-700",
       premium: "bg-pink-100 text-pink-700"
@@ -125,10 +127,10 @@ export default function TherapistWalletPage() {
     );
   }
 
-  const currentPlan = subscription?.plan || "essencial";
+  const currentPlan = subscription?.plan || "basico";
   const currentPlanLabel = getPlanLabel(currentPlan);
   const currentPlanColor = getPlanColor(currentPlan);
-  const currentCommissionRate = currentPlan === "essencial" ? 20 : currentPlan === "profissional" ? 10 : 3;
+  const currentCommissionRate = (currentPlan === "essencial" || currentPlan === "basico") ? 20 : currentPlan === "profissional" ? 10 : 3;
 
   return (
     <>
@@ -213,7 +215,7 @@ export default function TherapistWalletPage() {
                 Próxima cobrança: {formatDate(subscription.current_period_end)}
               </p>
             )}
-            {subscription?.status !== "active" && currentPlan === "essencial" && (
+            {subscription?.status !== "active" && currentPlan === "basico" && (
               <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
                 Plano gratuito
               </span>
@@ -221,7 +223,7 @@ export default function TherapistWalletPage() {
           </div>
           
           {/* Barra de progresso de economia */}
-          {currentPlan !== "essencial" && (
+          {currentPlan !== "essencial" && currentPlan !== "basico" && (
             <div className="mt-3 pt-3 border-t border-gray-100">
               <div className="flex justify-between text-xs text-gray-500 mb-1">
                 <span>Comissão padrão: 20%</span>

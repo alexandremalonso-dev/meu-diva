@@ -112,6 +112,7 @@ const ROLES = [
 ];
 
 const PLANS = [
+  { id: "basico", name: "Básico", color: "text-gray-400", bgColor: "bg-gray-50" },
   { id: "essencial", name: "Essencial", color: "text-gray-500", bgColor: "bg-gray-100" },
   { id: "profissional", name: "Profissional", color: "text-blue-500", bgColor: "bg-blue-50" },
   { id: "premium", name: "Premium", color: "text-[#E03673]", bgColor: "bg-pink-50" }

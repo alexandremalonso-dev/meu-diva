@@ -39,6 +39,7 @@ MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET", "")
 
 # IDs dos planos de assinatura criados no painel do Mercado Pago
 MP_PLAN_IDS = {
+    "essencial":    "60118896981a4238b52fdebb02e72769",
     "profissional": "d2ec35a8800f454c8e4e9472c635e767",
     "premium":      "c02a3c222900447181af9b10314af05f",
 }
@@ -290,7 +291,7 @@ def handle_subscription_updated(subscription_data, db):
     subscription.cancel_at_period_end = subscription_data.get("cancel_at_period_end", False)
     subscription.updated_at = datetime.now()
     if status in ["canceled", "expired", "incomplete_expired", "past_due"]:
-        subscription.plan = "essencial"
+        subscription.plan = "basico"
     db.commit()
     if status in ["canceled", "expired", "incomplete_expired"]:
         try:
@@ -309,7 +310,7 @@ def handle_subscription_deleted(subscription_data, db):
     if not subscription:
         return
     old_plan = subscription.plan
-    subscription.status = "cancelled"; subscription.plan = "essencial"; subscription.updated_at = datetime.now()
+    subscription.status = "cancelled"; subscription.plan = "basico"; subscription.updated_at = datetime.now()
     db.commit()
     try:
         therapist_user = db.get(User, subscription.therapist_profile.user_id)
@@ -345,6 +346,21 @@ async def create_subscription_checkout(
     return {"checkout_url": checkout_url}
 
 
+def _period_end_from_mp(mp_data, now):
+    """
+    Fim do período = próxima cobrança informada pelo Mercado Pago (já considera
+    o teste grátis). Fallback: 30 dias. A conta antiga com replace(month=...)
+    quebrava nos dias 29 a 31 (ex.: 31/10 + 1 mês = 31/11, que não existe).
+    """
+    raw = (mp_data or {}).get("next_payment_date")
+    try:
+        if raw:
+            return datetime.fromisoformat(str(raw).replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        pass
+    return now + timedelta(days=30)
+
+
 @router.post("/create-subscription")
 async def create_subscription(
     request: Request,
@@ -361,7 +377,14 @@ async def create_subscription(
     body = await request.json()
     plan = body.get("plan", "").lower()
     card_token_id = body.get("card_token_id", "")
-    payer_email = body.get("payer_email", current_user.email)
+    # 🔥 O e-mail do pagador SEMPRE vem do usuário logado (servidor). Antes vinha
+    # do navegador e podia chegar vazio se a chamada a /api/users/me falhasse.
+    payer_email = (current_user.email or "").strip()
+    # 🔥 Device ID gerado pelo script de segurança do Mercado Pago no navegador.
+    import re as _re
+    device_id = str(body.get("device_id", "") or "").strip()
+    if device_id and not _re.fullmatch(r"[A-Za-z0-9_.\-]{1,200}", device_id):
+        device_id = ""
     payer_cpf = body.get("payer_cpf", "").replace(".", "").replace("-", "")
 
     if plan not in MP_PLAN_IDS:
@@ -374,8 +397,8 @@ async def create_subscription(
         raise HTTPException(status_code=503, detail="Mercado Pago não configurado.")
 
     plan_id = MP_PLAN_IDS[plan]
-    plan_prices = {"profissional": 79.00, "premium": 149.00}
-    plan_names = {"profissional": "Plano Profissional — Meu Divã", "premium": "Plano Premium — Meu Divã"}
+    plan_prices = {"essencial": 19.90, "profissional": 79.00, "premium": 149.00}
+    plan_names = {"essencial": "Plano Essencial — Meu Divã", "profissional": "Plano Profissional — Meu Divã", "premium": "Plano Premium — Meu Divã"}
 
     mp_payload = {
         "preapproval_plan_id": plan_id,
@@ -387,11 +410,46 @@ async def create_subscription(
         "status": "authorized",
     }
 
-    print(f"📦 Criando assinatura MP - User {current_user.id} - Plano {plan}")
+    print(f"📦 Criando assinatura MP - User {current_user.id} - Plano {plan} - device_id={'sim' if device_id else 'nao'} - email={'sim' if payer_email else 'nao'}")
+
+    # 🔥 Registra a tentativa de checkout: reinicia a contagem da limpeza de cadastros sem plano
+    try:
+        from sqlalchemy import text as _t
+        db.execute(
+            _t("INSERT INTO onboarding_cleanup (user_id, last_attempt_at) VALUES (:u, :t) ON CONFLICT (user_id) DO UPDATE SET last_attempt_at = :t"),
+            {"u": current_user.id, "t": datetime.utcnow()},
+        )
+        db.commit()
+    except Exception as _e:
+        db.rollback()
+        print(f"⚠️ nao foi possivel registrar a tentativa de checkout: {_e}")
 
     try:
-        response = sdk.preapproval().create(mp_payload)
-        mp_data = response.get("response", {})
+        mp_token = os.getenv("MP_ACCESS_TOKEN", "")
+        if not mp_token:
+            raise HTTPException(status_code=503, detail="Mercado Pago não configurado.")
+
+        # 🔥 Chamada direta à API (em vez do SDK) para poder enviar o header
+        # X-meli-session-id (Device ID), recomendado pela documentação do
+        # Mercado Pago. Não está confirmado que o endpoint de assinaturas use
+        # esse header; ele é inofensivo se for ignorado.
+        import requests as _requests
+        mp_headers = {
+            "Authorization": f"Bearer {mp_token}",
+            "Content-Type": "application/json",
+        }
+        if device_id:
+            mp_headers["X-meli-session-id"] = device_id
+        mp_resp = _requests.post(
+            "https://api.mercadopago.com/preapproval",
+            headers=mp_headers, json=mp_payload, timeout=30,
+        )
+        try:
+            mp_data = mp_resp.json()
+        except ValueError:
+            mp_data = {}
+        if not mp_resp.ok:
+            print(f"📦 MP erro HTTP {mp_resp.status_code}: {json.dumps(mp_data, ensure_ascii=False)[:600]}")
         mp_status = mp_data.get("status")
         mp_id = mp_data.get("id")
         mp_error = mp_data.get("message", "")
@@ -415,15 +473,35 @@ async def create_subscription(
         ).scalar_one_or_none()
 
         if existing:
+            # 🔥 Troca de plano: cancela a assinatura ANTERIOR no Mercado Pago. Sem isso
+            # ela continua cobrando em paralelo (o ID antigo é sobrescrito logo abaixo).
+            _old_mp_id = existing.stripe_subscription_id
+            if (
+                _old_mp_id
+                and _old_mp_id != str(mp_id)
+                and (getattr(existing, "payment_provider", None) or "mercadopago") == "mercadopago"
+                and existing.status in ("active", "paused", "pending")
+            ):
+                try:
+                    import requests as _rq
+                    _r = _rq.put(
+                        f"https://api.mercadopago.com/preapproval/{_old_mp_id}",
+                        headers={"Authorization": f"Bearer {mp_token}", "Content-Type": "application/json"},
+                        json={"status": "cancelled"}, timeout=20,
+                    )
+                    print(f"🔁 Troca de plano: assinatura anterior {_old_mp_id} cancelada (HTTP {_r.status_code})")
+                except Exception as e:
+                    print(f"⚠️ Erro ao cancelar assinatura anterior {_old_mp_id}: {e}")
             existing.plan = plan
             existing.status = "active" if mp_status == "authorized" else "pending"
             existing.stripe_subscription_id = str(mp_id)
+            existing.payment_provider = "mercadopago"
             existing.current_period_start = now
-            existing.current_period_end = now.replace(month=now.month % 12 + 1) if now.month < 12 else now.replace(year=now.year + 1, month=1)
+            existing.current_period_end = _period_end_from_mp(mp_data, now)
             existing.cancel_at_period_end = False
             existing.updated_at = now
         else:
-            period_end = now.replace(month=now.month % 12 + 1) if now.month < 12 else now.replace(year=now.year + 1, month=1)
+            period_end = _period_end_from_mp(mp_data, now)
             db.add(Subscription(
                 therapist_id=therapist_profile.id,
                 plan=plan,
@@ -451,11 +529,68 @@ async def create_subscription(
         raise HTTPException(status_code=500, detail=f"Erro ao criar assinatura: {str(e)}")
 
 
+# Dedupe simples (em memória) para não repetir o mesmo alerta de cobrança recusada
+_ALERTED_CHARGES: set = set()
+
+
+def _mp_get(path: str):
+    """GET direto na API do Mercado Pago. Retorna (status_http, json)."""
+    import requests as _requests
+    token = os.getenv("MP_ACCESS_TOKEN", "")
+    try:
+        r = _requests.get(
+            f"https://api.mercadopago.com{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=20,
+        )
+        try:
+            return r.status_code, r.json()
+        except ValueError:
+            return r.status_code, {}
+    except Exception as e:
+        print(f"⚠️ Erro GET MP {path}: {e}")
+        return 0, {}
+
+
+def _alert_failed_charge(user, plan_name, ap):
+    """Avisa por e-mail quando uma cobrança de assinatura é recusada."""
+    key = f"pay:{(ap.get('payment') or {}).get('id') or ap.get('id')}"
+    if key in _ALERTED_CHARGES:
+        return
+    _ALERTED_CHARGES.add(key)
+    try:
+        import html as _html
+        from app.services.email_service import email_service
+        to_email = os.getenv("PAYMENT_ALERT_EMAIL", "contato@meudivaonline.com")
+        nome = _html.escape(getattr(user, "full_name", None) or f"usuário {user.id}")
+        codigo = ap.get("rejection_code") or (ap.get("payment") or {}).get("status_detail") or "desconhecido"
+        texto = _html.escape(_mp_rejection_message(codigo))
+        corpo = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
+          <h2 style="color:#E03673;margin:0 0 16px;">Cobrança de assinatura recusada</h2>
+          <p><strong>Terapeuta:</strong> {nome} (usuário {user.id})</p>
+          <p><strong>Plano:</strong> {plan_name}</p>
+          <p><strong>Valor:</strong> R$ {ap.get('transaction_amount')}</p>
+          <p><strong>Motivo:</strong> {texto} ({_html.escape(str(codigo))})</p>
+          {('<p><strong>Tentativa:</strong> ' + str(ap.get('retry_attempt')) + '</p>') if ap.get('retry_attempt') else ''}
+          <p style="color:#888;font-size:13px;">O Mercado Pago tenta cobrar de novo automaticamente. Depois de 3 parcelas recusadas a assinatura é cancelada.</p>
+        </div>
+        """
+        email_service._send_email(
+            to_email=to_email,
+            subject=f"⚠️ Cobrança de assinatura recusada — plano {plan_name}",
+            html_content=corpo,
+        )
+    except Exception as e:
+        print(f"⚠️ Erro ao enviar alerta de cobrança recusada: {e}")
+
+
 @router.post("/webhook/mp/subscription")
 async def mp_subscription_webhook(request: Request, db: Session = Depends(get_db)):
     """
-    Webhook do MP para assinaturas (preapproval).
-    Ativado quando o terapeuta assina, renova ou cancela.
+    Webhook do MP para assinaturas.
+    - subscription_preapproval: mudança de status da assinatura (autorizada, pausada, cancelada)
+    - subscription_authorized_payment: cobrança (aprovada ou recusada) de uma assinatura
     """
     try:
         raw_body = await request.body()
@@ -472,83 +607,159 @@ async def mp_subscription_webhook(request: Request, db: Session = Depends(get_db
         if not sdk:
             return {"status": "ignored"}
 
+        import re as _re
+        charge = None
+
+        # 🔥 Evento de COBRANÇA: o id do evento é o da cobrança, não o da assinatura.
+        if event_type == "subscription_authorized_payment":
+            http_status, charge = _mp_get(f"/authorized_payments/{resource_id}")
+            if http_status != 200 or not charge.get("preapproval_id"):
+                print(f"⚠️ Cobrança {resource_id} sem preapproval_id (HTTP {http_status})")
+                return {"status": "ignored"}
+            resource_id = charge["preapproval_id"]
+
         # Busca os detalhes da assinatura no MP
         preapproval_response = sdk.preapproval().get(resource_id)
         preapproval = preapproval_response.get("response", {})
 
         mp_status = preapproval.get("status")
         plan_id = preapproval.get("preapproval_plan_id", "")
-        payer_email = preapproval.get("payer_email", "")
-        external_reference = preapproval.get("external_reference", "")
+        payer_email = preapproval.get("payer_email", "") or ""
+        external_reference = preapproval.get("external_reference", "") or ""
         next_payment_date = preapproval.get("next_payment_date")
         date_created = preapproval.get("date_created")
 
-        print(f"📦 MP Subscription: status={mp_status} | plan_id={plan_id} | email={payer_email}")
+        print(f"📦 MP Subscription: status={mp_status} | plan_id={plan_id} | ref={external_reference}")
 
         # Descobre qual plano pelo preapproval_plan_id
         plan_name = next((k for k, v in MP_PLAN_IDS.items() if v == plan_id), None)
         if not plan_name:
+            # 🔥 Plano de PACIENTE (pacotes de sessões): tratado em services/patient_packages.py.
+            # Só chega aqui quando o plano não é de terapeuta, então o fluxo dos terapeutas não muda.
+            try:
+                from app.services.patient_packages import handle_patient_package_event
+                if handle_patient_package_event(db, preapproval, charge, str(resource_id)):
+                    return {"status": "success"}
+            except Exception as _e:
+                db.rollback()
+                print(f"❌ [PACOTE] erro ao processar evento de plano de paciente: {_e}")
+                import traceback as _tb
+                _tb.print_exc()
+                # 500 para o Mercado Pago reenviar o evento (o crédito não pode se perder)
+                from fastapi.responses import JSONResponse
+                return JSONResponse(status_code=500, content={"status": "error"})
             print(f"⚠️ plan_id não reconhecido: {plan_id}")
-            return {"status": "ignored"}
-
-        # Encontra o terapeuta pelo email do pagador
-        user = db.execute(select(User).where(User.email == payer_email)).scalar_one_or_none()
-        if not user:
-            print(f"⚠️ Usuário não encontrado para email: {payer_email}")
-            return {"status": "ignored"}
-
-        therapist_profile = db.execute(
-            select(TherapistProfile).where(TherapistProfile.user_id == user.id)
-        ).scalar_one_or_none()
-        if not therapist_profile:
-            print(f"⚠️ Perfil de terapeuta não encontrado para user: {user.id}")
             return {"status": "ignored"}
 
         from app.models.subscription import Subscription
         from app.services.notification_service import NotificationService
 
-        # Calcula datas do período
-        now = datetime.now()
-        period_start = datetime.fromisoformat(date_created.replace("Z", "+00:00")).replace(tzinfo=None) if date_created else now
-        period_end = datetime.fromisoformat(next_payment_date.replace("Z", "+00:00")).replace(tzinfo=None) if next_payment_date else (now + timedelta(days=30))
-
-        # Busca assinatura existente pelo resource_id do MP
+        # Assinatura já salva com esse ID do MP (correspondência exata)
         existing = db.execute(
-            select(Subscription).where(Subscription.stripe_subscription_id == resource_id)
+            select(Subscription).where(Subscription.stripe_subscription_id == str(resource_id))
         ).scalar_one_or_none()
 
+        # 🔥 Identifica o terapeuta: 1) pela assinatura salva, 2) pelo
+        # external_reference (therapist_<id>_plan_...), 3) pelo e-mail (a API
+        # do MP devolve payer_email vazio, então este é só o último recurso).
+        user = None
+        therapist_profile = None
+        if existing:
+            therapist_profile = db.get(TherapistProfile, existing.therapist_id)
+            if therapist_profile:
+                user = db.get(User, therapist_profile.user_id)
+        if not user:
+            m = _re.match(r"^therapist_(\d+)_plan_", external_reference)
+            if m:
+                user = db.get(User, int(m.group(1)))
+        if not user and payer_email:
+            user = db.execute(select(User).where(User.email == payer_email)).scalar_one_or_none()
+        if not user:
+            print(f"⚠️ Usuário não identificado (ref={external_reference!r})")
+            return {"status": "ignored"}
+
+        if not therapist_profile:
+            therapist_profile = db.execute(
+                select(TherapistProfile).where(TherapistProfile.user_id == user.id)
+            ).scalar_one_or_none()
+        if not therapist_profile:
+            print(f"⚠️ Perfil de terapeuta não encontrado para user: {user.id}")
+            return {"status": "ignored"}
+
+        # Cobrança: registra e avisa se foi recusada
+        if charge is not None:
+            pay = charge.get("payment") or {}
+            print(
+                f"💳 Cobrança {charge.get('id')}: status={charge.get('status')} | "
+                f"pagamento={pay.get('status')} | codigo={charge.get('rejection_code')} | "
+                f"tentativa={charge.get('retry_attempt')} | valor={charge.get('transaction_amount')}"
+            )
+            if charge.get("rejection_code") or pay.get("status") == "rejected":
+                _alert_failed_charge(user, plan_name, charge)
+
+        def _parse_dt(s, default):
+            try:
+                return datetime.fromisoformat(s.replace("Z", "+00:00")).replace(tzinfo=None) if s else default
+            except Exception:
+                return default
+
+        now = datetime.now()
+        period_start = _parse_dt(date_created, now)
+        period_end = _parse_dt(next_payment_date, now + timedelta(days=30))
+
         if mp_status == "authorized":
-            # Assinatura ativa
-            if existing:
-                existing.status = "active"
-                existing.plan = plan_name
-                existing.current_period_start = period_start
-                existing.current_period_end = period_end
-                existing.updated_at = now
+            sub = existing
+            if sub is None:
+                # Uma linha por terapeuta (como em create_subscription)
+                sub = db.execute(
+                    select(Subscription).where(Subscription.therapist_id == therapist_profile.id)
+                ).scalars().first()
+                if sub is not None and getattr(sub, "payment_provider", "mercadopago") == "apple_iap":
+                    sub = None
+
+            was_active = bool(sub and sub.status == "active" and sub.plan == plan_name)
+
+            if sub:
+                sub.status = "active"
+                sub.plan = plan_name
+                sub.stripe_subscription_id = str(resource_id)
+                sub.payment_provider = "mercadopago"
+                sub.current_period_start = period_start
+                sub.current_period_end = period_end
+                sub.updated_at = now
             else:
                 db.add(Subscription(
                     therapist_id=therapist_profile.id,
                     plan=plan_name,
                     status="active",
-                    stripe_subscription_id=resource_id,  # reutiliza campo para ID do MP
+                    stripe_subscription_id=str(resource_id),  # reutiliza campo para ID do MP
                     current_period_start=period_start,
                     current_period_end=period_end,
                 ))
             db.commit()
             print(f"✅ Assinatura MP ativada: terapeuta {user.id} - plano {plan_name}")
-            try:
-                NotificationService(db).notify_subscription_activated(user, get_plan_name(plan_name))
-            except Exception as e:
-                print(f"⚠️ Erro notificação: {e}")
+            if not was_active:
+                try:
+                    NotificationService(db).notify_subscription_activated(user, get_plan_name(plan_name))
+                except Exception as e:
+                    print(f"⚠️ Erro notificação: {e}")
 
         elif mp_status in ("cancelled", "paused", "pending"):
+            # Só altera a linha cujo ID de assinatura bate exatamente
             if existing:
-                existing.status = "cancelled" if mp_status == "cancelled" else mp_status
-                existing.plan = "essencial" if mp_status == "cancelled" else existing.plan
+                # 🔥 Cancelamento agendado pelo terapeuta: o plano vale até o fim do período pago
+                if (mp_status == "cancelled" and existing.cancel_at_period_end
+                        and existing.current_period_end and existing.current_period_end > now):
+                    print(f"ℹ️ Cancelamento agendado mantido até {existing.current_period_end}: terapeuta {user.id}")
+                    return {"status": "success"}
+                novo_status = "cancelled" if mp_status == "cancelled" else mp_status
+                ja_estava = existing.status == novo_status
+                existing.status = novo_status
+                existing.plan = "basico" if mp_status == "cancelled" else existing.plan
                 existing.updated_at = now
                 db.commit()
                 print(f"⚠️ Assinatura MP {mp_status}: terapeuta {user.id}")
-                if mp_status == "cancelled":
+                if mp_status == "cancelled" and not ja_estava:
                     try:
                         NotificationService(db).notify_subscription_cancelled(user, get_plan_name(plan_name))
                     except Exception as e:
@@ -587,19 +798,56 @@ async def cancel_mp_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Assinatura ativa não encontrada")
 
+    # 🔥 Cancelamento já agendado: não cancela de novo no Mercado Pago
+    if getattr(subscription, "cancel_at_period_end", False):
+        _ate = subscription.current_period_end
+        _txt = _ate.strftime("%d/%m/%Y") if _ate else ""
+        return {
+            "message": ("Cancelamento já agendado. Seu plano continua ativo até " + _txt + ".") if _txt else "Cancelamento já agendado.",
+            "ends_at": _ate.isoformat() if _ate else None,
+        }
+
     # Cancela no MP se tiver SDK
     if sdk and subscription.stripe_subscription_id:
         try:
-            sdk.preapproval().update(subscription.stripe_subscription_id, {"status": "cancelled"})
-            print(f"✅ Assinatura MP cancelada: {subscription.stripe_subscription_id}")
+            _resp = sdk.preapproval().update(subscription.stripe_subscription_id, {"status": "cancelled"})
+            _st = _resp.get("status") if isinstance(_resp, dict) else None
+            print(f"✅ Assinatura MP cancelada: {subscription.stripe_subscription_id} (resposta do MP: {_st})")
+            if _st is not None and int(_st) >= 400:
+                print(f"⚠️ O Mercado Pago NAO confirmou o cancelamento: {str(_resp)[:300]}")
         except Exception as e:
             print(f"⚠️ Erro ao cancelar no MP: {e}")
 
     old_plan = subscription.plan
+    agora = datetime.now()
+    fim = subscription.current_period_end
+
+    if fim and fim > agora:
+        # 🔥 Já pagou o ciclo atual: mantém o plano até o fim do período (a cobrança futura
+        # já foi cancelada no Mercado Pago acima). Um job horário rebaixa para o Básico depois.
+        subscription.cancel_at_period_end = True
+        subscription.updated_at = agora
+        db.commit()
+        fim_txt = fim.strftime("%d/%m/%Y")
+        try:
+            NotificationService(db).create_notification(
+                user_id=current_user.id,
+                notification_type="subscription_cancelled",
+                title="Cancelamento agendado",
+                message=f"Sua assinatura {get_plan_name(old_plan)} foi cancelada e continua ativa até {fim_txt}. Depois dessa data, você volta ao plano gratuito.",
+                data={"plan": old_plan, "ends_at": fim.isoformat()},
+                action_link="/therapist/subscription",
+            )
+        except Exception as e:
+            print(f"⚠️ {e}")
+        print(f"🗓️ Cancelamento agendado: usuario {current_user.id} plano {old_plan} ate {fim}")
+        return {"message": f"Assinatura cancelada. Seu plano continua ativo até {fim_txt}.", "ends_at": fim.isoformat()}
+
+    # Sem período futuro conhecido: volta ao Básico na hora
     subscription.status = "cancelled"
-    subscription.plan = "essencial"
+    subscription.plan = "basico"
     subscription.cancel_at_period_end = False
-    subscription.updated_at = datetime.now()
+    subscription.updated_at = agora
     db.commit()
 
     try:
@@ -888,6 +1136,41 @@ def _mp_rejection_message(status_detail):
 # WEBHOOK MERCADO PAGO (pagamentos)
 # ============================================
 
+def _handle_subscription_payment(db, mp_payment_id, mp_data) -> bool:
+    """
+    Pagamentos de ASSINATURA (cobrança e retentativas) trazem external_reference
+    no formato "therapist_<id>_plan_<plano>", não o id de um Payment de sessão.
+    Antes isso caía em int() e gerava erro no log. Aqui só alertamos recusas;
+    o status da assinatura é tratado pelo webhook de assinatura.
+    Retorna True se o pagamento era de assinatura (já tratado).
+    """
+    import re as _re
+    # 🔥 Cobrança de pacote de PACIENTE: o crédito é tratado pelo webhook de assinatura
+    if _re.match(r"^patient_\d+_plan_\w+$", str(mp_data.get("external_reference") or "")):
+        return True
+    m = _re.match(r"^therapist_(\d+)_plan_(\w+)$", str(mp_data.get("external_reference") or ""))
+    if not m:
+        return False
+    if mp_data.get("status") == "rejected":
+        try:
+            sub_user = db.get(User, int(m.group(1)))
+            if sub_user:
+                _alert_failed_charge(sub_user, m.group(2), {
+                    "id": mp_payment_id,
+                    "retry_attempt": (mp_data.get("metadata") or {}).get("retry_attempt"),
+                    "rejection_code": mp_data.get("status_detail"),
+                    "transaction_amount": mp_data.get("transaction_amount"),
+                    "payment": {
+                        "id": mp_payment_id,
+                        "status": mp_data.get("status"),
+                        "status_detail": mp_data.get("status_detail"),
+                    },
+                })
+        except Exception as e:
+            print(f"⚠️ Erro ao tratar recusa de assinatura: {e}")
+    return True
+
+
 @router.post("/webhook/mp")
 async def mp_webhook(request: Request, db: Session = Depends(get_db)):
     try:
@@ -917,6 +1200,9 @@ async def mp_webhook(request: Request, db: Session = Depends(get_db)):
         external_reference = mp_data.get("external_reference")
 
         print(f"📦 MP Webhook: status={mp_status} | ref={external_reference}")
+
+        if _handle_subscription_payment(db, mp_payment_id, mp_data):
+            return {"status": "subscription_payment"}
 
         if mp_status != "approved" or not external_reference:
             return {"status": "ignored"}
@@ -1160,7 +1446,7 @@ async def apple_server_notifications(request: Request, db: Session = Depends(get
         elif notification_type in ("EXPIRED", "REFUND", "REVOKE", "GRACE_PERIOD_EXPIRED"):
             old_plan = subscription.plan
             subscription.status = "cancelled"
-            subscription.plan = "essencial"
+            subscription.plan = "basico"
             subscription.updated_at = now
             db.commit()
             try:
@@ -1277,17 +1563,19 @@ async def get_therapist_subscription(
     ).order_by(Commission.created_at.desc()).limit(12).all()
 
     plan_names = {
+        "basico": "Básico",
         "essencial": "Essencial",
         "profissional": "Profissional",
         "premium": "Premium"
     }
     plan_commissions = {
+        "basico": 20,
         "essencial": 20,
         "profissional": 10,
         "premium": 3
     }
 
-    current_plan = subscription.plan if subscription else "essencial"
+    current_plan = subscription.plan if subscription else "basico"
 
     return {
         "subscription": {

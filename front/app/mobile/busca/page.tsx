@@ -268,7 +268,7 @@ function MobileBuscaContent() {
                 { key: "duracao_30min", label: "Sessões de 30min" },
                 { key: "duracao_50min", label: "Sessões de 50min" },
                 { key: "disponivel_agora", label: "Disponível agora" },
-                { key: "aceita_corporativo", label: "Aceita plano empresa" },
+                { key: "aceita_corporativo", label: "Corporativo e pacotes" },
               ].map(({ key, label }) => (
                 <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
                   <input

@@ -59,7 +59,8 @@ export function MenuCard({ href, icon, title, description, color = 'blue' }: Men
         {getIcon(icon)}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-[11px] sm:text-xs lg:text-sm leading-tight truncate">
+        {/* 🔥 CORRIGIDO: line-clamp-2 em vez de truncate */}
+        <p className="font-semibold text-[11px] sm:text-xs lg:text-sm leading-tight line-clamp-2">
           {title}
         </p>
         <p className="text-[10px] sm:text-[11px] lg:text-xs text-white/80 leading-tight truncate hidden sm:block">

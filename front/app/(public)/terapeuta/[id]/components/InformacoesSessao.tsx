@@ -56,19 +56,24 @@ export function InformacoesSessao({ terapeuta, isLoggedIn = false }: Informacoes
           </div>
         )}
         
-        {/* Abordagem */}
-        {terapeuta.abordagem && (
+        {/* Especialidade (antigo "Especialidades" com texto livre) */}
+        {terapeuta.professional_type && (
           <div className="md:col-span-2">
-            <h3 className="text-sm font-medium text-gray-500 mb-1">Abordagem</h3>
-            <p className="text-gray-900" style={{ color: CORES.cinzaTexto }}>{terapeuta.abordagem}</p>
+            <h3 className="text-sm font-medium text-gray-500 mb-1">Especialidade</h3>
+            <p className="text-gray-900" style={{ color: CORES.cinzaTexto }}>{terapeuta.professional_type}</p>
           </div>
         )}
-        
-        {/* Especialidades */}
-        {terapeuta.specialties && (
+
+        {/* Descrição (antigo "Abordagem") — limitado a 2 linhas visualmente */}
+        {terapeuta.abordagem && (
           <div className="md:col-span-2">
-            <h3 className="text-sm font-medium text-gray-500 mb-1">Especialidades</h3>
-            <p className="text-gray-900" style={{ color: CORES.cinzaTexto }}>{terapeuta.specialties}</p>
+            <h3 className="text-sm font-medium text-gray-500 mb-1">Especialização</h3>
+            <p
+              className="text-gray-900"
+              style={{ color: CORES.cinzaTexto, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+            >
+              {terapeuta.abordagem}
+            </p>
           </div>
         )}
       </div>

@@ -156,6 +156,82 @@ def create_period(
 
 
 # ==========================
+# PUT - Atualizar um período existente
+# ==========================
+
+@router.put("/periods/{period_id}", response_model=AvailabilityPeriodOut)
+def update_period(
+    period_id: int,
+    payload: AvailabilityPeriodCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
+):
+    """
+    Atualiza um período de disponibilidade existente (datas + horários).
+    Substitui todos os slots antigos pelos novos enviados.
+    """
+    print(f"\n✏️ Atualizando período {period_id} do usuário: {current_user.id}")
+
+    try:
+        therapist_profile = db.execute(
+            select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+        ).scalar_one_or_none()
+
+        if not therapist_profile:
+            raise HTTPException(status_code=400, detail="Perfil do terapeuta não encontrado")
+
+        period = db.execute(
+            select(AvailabilityPeriod).where(
+                AvailabilityPeriod.id == period_id,
+                AvailabilityPeriod.therapist_profile_id == therapist_profile.id
+            )
+        ).scalar_one_or_none()
+
+        if not period:
+            raise HTTPException(status_code=404, detail="Período não encontrado")
+
+        if payload.start_date > payload.end_date:
+            raise HTTPException(status_code=400, detail="Data inicial não pode ser maior que data final")
+
+        if not payload.slots:
+            raise HTTPException(status_code=400, detail="Pelo menos um horário deve ser informado")
+
+        for slot in payload.slots:
+            if slot.weekday < 0 or slot.weekday > 6:
+                raise HTTPException(status_code=400, detail="Dia da semana deve ser entre 0 e 6")
+            if slot.start_time >= slot.end_time:
+                raise HTTPException(status_code=400, detail="Horário de início deve ser anterior ao fim")
+
+        period.start_date = payload.start_date
+        period.end_date = payload.end_date
+
+        db.query(AvailabilitySlot).filter(AvailabilitySlot.period_id == period.id).delete()
+        db.flush()
+
+        for slot_data in payload.slots:
+            slot = AvailabilitySlot(
+                period_id=period.id,
+                weekday=slot_data.weekday,
+                start_time=slot_data.start_time,
+                end_time=slot_data.end_time
+            )
+            db.add(slot)
+
+        db.commit()
+        db.refresh(period)
+
+        print(f"✅ Período {period_id} atualizado: {len(payload.slots)} slots")
+        return period
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Erro ao atualizar período: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+# ==========================
 # DELETE - Remover um período
 # ==========================
 

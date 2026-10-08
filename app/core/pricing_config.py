@@ -8,27 +8,38 @@ from app.db.database import SessionLocal
 
 # Fallback prices (caso banco esteja vazio)
 FALLBACK_PRICES = {
+    "essencial": {"price_cents": 1990, "price_brl": 19.90},
     "profissional": {"price_cents": 7900, "price_brl": 79.00},
     "premium": {"price_cents": 14900, "price_brl": 149.00}
 }
 
 PLAN_NAMES = {
+    "basico": "Básico",
     "essencial": "Essencial",
     "profissional": "Profissional",
     "premium": "Premium"
 }
 
 PLAN_DESCRIPTIONS = {
+    "basico": "Cortesia da plataforma",
     "essencial": "Perfeito para começar",
     "profissional": "Para terapeutas em crescimento",
     "premium": "Para clínicas e profissionais experientes"
 }
 
 PLAN_FEATURES_DISPLAY = {
+    "basico": [
+        "✓ Até 10 pacientes ativos",
+        "✓ Agendamento básico",
+        "✓ Prontuário digital",
+        "✓ Comissão de 20% por sessão"
+    ],
     "essencial": [
         "✓ Até 10 pacientes ativos",
         "✓ Agendamento básico",
         "✓ Prontuário digital",
+        "✓ Visibilidade no marketplace",
+        "✓ Relatórios financeiros",
         "✓ Comissão de 20% por sessão"
     ],
     "profissional": [

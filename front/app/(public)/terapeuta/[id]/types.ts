@@ -2,12 +2,23 @@ export interface TerapeutaPublico {
   id: number;
   user_id: number;
   full_name: string;
+  treatment?: string | null;
   user?: {
     full_name: string;
+  treatment?: string | null;
     email: string;
   };
   bio: string | null;
   specialties: string | null;
+  professional_type?: string | null;
+  therapeutic_approach?: string | null;
+  integrative_practice?: string | null;
+  target_audience?: string | null;
+  demand_focus?: string | null;
+  service_modality?: string | null;
+  service_modalities?: string[] | null;
+  approaches?: string[] | null;
+  reasons?: string[] | null;
   session_price: number | null;
   foto_url?: string | null;
   experiencia?: string | null;

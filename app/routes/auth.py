@@ -14,6 +14,7 @@ from typing import Optional
 from app.db.database import get_db
 from app.models.user import User
 from app.models.patient_profile import PatientProfile
+from app.core.text_utils import normalize_full_name
 from app.models.therapist_profile import TherapistProfile
 from app.schemas.auth import RegisterRequest, LoginRequest
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
@@ -208,22 +209,36 @@ def _notify_online_user_logout_sync(user: User):
 # ==========================
 
 @router.post("/register", status_code=201)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     existing = db.execute(
         select(User).where(User.email == payload.email)
     ).scalar_one_or_none()
 
     if existing:
+        # 🔥 cadastro ainda NÃO confirmado: a nova tentativa assume a conta (novo código); confirmado: 409
+        from app.services.email_verification import handle_existing_unverified
+        _pendente = handle_existing_unverified(db, existing, payload, request)
+        if _pendente is not None:
+            return _pendente
         raise HTTPException(status_code=409, detail="Email ja cadastrado")
 
     role = UserRole.patient
     requested_role = getattr(payload, "role", None)
     if requested_role is not None:
         role = _coerce_role(requested_role)
+        if role.value not in ("patient", "therapist", "empresa"):
+            _fwd = request.headers.get("x-forwarded-for", "")
+            _ip = (_fwd.split(",")[0].strip() if _fwd else (request.client.host if request.client else "desconhecido"))
+            print(f"🚨 TENTATIVA DE CADASTRO COM PAPEL NAO PERMITIDO: papel={role.value!r} email={payload.email!r} ip={_ip} user_agent={request.headers.get('user-agent', '')[:120]!r}")
+            raise HTTPException(status_code=403, detail="Tipo de conta não permitido no cadastro")
+
+    # 🔥 Normaliza o nome pra Title Case (evita "LUANA PINHEIRO DA SILVA"
+    # ficando tudo em maiúsculo — comum quando o usuário digita com Caps Lock)
+    normalized_name = normalize_full_name(payload.full_name)
 
     user = User(
         email=payload.email,
-        full_name=payload.full_name,
+        full_name=normalized_name,
         password_hash=get_password_hash(payload.password),
         role=role,
         is_active=True,
@@ -236,7 +251,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         if role == UserRole.patient:
             patient_profile = PatientProfile(
                 user_id=user.id,
-                full_name=payload.full_name or "",
+                full_name=normalized_name or "",
                 email=payload.email,
                 timezone="America/Sao_Paulo",
                 preferred_language="pt-BR"
@@ -245,7 +260,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         elif role == UserRole.therapist:
             therapist_profile = TherapistProfile(
                 user_id=user.id,
-                full_name=payload.full_name or "",
+                full_name=normalized_name or "",
                 session_price=None,
                 session_duration_30min=True,
                 session_duration_50min=True
@@ -262,6 +277,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    # 🔥 e-mail só vale depois de confirmado: marca como pendente e envia o código
+    from app.services.email_verification import start_verification
+    start_verification(db, user)
+
     return {
         "id": user.id,
         "formatted_id": user.formatted_id,
@@ -269,7 +288,8 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         "full_name": user.full_name,
         "role": user.role.value,
         "is_active": user.is_active,
-        "created_at": user.created_at
+        "created_at": user.created_at,
+        "verification_required": True
     }
 
 
@@ -284,6 +304,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     if not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciais invalidas")
+
+    # 🔥 e-mail ainda não confirmado: reenvia o código (respeitando o intervalo) e pede a confirmação
+    from app.services.email_verification import require_verified
+    require_verified(db, user)
 
     access_token = create_access_token({"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -645,9 +669,12 @@ async def google_login(request: Request, db: Session = Depends(get_db)):
     )
 
     is_mobile = request.query_params.get("mobile") == "true"
+    # 🔥 Tipo de conta escolhido no cadastro (vale só para conta NOVA). Só "therapist" é aceito;
+    # qualquer outro valor vira "patient". O papel viaja dentro do state, validado no banco.
+    signup_role = "therapist" if request.query_params.get("role") == "therapist" else "patient"
     raw_state = secrets.token_urlsafe(32)
     context = "mobile" if is_mobile else "web"
-    state = f"{raw_state}:{context}"
+    state = f"{raw_state}:{signup_role}:{context}"
 
     db.add(OAuthState(state=state))
     db.commit()
@@ -689,6 +716,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="State expired, please try again")
 
         is_mobile = state_param.endswith(":mobile")
+        signup_role = "therapist" if state_param.split(":")[-2:-1] == ["therapist"] else "patient"
 
         db.delete(stored_state)
         db.commit()
@@ -723,16 +751,33 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 
         user = db.query(User).filter(User.email == email).first()
         is_new_user = False
+        new_role_q = ""
 
         if not user:
             is_new_user = True
-            user = User(email=email, full_name=full_name, role=UserRole.patient, is_active=True, password_hash=None)
-            db.add(user)
-            db.flush()
-            db.add(PatientProfile(
-                user_id=user.id, full_name=full_name, email=email,
-                timezone="America/Sao_Paulo", preferred_language="pt-BR"
-            ))
+            if signup_role == "therapist":
+                # 🔥 Cadastro social como especialista: a conta já nasce terapeuta (perfil + carteira),
+                # como no cadastro por e-mail.
+                from app.models.wallet import Wallet
+                user = User(email=email, full_name=full_name, role=UserRole.therapist, is_active=True, password_hash=None)
+                db.add(user)
+                db.flush()
+                tp = TherapistProfile(
+                    user_id=user.id, full_name=full_name or "",
+                    session_price=None, session_duration_30min=True, session_duration_50min=True,
+                )
+                db.add(tp)
+                db.flush()
+                db.add(Wallet(therapist_id=tp.id, balance=0, currency="BRL"))
+                new_role_q = "&new_role=therapist"
+            else:
+                user = User(email=email, full_name=full_name, role=UserRole.patient, is_active=True, password_hash=None)
+                db.add(user)
+                db.flush()
+                db.add(PatientProfile(
+                    user_id=user.id, full_name=full_name, email=email,
+                    timezone="America/Sao_Paulo", preferred_language="pt-BR"
+                ))
             db.commit()
             db.refresh(user)
 
@@ -753,7 +798,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         if is_mobile:
             redirect_url = f"meudiva://oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
         else:
-            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}{new_role_q}"
         return RedirectResponse(url=redirect_url)
 
     except HTTPException:
@@ -773,6 +818,12 @@ async def microsoft_login(request: Request):
     if not oauth.microsoft:
         raise HTTPException(status_code=503, detail="Microsoft OAuth not configured")
     redirect_uri = request.url_for("microsoft_callback")
+    # 🔥 Tipo de conta escolhido no cadastro (vale só para conta NOVA), guardado na sessão assinada
+    # que o authlib já usa para o state. Só "therapist" é aceito; o resto vira "patient".
+    try:
+        request.session["signup_role"] = "therapist" if request.query_params.get("role") == "therapist" else "patient"
+    except Exception:
+        pass
     return await oauth.microsoft.authorize_redirect(request, redirect_uri)
 
 
@@ -793,16 +844,37 @@ async def microsoft_callback(request: Request, db: Session = Depends(get_db)):
 
         user = db.query(User).filter(User.email == email).first()
         is_new_user = False
+        new_role_q = ""
+        try:
+            signup_role = "therapist" if request.session.get("signup_role") == "therapist" else "patient"
+            request.session.pop("signup_role", None)
+        except Exception:
+            signup_role = "patient"
 
         if not user:
             is_new_user = True
-            user = User(email=email, full_name=full_name, role=UserRole.patient, is_active=True, password_hash=None)
-            db.add(user)
-            db.flush()
-            db.add(PatientProfile(
-                user_id=user.id, full_name=full_name, email=email,
-                timezone="America/Sao_Paulo", preferred_language="pt-BR"
-            ))
+            if signup_role == "therapist":
+                # Cadastro social como especialista: a conta já nasce terapeuta (perfil + carteira)
+                from app.models.wallet import Wallet
+                user = User(email=email, full_name=full_name, role=UserRole.therapist, is_active=True, password_hash=None)
+                db.add(user)
+                db.flush()
+                tp = TherapistProfile(
+                    user_id=user.id, full_name=full_name or "",
+                    session_price=None, session_duration_30min=True, session_duration_50min=True,
+                )
+                db.add(tp)
+                db.flush()
+                db.add(Wallet(therapist_id=tp.id, balance=0, currency="BRL"))
+                new_role_q = "&new_role=therapist"
+            else:
+                user = User(email=email, full_name=full_name, role=UserRole.patient, is_active=True, password_hash=None)
+                db.add(user)
+                db.flush()
+                db.add(PatientProfile(
+                    user_id=user.id, full_name=full_name, email=email,
+                    timezone="America/Sao_Paulo", preferred_language="pt-BR"
+                ))
             db.commit()
             db.refresh(user)
 
@@ -826,7 +898,7 @@ async def microsoft_callback(request: Request, db: Session = Depends(get_db)):
         if is_mobile:
             redirect_url = f"meudiva://oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
         else:
-            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}{new_role_q}"
         return RedirectResponse(url=redirect_url)
 
     except OAuthError as e:
@@ -857,7 +929,9 @@ async def apple_login(request: Request):
         "https://api.meudivaonline.com/api/auth/apple/callback/web"
     )
 
-    state = f"{secrets.token_urlsafe(32)}:{context}"
+    # 🔥 Tipo de conta escolhido no cadastro (vale só para conta NOVA). Só "therapist" é aceito.
+    signup_role = "therapist" if request.query_params.get("role") == "therapist" else "patient"
+    state = f"{secrets.token_urlsafe(32)}:{signup_role}:{context}"
 
     apple_auth_url = (
         f"https://appleid.apple.com/auth/authorize"
@@ -887,6 +961,7 @@ async def apple_callback_web(request: Request, db: Session = Depends(get_db)):
         user_data_str = form.get("user")  # Só enviado na primeira autenticação
 
         is_mobile = state.endswith(":mobile")
+        signup_role = "therapist" if state.split(":")[-2:-1] == ["therapist"] else "patient"
 
         given_name = None
         family_name = None
@@ -924,25 +999,33 @@ async def apple_callback_web(request: Request, db: Session = Depends(get_db)):
 
         user = db.query(User).filter(User.email == email).first()
         is_new_user = False
+        new_role_q = ""
 
         if not user:
             is_new_user = True
-            user = User(
-                email=email,
-                full_name=full_name or email.split("@")[0],
-                role=UserRole.patient,
-                is_active=True,
-                password_hash=None
-            )
-            db.add(user)
-            db.flush()
-            db.add(PatientProfile(
-                user_id=user.id,
-                full_name=full_name or email.split("@")[0],
-                email=email,
-                timezone="America/Sao_Paulo",
-                preferred_language="pt-BR"
-            ))
+            nome_novo = full_name or email.split("@")[0]
+            if signup_role == "therapist":
+                # Cadastro social como especialista: a conta já nasce terapeuta (perfil + carteira)
+                from app.models.wallet import Wallet
+                user = User(email=email, full_name=nome_novo, role=UserRole.therapist, is_active=True, password_hash=None)
+                db.add(user)
+                db.flush()
+                tp = TherapistProfile(
+                    user_id=user.id, full_name=nome_novo,
+                    session_price=None, session_duration_30min=True, session_duration_50min=True,
+                )
+                db.add(tp)
+                db.flush()
+                db.add(Wallet(therapist_id=tp.id, balance=0, currency="BRL"))
+                new_role_q = "&new_role=therapist"
+            else:
+                user = User(email=email, full_name=nome_novo, role=UserRole.patient, is_active=True, password_hash=None)
+                db.add(user)
+                db.flush()
+                db.add(PatientProfile(
+                    user_id=user.id, full_name=nome_novo, email=email,
+                    timezone="America/Sao_Paulo", preferred_language="pt-BR"
+                ))
             db.commit()
             db.refresh(user)
         elif full_name and not user.full_name:
@@ -967,7 +1050,7 @@ async def apple_callback_web(request: Request, db: Session = Depends(get_db)):
         if is_mobile:
             redirect_url = f"meudiva://oauth-callback?access_token={access_token}&refresh_token={refresh_token_val}"
         else:
-            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token_val}"
+            redirect_url = f"{settings.FRONTEND_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token_val}{new_role_q}"
         return RedirectResponse(url=redirect_url, status_code=303)
 
     except HTTPException:

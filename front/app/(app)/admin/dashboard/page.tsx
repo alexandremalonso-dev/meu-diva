@@ -9,16 +9,16 @@ import Link from "next/link";
 import {
   Calendar, Users, User, ArrowRight, X, Loader2,
   BarChart2, UserPlus, CheckCircle, XCircle, DollarSign, Activity,
-  CreditCard, Building2
+  CreditCard, Building2, LayoutDashboard, Send, Clock, Activity as ActivityIcon
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine
 } from "recharts";
 
-import { MenuCard } from "@/app/(app)/therapist/dashboard/components/cards/MenuCard";
 import { CalendarAdmin } from "@/components/calendar/CalendarAdmin";
 import { StatsCards } from "./components/StatsCards";
+import { RotatingStatCard } from "./components/shared/RotatingStatCard";
 import { useStats } from "./components/hooks/useStats";
 import type { Appointment } from '@/types/appointment';
 import { ChartTooltip } from '@/components/ui/ChartTooltip';
@@ -48,46 +48,34 @@ interface SubscriptionData {
   created_at?: string;
 }
 
-function StatCard({ title, value, subtitle, icon: Icon, onClick, active = false, children }: {
+function StatCard({ title, value, subtitle, icon: Icon, onClick, active = false, gradient = "from-[#E03673] to-[#E03673]/80" }: {
   title: string; value: string | number; subtitle?: string;
-  icon: React.ElementType; onClick?: () => void; active?: boolean;
-  children?: React.ReactNode;
+  icon: React.ElementType; onClick?: () => void; active?: boolean; gradient?: string;
 }) {
   return (
     <div onClick={onClick}
-      className={`bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-sm p-4 text-white transition-all hover:shadow-md hover:scale-[1.02] ${onClick ? "cursor-pointer" : ""} ${active ? "ring-2 ring-white/50 ring-offset-2" : ""}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-white/80">{title}</span>
-        <Icon className="w-5 h-5 text-white/70" />
+      className={`h-full flex flex-col justify-center bg-gradient-to-r ${gradient} rounded-lg shadow-sm px-3 py-2 text-white transition-all hover:shadow-md hover:scale-[1.01] ${onClick ? "cursor-pointer" : ""} ${active ? "ring-2 ring-white/50 ring-offset-1" : ""}`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-fluid-2xs font-medium text-white/80">{title}</span>
+        <Icon className="w-3.5 h-3.5 text-white/70" />
       </div>
-      <p className="text-2xl font-bold">{value}</p>
-      {subtitle && <p className="text-xs text-white/70 mt-1">{subtitle}</p>}
-      {children}
+      <p className="text-lg sm:text-xl font-bold leading-tight">{value}</p>
+      {subtitle && <p className="text-fluid-2xs text-white/70 mt-0.5">{subtitle}</p>}
     </div>
   );
 }
 
-// Avatar com foto ou inicial
 function UserAvatar({ fotoUrl, name, size = "sm" }: { fotoUrl?: string | null; name?: string | null; size?: "sm" | "md" }) {
   const dim = size === "sm" ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm";
   const initial = name?.charAt(0).toUpperCase() || "U";
-  
   let src: string | null = null;
   if (fotoUrl) {
-    if (fotoUrl.startsWith("http")) {
-      src = fotoUrl;
-    } else {
-      src = getFotoSrc(fotoUrl) ?? "";
-    }
+    src = fotoUrl.startsWith("http") ? fotoUrl : (getFotoSrc(fotoUrl) ?? "");
   }
-  
   return (
     <div className={`${dim} rounded-full overflow-hidden bg-gradient-to-br from-[#2F80D3] to-[#2F80D3]/80 flex items-center justify-center flex-shrink-0`}>
       {src ? (
-        <img 
-          src={src} 
-          alt={name || ""} 
-          className="w-full h-full object-cover"
+        <img src={src} alt={name || ""} className="w-full h-full object-cover"
           onError={(e) => {
             e.currentTarget.style.display = "none";
             if (e.currentTarget.parentElement) {
@@ -99,6 +87,52 @@ function UserAvatar({ fotoUrl, name, size = "sm" }: { fotoUrl?: string | null; n
       ) : (
         <span className="text-white font-bold">{initial}</span>
       )}
+    </div>
+  );
+}
+
+function MiniRevenueCard({
+  href, icon: Icon, label, value, gradient, footerLabel,
+}: {
+  href: string; icon: React.ElementType; label: string; value: string;
+  gradient: string; footerLabel: string;
+}) {
+  return (
+    <Link href={href} className="block h-full">
+      <div className={`h-full flex flex-col justify-center ${gradient} rounded-lg shadow-sm px-3 py-2 text-white transition-all hover:shadow-md hover:scale-[1.01]`}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Icon className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
+            <span className="text-fluid-2xs text-white/80 truncate">{label}</span>
+          </div>
+          <ArrowRight className="w-3 h-3 text-white/60 flex-shrink-0" />
+        </div>
+        <p className="text-lg sm:text-xl font-bold truncate leading-tight">{value}</p>
+        <p className="text-fluid-2xs text-white/60 mt-0.5 truncate">{footerLabel}</p>
+      </div>
+    </Link>
+  );
+}
+
+function QuickLinkPill({ href, icon: Icon, label }: { href: string; icon: React.ElementType; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="h-14 flex flex-col items-center justify-center gap-0.5 rounded-lg bg-gradient-to-br from-[#2F80D3] to-[#2F80D3]/80 text-white text-center transition-all hover:shadow-md hover:scale-[1.02] px-1"
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      <span className="text-fluid-2xs font-medium leading-tight truncate w-full">{label}</span>
+    </Link>
+  );
+}
+
+function ColumnLabel({ label, icon: Icon, gradient = "from-[#E03673] to-[#E03673]/80" }: { label: string; icon: React.ElementType; gradient?: string }) {
+  return (
+    <div
+      className={`h-14 flex flex-col items-center justify-center gap-0.5 rounded-lg bg-gradient-to-br ${gradient} text-white text-center px-1`}
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      <span className="text-fluid-2xs font-medium leading-tight truncate w-full">{label}</span>
     </div>
   );
 }
@@ -119,8 +153,7 @@ export default function AdminDashboardPage() {
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [modalFilter, setModalFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
-  
-  // Dados para os cards
+
   const [reportData, setReportData] = useState({
     geral: { revenue: 0, sessions: 0 },
     terapeutas: { revenue: 0, sessions: 0 },
@@ -128,10 +161,8 @@ export default function AdminDashboardPage() {
     assinaturas: { revenue: 0, subscribers: 0, mrr: 0 }
   });
 
-  // Usando o hook useStats com totalAvailability
   const stats = useStats(appointments, totalAvailability);
 
-  // Estatísticas de usuários para os cards
   const userStats = useMemo(() => {
     const therapists = users.filter(u => u.role === "therapist");
     const patients = users.filter(u => u.role === "patient");
@@ -152,25 +183,20 @@ export default function AdminDashboardPage() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfYear = new Date(now.getFullYear(), 0, 1);
     let base = [...appointments];
-    
+
     if (periodFilter === "week") base = base.filter((a: Appointment) => a.starts_at && new Date(a.starts_at) >= startOfWeek);
     else if (periodFilter === "month") base = base.filter((a: Appointment) => a.starts_at && new Date(a.starts_at) >= startOfMonth);
     else if (periodFilter === "year") base = base.filter((a: Appointment) => a.starts_at && new Date(a.starts_at) >= startOfYear);
-    
+
     if (modalFilter === "upcoming") return base.filter((a: Appointment) => a.starts_at && new Date(a.starts_at) > now && ["scheduled", "confirmed"].includes(a.status));
     if (modalFilter === "completed") return base.filter((a: Appointment) => a.status === "completed");
     if (modalFilter === "cancelled") return base.filter((a: Appointment) => a.status?.includes("cancelled"));
     return base;
   }, [appointments, modalFilter, periodFilter]);
 
-  // Buscar disponibilidade total
   const loadTotalAvailability = useCallback(async () => {
     try {
-      const data = await apiCall({
-        url: "/api/admin/availability/all",
-        requireAuth: true
-      });
-      
+      const data = await apiCall({ url: "/api/admin/availability/all", requireAuth: true });
       if (data && Array.isArray(data) && data.length > 0) {
         let totalSlots = 0;
         for (const therapist of data) {
@@ -213,15 +239,11 @@ export default function AdminDashboardPage() {
       const year = now.getFullYear();
       const month = now.getMonth();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
+
       const dailyData = Array.from({ length: daysInMonth }, (_, i) => ({
-        day: i + 1,
-        revenue: 0,
-        sessions: 0,
-        liquidRevenue: 0,
-        commission: 0
+        day: i + 1, revenue: 0, sessions: 0, liquidRevenue: 0, commission: 0
       }));
-      
+
       appointmentsData.forEach((apt: Appointment) => {
         if (apt.status === "completed" && apt.session_price && apt.starts_at) {
           const aptDate = new Date(apt.starts_at);
@@ -238,39 +260,32 @@ export default function AdminDashboardPage() {
           }
         }
       });
-      
+
       setChartData(dailyData);
-      
+
       const currentMonthAppointments = appointmentsData.filter((apt: Appointment) => {
         if (!apt.starts_at) return false;
         const aptDate = new Date(apt.starts_at);
         return aptDate.getFullYear() === year && aptDate.getMonth() === month && apt.status === "completed";
       });
-      
+
       const currentMonthRevenue = currentMonthAppointments.reduce((sum: number, apt: Appointment) => sum + (apt.session_price || 0), 0);
       const currentMonthSessions = currentMonthAppointments.length;
       const currentMonthLiquid = currentMonthRevenue * 0.8;
       const currentMonthCommission = currentMonthRevenue * 0.2;
-      
-      // 🔥 só contar planos pagos (Profissional + Premium) como "assinantes ativos",
-      // igual ao relatório /admin/reports/assinaturas
+
       const activeSubscriptions = (subscriptionsData || []).filter(
-        (s: any) => s.plan !== "essencial" && s.subscription_status === "active"
+        (s: any) => s.plan !== "basico" && s.subscription_status === "active"
       );
       const mrrEstimado = activeSubscriptions.reduce((sum: number, s: any) => {
         if (s.plan === "profissional") return sum + 79;
         if (s.plan === "premium") return sum + 149;
         return sum;
       }, 0);
-      // 🔥 receita real do MP se disponível, senão fallback para cálculo estimado
       const mrr = revenueReal?.total_mensal_real ?? mrrEstimado;
-      
-      const subscriptionDailyData = Array.from({ length: daysInMonth }, (_, i) => ({
-        day: i + 1,
-        subscribers: 0,
-        mrr: 0
-      }));
-      
+
+      const subscriptionDailyData = Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, subscribers: 0, mrr: 0 }));
+
       activeSubscriptions.forEach((sub: any) => {
         const createdAt = sub.created_at ? new Date(sub.created_at) : null;
         if (createdAt && createdAt.getFullYear() === year && createdAt.getMonth() === month) {
@@ -282,7 +297,7 @@ export default function AdminDashboardPage() {
           }
         }
       });
-      
+
       let accumulatedSubscribers = 0;
       let accumulatedMrr = 0;
       for (let i = 0; i < daysInMonth; i++) {
@@ -291,16 +306,16 @@ export default function AdminDashboardPage() {
         subscriptionDailyData[i].subscribers = accumulatedSubscribers;
         subscriptionDailyData[i].mrr = accumulatedMrr;
       }
-      
+
       setSubscriptionChartData(subscriptionDailyData);
-      
+
       setReportData({
         geral: { revenue: currentMonthRevenue, sessions: currentMonthSessions },
         terapeutas: { revenue: currentMonthLiquid, sessions: currentMonthSessions },
         plataforma: { revenue: currentMonthCommission, sessions: currentMonthSessions },
         assinaturas: { revenue: mrr, subscribers: activeSubscriptions.length, mrr: mrr }
       });
-      
+
     } catch (err) {
       console.error("❌ Erro:", err);
       setError("Erro ao carregar dados");
@@ -318,14 +333,8 @@ export default function AdminDashboardPage() {
   };
 
   const handlePeriodFilter = (period: string, type: "completed" | "cancelled" | "availability") => {
-    if (type === "completed" || type === "cancelled") {
-      setModalFilter(type);
-      setPeriodFilter(period);
-    }
-    if (type === "availability") {
-      setModalFilter(type);
-      setPeriodFilter(period);
-    }
+    if (type === "completed" || type === "cancelled") { setModalFilter(type); setPeriodFilter(period); }
+    if (type === "availability") { setModalFilter(type); setPeriodFilter(period); }
   };
 
   const handleAvailabilityClick = () => {};
@@ -335,7 +344,7 @@ export default function AdminDashboardPage() {
     if (!d) return "--/--/---- --:--";
     return new Date(d).toLocaleDateString("pt-BR") + " às " + new Date(d).toLocaleTimeString("pt-BR").slice(0, 5);
   };
-  
+
   const statusColor = (s: string) => {
     if (s === "scheduled") return "bg-green-100 text-green-800";
     if (s === "confirmed") return "bg-blue-100 text-blue-800";
@@ -344,7 +353,7 @@ export default function AdminDashboardPage() {
     if (s === "completed") return "bg-gray-100 text-gray-800";
     return "bg-gray-100 text-gray-800";
   };
-  
+
   const statusLabel = (s: string) => {
     if (s === "scheduled") return "Agendada";
     if (s === "confirmed") return "Confirmada";
@@ -359,282 +368,157 @@ export default function AdminDashboardPage() {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
   };
 
+  const quickLinks = [
+    { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/admin/sessions", icon: Calendar, label: "Sessões" },
+    { href: "/admin/availability", icon: Clock, label: "Agendas" },
+    { href: "/admin/invites", icon: Send, label: "Convites" },
+    { href: "/admin/reports", icon: BarChart2, label: "Relatórios" },
+  ];
+
   if (loading) return (
     <div className="max-w-7xl mx-auto px-4 py-12 flex justify-center">
       <Loader2 className="w-8 h-8 text-[#E03673] animate-spin" />
     </div>
   );
 
-  // 🔥 baseado no total real de assinantes ativos, não apenas nos criados neste mês
-  const hasSubscriptionData = reportData.assinaturas.subscribers > 0;
-
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
-        <h1 className="text-2xl font-bold text-gray-900">Olá, {user?.full_name || user?.email}!</h1>
-        <p className="text-sm text-gray-600 mt-1">Painel Administrativo — visão geral da plataforma</p>
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-1">
+        <h1 className="text-fluid-xl font-bold text-gray-900">Olá, {user?.full_name || user?.email}!</h1>
+        <p className="text-fluid-xs text-gray-600">Painel Administrativo — visão geral da plataforma</p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {error && <div className="p-3 bg-red-50 text-red-700 rounded border border-red-200">{error}</div>}
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pb-3">
+        {error && <div className="mb-2 p-3 bg-red-50 text-red-700 rounded border border-red-200">{error}</div>}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-          <MenuCard href="/admin/dashboard" icon="dashboard" title="Dashboard" description="Visão geral" color="blue" />
-          <MenuCard href="/admin/users" icon="users" title="Usuários" description="Todos" color="blue" />
-          <MenuCard href="/admin/therapists" icon="user" title="Terapeutas" description="Gerenciar" color="blue" />
-          <MenuCard href="/admin/patients" icon="users" title="Pacientes" description="Gerenciar" color="blue" />
-          <MenuCard href="/admin/sessions" icon="calendar" title="Sessões" description="Todas" color="blue" />
-          <MenuCard href="/admin/availability" icon="calendar" title="Agendas" description="Disponibilidade" color={"blue"} />
-          <MenuCard href="/admin/invites" icon="invites" title="Convites" description="Enviados" color="blue" />
-          <MenuCard href="/admin/reports" icon="reports" title="Relatórios" description="Financeiro" color="blue" />
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-3 lg:h-[calc(100vh-9rem)]">
 
-        <StatsCards
-          stats={stats}
-          sessionFilter={modalFilter}
-          selectedPeriod={periodFilter}
-          onUpcomingClick={handleUpcomingClick}
-          onPeriodFilter={handlePeriodFilter}
-          onAvailabilityClick={handleAvailabilityClick}
-          onFinancialClick={handleFinancialClick}
-        />
-
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <StatCard title="Total Usuários" value={userStats.total} subtitle={`${userStats.active} ativos`} icon={Users} onClick={() => router.push("/admin/users")} />
-          <StatCard title="Terapeutas" value={userStats.therapists} subtitle="Cadastrados" icon={Activity} onClick={() => router.push("/admin/therapists")} />
-          <StatCard title="Pacientes" value={userStats.patients} subtitle="Cadastrados" icon={User} onClick={() => router.push("/admin/patients")} />
-          <StatCard title="Novos Terapeutas" value={userStats.newTherapists} subtitle="Últimos 30 dias" icon={UserPlus} onClick={() => router.push("/admin/therapists")} />
-          <StatCard title="Novos Pacientes" value={userStats.newPatients} subtitle="Últimos 30 dias" icon={UserPlus} onClick={() => router.push("/admin/patients")} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+          {/* ===== COLUNA A: Menu + Agenda (fundo normal da página) ===== */}
+          <div className="min-h-0">
             <CalendarAdmin appointments={appointments} />
           </div>
-          
-          <div className="space-y-6">
-            <div className="bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-lg p-5 text-white">
+
+          {/* ===== COLUNA B: Painel cinza — Sessões + Usuários + Relatórios ===== */}
+          <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 min-h-0 flex flex-col lg:grid lg:grid-rows-[3.5rem_minmax(0,1fr)_auto] gap-2 lg:-mt-16">
+
+            <div className="grid grid-cols-2 gap-2 flex-shrink-0">
+              <ColumnLabel label="Sessões" icon={ActivityIcon} gradient="from-[#E03673] to-[#E03673]/80" />
+              <ColumnLabel label="Usuários" icon={Users} gradient="from-[#2F80D3] to-[#2F80D3]/80" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 min-h-0 flex-1">
+              <div className="min-h-0 overflow-y-auto overflow-x-hidden">
+                <StatsCards
+                  stats={stats}
+                  sessionFilter={modalFilter}
+                  selectedPeriod={periodFilter}
+                  onUpcomingClick={handleUpcomingClick}
+                  onPeriodFilter={handlePeriodFilter}
+                  onAvailabilityClick={handleAvailabilityClick}
+                  onFinancialClick={handleFinancialClick}
+                />
+              </div>
+
+              <div className="min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-1.5">
+                <div className="flex-1 min-h-[4.75rem]">
+                  <StatCard
+                    title="Total Usuários" value={userStats.total} subtitle={`${userStats.active} ativos`}
+                    icon={Users} onClick={() => router.push("/admin/users")}
+                    gradient="from-[#2F80D3] to-[#2F80D3]/80"
+                  />
+                </div>
+                <div className="flex-1 min-h-[4.75rem]">
+                  <RotatingStatCard
+                    onClick={() => router.push("/admin/therapists")}
+                    gradient="from-[#2F80D3] to-[#2F80D3]/80"
+                    views={[
+                      { title: "Terapeutas", value: userStats.therapists, subtitle: "Cadastrados", icon: Activity },
+                      { title: "Novos Terapeutas", value: userStats.newTherapists, subtitle: "Últimos 30 dias", icon: UserPlus },
+                    ]}
+                  />
+                </div>
+                <div className="flex-1 min-h-[4.75rem]">
+                  <RotatingStatCard
+                    onClick={() => router.push("/admin/patients")}
+                    gradient="from-[#2F80D3] to-[#2F80D3]/80"
+                    views={[
+                      { title: "Pacientes", value: userStats.patients, subtitle: "Cadastrados", icon: User },
+                      { title: "Novos Pacientes", value: userStats.newPatients, subtitle: "Últimos 30 dias", icon: UserPlus },
+                    ]}
+                  />
+                </div>
+                <div className="flex-1 min-h-[4.75rem]">
+                  <MiniRevenueCard
+                    href="/admin/reports/geral"
+                    icon={BarChart2}
+                    label="Receita Total (mês)"
+                    value={formatCurrency(reportData.geral.revenue)}
+                    gradient="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80"
+                    footerLabel={`${reportData.geral.sessions} sessões este mês`}
+                  />
+                </div>
+                <div className="flex-1 min-h-[4.75rem]">
+                  <MiniRevenueCard
+                    href="/admin/reports/assinaturas"
+                    icon={CreditCard}
+                    label="MRR (Assinaturas)"
+                    value={formatCurrency(reportData.assinaturas.mrr)}
+                    gradient="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80"
+                    footerLabel={`${reportData.assinaturas.subscribers} assinantes ativos`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
               <Link href="/admin/reports/geral" className="block">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                      <BarChart2 className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-white/70">Receita Total (mês atual)</p>
-                      <p className="text-xl font-bold">{formatCurrency(reportData.geral.revenue)}</p>
-                    </div>
+                <div className="bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-lg shadow-sm px-3 py-2 text-white transition-all hover:shadow-md hover:scale-[1.01]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <BarChart2 className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
+                    <span className="text-fluid-2xs text-white/80 truncate">Relatório Geral</span>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-white/70" />
+                  <p className="text-base font-bold truncate leading-tight">{formatCurrency(reportData.geral.revenue)}</p>
+                  <p className="text-fluid-2xs text-white/70 truncate">{reportData.geral.sessions} sessões</p>
                 </div>
               </Link>
-              <div className="pt-3 border-t border-white/20">
-                <div className="flex justify-between text-xs text-white/70 mb-3">
-                  <span>Receita diária - {new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span>
-                  <span>{reportData.geral.sessions} sessões este mês</span>
-                </div>
-                {chartData.every(d => d.revenue === 0) ? (
-                  <div className="h-24 flex items-center justify-center text-white/50 text-xs">Nenhum dado disponível</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={110}>
-                    <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="day" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 10)} />
-                      <YAxis tickFormatter={v => `R$${v}`} tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} width={35} />
-                      <Tooltip content={<ChartTooltip formatter={formatCurrency} />} />
-                      <Line type="monotone" dataKey="revenue" stroke="white" strokeWidth={2} dot={{ fill: "white", r: 2 }} />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-                <Link href="/admin/reports/geral" className="flex justify-between text-xs text-white/70 hover:text-white mt-3 pt-2 border-t border-white/20 transition-colors">
-                  <span className="flex items-center gap-1"><BarChart2 className="w-3 h-3" /> Ver relatório completo</span>
-                  <span>→</span>
-                </Link>
-              </div>
-            </div>
 
-            <div className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 rounded-xl shadow-lg p-5 text-white">
+              <Link href="/admin/reports/terapeutas" className="block">
+                <div className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 rounded-lg shadow-sm px-3 py-2 text-white transition-all hover:shadow-md hover:scale-[1.01]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Users className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
+                    <span className="text-fluid-2xs text-white/80 truncate">Por Terapeuta</span>
+                  </div>
+                  <p className="text-base font-bold truncate leading-tight">{formatCurrency(reportData.terapeutas.revenue)}</p>
+                  <p className="text-fluid-2xs text-white/70 truncate">{reportData.terapeutas.sessions} sessões</p>
+                </div>
+              </Link>
+
+              <Link href="/admin/reports/plataforma" className="block">
+                <div className="bg-gradient-to-r from-[#10B981] to-[#10B981]/80 rounded-lg shadow-sm px-3 py-2 text-white transition-all hover:shadow-md hover:scale-[1.01]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Building2 className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
+                    <span className="text-fluid-2xs text-white/80 truncate">Plataforma</span>
+                  </div>
+                  <p className="text-base font-bold truncate leading-tight">{formatCurrency(reportData.plataforma.revenue)}</p>
+                  <p className="text-fluid-2xs text-white/70 truncate">comissão 20%</p>
+                </div>
+              </Link>
+
               <Link href="/admin/reports/assinaturas" className="block">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                      <CreditCard className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-white/70">MRR (Assinaturas)</p>
-                      <p className="text-xl font-bold">{formatCurrency(reportData.assinaturas.mrr)}</p>
-                    </div>
+                <div className="bg-gradient-to-r from-[#F59E0B] to-[#F59E0B]/80 rounded-lg shadow-sm px-3 py-2 text-white transition-all hover:shadow-md hover:scale-[1.01]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CreditCard className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
+                    <span className="text-fluid-2xs text-white/80 truncate">Assinaturas</span>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-white/70" />
+                  <p className="text-base font-bold truncate leading-tight">{formatCurrency(reportData.assinaturas.mrr)}</p>
+                  <p className="text-fluid-2xs text-white/70 truncate">{reportData.assinaturas.subscribers} ativos</p>
                 </div>
               </Link>
-              <div className="pt-3 border-t border-white/20">
-                <div className="flex justify-between text-xs text-white/70 mb-3">
-                  <span>Receita recorrente mensal</span>
-                  <span>{reportData.assinaturas.subscribers} assinantes ativos</span>
-                </div>
-                {!hasSubscriptionData ? (
-                  <div className="h-24 flex items-center justify-center text-white/50 text-xs">Nenhuma assinatura ativa no mês</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={110}>
-                    <LineChart data={subscriptionChartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="day" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} interval={Math.floor(subscriptionChartData.length / 10)} />
-                      <YAxis tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} width={35} />
-                      <Tooltip content={<ChartTooltip formatter={formatCurrency} />} />
-                      <Line type="monotone" dataKey="subscribers" stroke="rgba(255,255,255,0.6)" strokeWidth={1.5} dot={{ fill: "white", r: 2 }} />
-                      <Line type="monotone" dataKey="mrr" stroke="white" strokeWidth={2} dot={{ fill: "white", r: 2 }} />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-                <div className="flex justify-between text-xs text-white/70 mt-3 pt-2 border-t border-white/20">
-                  <span>Planos: Profissional (R$79) | Premium (R$149)</span>
-                  <Link href="/admin/reports/assinaturas" className="hover:text-white transition-colors">Ver detalhes →</Link>
-                </div>
-              </div>
             </div>
+
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-          <Link href="/admin/reports/geral" className="block">
-            <div className="bg-gradient-to-r from-[#E03673] to-[#E03673]/80 rounded-xl shadow-lg p-4 text-white transition-all hover:shadow-md hover:scale-[1.02] h-full">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <BarChart2 className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-white/70">Relatório Geral</p>
-                    <p className="text-lg font-bold">{formatCurrency(reportData.geral.revenue)}</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-white/70" />
-              </div>
-              <p className="text-xs text-white/70 mb-2 -mt-1">{reportData.geral.sessions} sessões este mês</p>
-              <div className="pt-2 border-t border-white/20">
-                {chartData.every(d => d.revenue === 0) ? (
-                  <div className="h-16 flex items-center justify-center text-white/50 text-xs">Nenhum dado disponível</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={80}>
-                    <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="day" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
-                      <YAxis hide={true} />
-                      <Tooltip content={<ChartTooltip formatter={formatCurrency} />} />
-                      <Line type="monotone" dataKey="revenue" stroke="white" strokeWidth={2} dot={{ fill: "white", r: 2 }} />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/admin/reports/terapeutas" className="block">
-            <div className="bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 rounded-xl shadow-lg p-4 text-white transition-all hover:shadow-md hover:scale-[1.02] h-full">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-white/70">Relatório por Terapeuta</p>
-                    <p className="text-lg font-bold">{formatCurrency(reportData.terapeutas.revenue)}</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-white/70" />
-              </div>
-              <p className="text-xs text-white/70 mb-2 -mt-1">{reportData.terapeutas.sessions} sessões (líquido)</p>
-              <div className="pt-2 border-t border-white/20">
-                {chartData.every(d => d.liquidRevenue === 0) ? (
-                  <div className="h-16 flex items-center justify-center text-white/50 text-xs">Nenhum dado disponível</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={80}>
-                    <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="day" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
-                      <YAxis hide={true} />
-                      <Tooltip content={<ChartTooltip formatter={formatCurrency} />} />
-                      <Line type="monotone" dataKey="liquidRevenue" stroke="white" strokeWidth={2} dot={{ fill: "white", r: 2 }} />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/admin/reports/plataforma" className="block">
-            <div className="bg-gradient-to-r from-[#10B981] to-[#10B981]/80 rounded-xl shadow-lg p-4 text-white transition-all hover:shadow-md hover:scale-[1.02] h-full">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <Building2 className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-white/70">Relatório da Plataforma</p>
-                    <p className="text-lg font-bold">{formatCurrency(reportData.plataforma.revenue)}</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-white/70" />
-              </div>
-              <p className="text-xs text-white/70 mb-2 -mt-1">{reportData.plataforma.sessions} sessões (comissão 20%)</p>
-              <div className="pt-2 border-t border-white/20">
-                {chartData.every(d => d.commission === 0) ? (
-                  <div className="h-16 flex items-center justify-center text-white/50 text-xs">Nenhum dado disponível</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={80}>
-                    <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="day" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
-                      <YAxis hide={true} />
-                      <Tooltip content={<ChartTooltip formatter={formatCurrency} />} />
-                      <Line type="monotone" dataKey="commission" stroke="white" strokeWidth={2} dot={{ fill: "white", r: 2 }} />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/admin/reports/assinaturas" className="block">
-            <div className="bg-gradient-to-r from-[#F59E0B] to-[#F59E0B]/80 rounded-xl shadow-lg p-4 text-white transition-all hover:shadow-md hover:scale-[1.02] h-full">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-white/70">Relatório de Assinaturas</p>
-                    <p className="text-lg font-bold">{formatCurrency(reportData.assinaturas.mrr)}</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-white/70" />
-              </div>
-              <p className="text-xs text-white/70 mb-2 -mt-1">{reportData.assinaturas.subscribers} assinantes ativos</p>
-              <div className="pt-2 border-t border-white/20">
-                {!hasSubscriptionData ? (
-                  <div className="h-16 flex items-center justify-center text-white/50 text-xs">Nenhuma assinatura ativa</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={80}>
-                    <LineChart data={subscriptionChartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="day" tick={{ fontSize: 8, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} interval={Math.floor(subscriptionChartData.length / 6)} />
-                      <YAxis hide={true} />
-                      <Tooltip content={<ChartTooltip formatter={formatCurrency} />} />
-                      <Line type="monotone" dataKey="subscribers" stroke="rgba(255,255,255,0.6)" strokeWidth={1.5} dot={{ fill: "white", r: 1.5 }} />
-                      <Line type="monotone" dataKey="mrr" stroke="white" strokeWidth={2} dot={{ fill: "white", r: 2 }} />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </Link>
         </div>
       </div>
 
@@ -667,7 +551,7 @@ export default function AdminDashboardPage() {
                     {filteredForModal.slice(0, 100).map((apt: Appointment) => {
                       const patientFotoUrl = apt.patient?.foto_url ? (apt.patient.foto_url.startsWith("http") ? apt.patient.foto_url : `${BACKEND_URL}${apt.patient.foto_url}`) : null;
                       const therapistFotoUrl = apt.therapist?.foto_url ? (apt.therapist.foto_url.startsWith("http") ? apt.therapist.foto_url : getFotoSrc(apt.therapist.foto_url) ?? "") : null;
-                      
+
                       return (
                         <tr key={apt.id} className="hover:bg-gray-50 transition-colors">
                           <td className="p-3 text-sm text-gray-700">{formatDate(apt.starts_at)}</td>

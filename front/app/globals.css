@@ -173,3 +173,49 @@ footer > div {
     padding-right: 2rem !important;
   }
 }
+/* ==========================================================================
+   🔥 SISTEMA GLOBAL DE RESPONSIVIDADE FLUIDA
+   Texto e espaçamento que se ajustam suavemente ao tamanho da tela via
+   clamp(), em vez de saltos bruscos por breakpoint. Nunca corta/trunca
+   texto — ele encolhe de forma legível até o tamanho mínimo definido.
+   Uso: aplicar essas classes em qualquer tela (dashboards, relatórios,
+   listas) para obter o mesmo comportamento compacto e responsivo.
+   ========================================================================== */
+
+/* Texto fluido — cada classe tem um mínimo (telas pequenas) e um máximo
+   (telas grandes), com transição suave entre eles */
+.text-fluid-2xs  { font-size: clamp(0.6rem,  0.52rem + 0.25vw, 0.7rem);   line-height: 1.3; }
+.text-fluid-xs   { font-size: clamp(0.65rem, 0.55rem + 0.35vw, 0.8rem);   line-height: 1.35; }
+.text-fluid-sm   { font-size: clamp(0.75rem, 0.65rem + 0.4vw,  0.925rem); line-height: 1.4; }
+.text-fluid-base { font-size: clamp(0.85rem, 0.72rem + 0.5vw,  1.05rem);  line-height: 1.45; }
+.text-fluid-lg   { font-size: clamp(0.95rem, 0.8rem + 0.6vw,   1.25rem);  line-height: 1.4; }
+.text-fluid-xl   { font-size: clamp(1.1rem,  0.9rem + 0.8vw,   1.5rem);   line-height: 1.3; }
+.text-fluid-2xl  { font-size: clamp(1.3rem,  1rem + 1.2vw,     1.875rem); line-height: 1.25; }
+
+/* Espaçamento fluido — padding/gap que reduz em telas menores */
+.p-fluid-xs  { padding: clamp(0.375rem, 0.3rem + 0.3vw, 0.625rem); }
+.p-fluid-sm  { padding: clamp(0.5rem,   0.4rem + 0.4vw, 0.875rem); }
+.p-fluid-md  { padding: clamp(0.625rem, 0.5rem + 0.5vw, 1.25rem); }
+.gap-fluid-xs { gap: clamp(0.25rem, 0.2rem + 0.2vw, 0.5rem); }
+.gap-fluid-sm { gap: clamp(0.375rem, 0.3rem + 0.3vw, 0.75rem); }
+.gap-fluid-md { gap: clamp(0.5rem, 0.4rem + 0.4vw, 1rem); }
+
+/* Container "compacto" — aplica um multiplicador geral de densidade menor
+   para telas que precisam caber mais conteúdo sem rolar. Envolve uma
+   seção inteira (ex: o dashboard) para reduzir todos os espaçamentos
+   internos proporcionalmente. */
+.dashboard-compact {
+  --dc-scale: clamp(0.82, 0.7 + 0.15vw, 1);
+}
+.dashboard-compact .dc-card {
+  padding: calc(1rem * var(--dc-scale));
+}
+.dashboard-compact .dc-gap {
+  gap: calc(1rem * var(--dc-scale));
+}
+
+/* Animação de fade usada pelo RotatingStatCard */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}

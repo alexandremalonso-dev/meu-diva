@@ -8,8 +8,9 @@ import { getFotoSrc } from '@/lib/utils';
 import {
   Users, Loader2, AlertCircle, Search, ArrowLeft,
   MoreVertical, X, CheckCircle, XCircle, ChevronLeft, ChevronRight,
-  Trash2, Power
+  Trash2, Power, Eye
 } from "lucide-react";
+import { startImpersonation } from "@/lib/impersonation";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -151,6 +152,19 @@ export default function AdminUsersPage() {
   }
 
   // 🔥 Excluir (após confirmação)
+  // 🔥 Ver como (impersonação) — apenas terapeutas, pacientes e empresas
+  async function handleViewAs(targetUser: any) {
+    setActionLoading(true);
+    try {
+      await startImpersonation(targetUser.id);
+    } catch {
+      setError("Erro ao iniciar simulação de acesso");
+      setTimeout(() => setError(""), 3000);
+      setActionLoading(false);
+      setOpenMenuId(null);
+    }
+  }
+
   async function handleConfirmDelete() {
     if (!deleteTarget) return;
     setActionLoading(true);
@@ -364,6 +378,17 @@ export default function AdminUsersPage() {
                           </button>
                           {openMenuId === u.id && (
                             <div ref={menuRef} className="absolute right-3 top-10 z-20 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 text-left">
+                              {(u.role === "therapist" || u.role === "patient" || u.role === "empresa") && (
+                                <button
+                                  onClick={() => handleViewAs(u)}
+                                  disabled={actionLoading || !u.is_active}
+                                  title={!u.is_active ? "Reative o usuário antes de simular o acesso" : undefined}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Ver como
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleToggleActive(u.id, u.is_active)}
                                 disabled={actionLoading}

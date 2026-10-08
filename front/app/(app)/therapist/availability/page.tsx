@@ -19,7 +19,8 @@ import {
   Timer,
   TrendingUp,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Pencil
 } from "lucide-react";
 
 export default function TherapistAvailabilityPage() {
@@ -46,6 +47,9 @@ export default function TherapistAvailabilityPage() {
   // 🔥 Modal de confirmação customizado
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; periodId: number | null }>({ open: false, periodId: null });
   const [deleting, setDeleting] = useState(false);
+
+  // 🔥 Edição de período existente
+  const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
@@ -77,14 +81,17 @@ export default function TherapistAvailabilityPage() {
     loadPeriods();
   }, [loadPeriods]);
 
-  const getNextSuggestedSlot = useCallback(() => {
-    if (slots.length === 0) {
+  // 🔥 Aceita um slot de referência específico (em vez de sempre usar o
+  // último do array), pra dar pra sugerir a partir de QUALQUER linha,
+  // não só da última.
+  const getNextSuggestedSlot = useCallback((baseSlot?: typeof slots[number]) => {
+    const ref = baseSlot ?? (slots.length > 0 ? slots[slots.length - 1] : null);
+    if (!ref) {
       return { weekday: 1, start_time: "07:00", end_time: "08:00" };
     }
 
-    const lastSlot = slots[slots.length - 1];
-    const [lastStartHour, lastStartMin] = lastSlot.start_time.split(':').map(Number);
-    const [lastEndHour, lastEndMin] = lastSlot.end_time.split(':').map(Number);
+    const [lastStartHour, lastStartMin] = ref.start_time.split(':').map(Number);
+    const [lastEndHour, lastEndMin] = ref.end_time.split(':').map(Number);
     
     const lastStartMinutes = lastStartHour * 60 + lastStartMin;
     const lastEndMinutes = lastEndHour * 60 + lastEndMin;
@@ -94,7 +101,7 @@ export default function TherapistAvailabilityPage() {
     const nextEndMinutes = nextStartMinutes + duration;
     
     if (nextEndMinutes > 24 * 60) {
-      return { weekday: lastSlot.weekday, start_time: "07:00", end_time: "08:00" };
+      return { weekday: ref.weekday, start_time: "07:00", end_time: "08:00" };
     }
     
     const nextStartHour = Math.floor(nextStartMinutes / 60).toString().padStart(2, '0');
@@ -102,12 +109,24 @@ export default function TherapistAvailabilityPage() {
     const nextEndHour = Math.floor(nextEndMinutes / 60).toString().padStart(2, '0');
     const nextEndMin = (nextEndMinutes % 60).toString().padStart(2, '0');
     
-    return { weekday: lastSlot.weekday, start_time: `${nextStartHour}:${nextStartMin}`, end_time: `${nextEndHour}:${nextEndMin}` };
+    return { weekday: ref.weekday, start_time: `${nextStartHour}:${nextStartMin}`, end_time: `${nextEndHour}:${nextEndMin}` };
   }, [slots]);
 
-  const addSlot = useCallback(() => {
-    const suggestedSlot = getNextSuggestedSlot();
-    setSlots(prevSlots => [...prevSlots, suggestedSlot]);
+  // 🔥 Sem índice: sugere a partir do último e adiciona no fim (usado pelo
+  // botão "Adicionar horário" do topo). Com índice: sugere a partir
+  // DAQUELA linha e insere logo depois dela (usado pelo "+" de cada linha).
+  const addSlot = useCallback((afterIndex?: number) => {
+    if (afterIndex === undefined) {
+      const suggestedSlot = getNextSuggestedSlot();
+      setSlots(prevSlots => [...prevSlots, suggestedSlot]);
+      return;
+    }
+    setSlots(prevSlots => {
+      const suggestedSlot = getNextSuggestedSlot(prevSlots[afterIndex]);
+      const updated = [...prevSlots];
+      updated.splice(afterIndex + 1, 0, suggestedSlot);
+      return updated;
+    });
   }, [getNextSuggestedSlot]);
 
   const removeSlot = useCallback((index: number) => {
@@ -152,8 +171,8 @@ export default function TherapistAvailabilityPage() {
   }, []);
 
   const hasDuplicatePeriod = useCallback((startDate: string, endDate: string): boolean => {
-    return periods.some(p => p.start_date === startDate && p.end_date === endDate);
-  }, [periods]);
+    return periods.some(p => p.start_date === startDate && p.end_date === endDate && p.id !== editingPeriodId);
+  }, [periods, editingPeriodId]);
 
   const validateDates = (startDate: string, endDate: string): boolean => {
     const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
@@ -215,15 +234,28 @@ export default function TherapistAvailabilityPage() {
         slots: slots
       };
 
-      const data = await apiCall({
-        url: "/api/therapist/availability/periods",
-        method: "POST",
-        body: payload,
-        requireAuth: true
-      });
+      if (editingPeriodId) {
+        const data = await apiCall({
+          url: `/api/therapist/availability/periods/${editingPeriodId}`,
+          method: "PUT",
+          body: payload,
+          requireAuth: true
+        });
 
-      setPeriods(prevPeriods => [data, ...prevPeriods]);
-      setSuccess("Período adicionado com sucesso!");
+        setPeriods(prevPeriods => prevPeriods.map(p => p.id === editingPeriodId ? data : p));
+        setSuccess("Período atualizado com sucesso!");
+        setEditingPeriodId(null);
+      } else {
+        const data = await apiCall({
+          url: "/api/therapist/availability/periods",
+          method: "POST",
+          body: payload,
+          requireAuth: true
+        });
+
+        setPeriods(prevPeriods => [data, ...prevPeriods]);
+        setSuccess("Período adicionado com sucesso!");
+      }
       
       setPeriod({ start_date: "", end_date: "" });
       setSlots([{ weekday: 1, start_time: "07:00", end_time: "08:00" }]);
@@ -231,12 +263,34 @@ export default function TherapistAvailabilityPage() {
       setTimeout(() => setSuccess(""), 3000);
       
     } catch (err: any) {
-      console.error("Erro ao adicionar:", err);
-      setError(err.message || "Erro ao adicionar período");
+      console.error("Erro ao salvar:", err);
+      setError(err.message || "Erro ao salvar período");
     } finally {
       setSaving(false);
     }
   }
+
+  // 🔥 Carrega um período existente no formulário pra edição
+  const handleEditClick = (p: typeof periods[number]) => {
+    if (!p.id) return;
+    setEditingPeriodId(p.id);
+    setPeriod({ start_date: p.start_date, end_date: p.end_date });
+    setSlots(p.slots.map(s => ({
+      weekday: s.weekday,
+      start_time: s.start_time.substring(0, 5),
+      end_time: s.end_time.substring(0, 5)
+    })));
+    setError("");
+    setSuccess("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPeriodId(null);
+    setPeriod({ start_date: "", end_date: "" });
+    setSlots([{ weekday: 1, start_time: "07:00", end_time: "08:00" }]);
+    setError("");
+  };
 
   // 🔥 Abre modal customizado em vez de confirm() nativo
   const handleDeleteClick = (id: number) => {
@@ -313,7 +367,7 @@ export default function TherapistAvailabilityPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
           <div className="flex items-center gap-2 mb-4">
             <Plus className="w-5 h-5 text-[#E03673]" />
-            <h2 className="text-lg font-semibold">Adicionar novo período</h2>
+            <h2 className="text-lg font-semibold">{editingPeriodId ? "Editar período" : "Adicionar novo período"}</h2>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -364,7 +418,7 @@ export default function TherapistAvailabilityPage() {
 
               <div className="space-y-3">
                 {slots.map((slot, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end bg-gray-50 p-3 rounded-lg">
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end bg-gray-50 p-3 rounded-lg">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Dia</label>
                       <select
@@ -379,32 +433,40 @@ export default function TherapistAvailabilityPage() {
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Início</label>
-                      <select
+                      <input
+                        type="time"
+                        step={60}
                         value={slot.start_time}
                         onChange={(e) => updateSlot(index, 'start_time', e.target.value)}
                         className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-white"
-                      >
-                        {timeOptions()}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Fim</label>
-                      <select
+                      <input
+                        type="time"
+                        step={60}
                         value={slot.end_time}
                         onChange={(e) => updateSlot(index, 'end_time', e.target.value)}
                         className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-white"
-                      >
-                        {timeOptions()}
-                      </select>
+                      />
                     </div>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => removeSlot(index)}
-                        className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
+                        title="Remover este horário"
+                        className="text-red-500 hover:text-red-700 flex items-center justify-center border border-red-200 hover:bg-red-50 rounded-lg w-8 h-8 transition-colors flex-shrink-0"
                       >
-                        <Trash2 className="w-3 h-3" />
-                        Remover
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addSlot(index)}
+                        title="Adicionar próximo horário sugerido logo após este"
+                        className="text-[#E03673] hover:text-[#c02c5e] flex items-center justify-center border border-[#E03673]/30 hover:bg-[#E03673]/5 rounded-lg w-8 h-8 transition-colors flex-shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -428,6 +490,16 @@ export default function TherapistAvailabilityPage() {
                 <X className="w-4 h-4" />
                 Cancelar
               </button>
+              {editingPeriodId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                  Cancelar edição
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={saving}
@@ -438,7 +510,7 @@ export default function TherapistAvailabilityPage() {
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                {saving ? "Salvando..." : "Salvar período"}
+                {saving ? "Salvando..." : editingPeriodId ? "Salvar alterações" : "Salvar período"}
               </button>
             </div>
           </form>
@@ -470,14 +542,23 @@ export default function TherapistAvailabilityPage() {
                         {period.slots.length} {period.slots.length === 1 ? 'horário' : 'horários'}
                       </p>
                     </div>
-                    {/* 🔥 Substituído confirm() por modal customizado */}
-                    <button
-                      onClick={() => period.id && handleDeleteClick(period.id)}
-                      className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      Remover período
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleEditClick(period)}
+                        className="text-[#2F80D3] hover:text-[#236bb3] text-sm flex items-center gap-1"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Editar
+                      </button>
+                      {/* 🔥 Substituído confirm() por modal customizado */}
+                      <button
+                        onClick={() => period.id && handleDeleteClick(period.id)}
+                        className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Remover período
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3">

@@ -51,7 +51,8 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
   }, []);
 
   const fotoUrl = terapeuta.foto_url ? getFotoSrc(terapeuta.foto_url) ?? "" : null;
-  const nomeCompleto = terapeuta.full_name || "Nome não disponível";
+  const nomeBase = terapeuta.full_name || "Nome não disponível";
+  const nomeCompleto = terapeuta.treatment ? `${terapeuta.treatment} ${nomeBase}` : nomeBase;
   const rating = Number(terapeuta.rating) || 0;
   const reviewsCount = Number(terapeuta.reviews_count) || 0;
   const totalSessions = Number(terapeuta.total_sessions) || 0;
@@ -111,9 +112,9 @@ export function Cabecalho({ terapeuta, isLoggedIn = false, onAgendar }: Cabecalh
         </h1>
 
         {/* Tipo de profissional */}
-        {terapeuta.specialties && (
+        {terapeuta.professional_type && (
           <div className="text-white/90 text-lg mb-1">
-            <span className="text-white">{terapeuta.specialties}</span>
+            <span className="text-white">{terapeuta.professional_type}</span>
           </div>
         )}
         {/* Abordagem — linha separada */}

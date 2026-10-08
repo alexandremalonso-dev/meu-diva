@@ -136,6 +136,8 @@ async def get_plan_features(
     result = []
     for config in configs:
         available_in = []
+        if getattr(config, "available_in_basico", False):
+            available_in.append("basico")
         if config.available_in_essencial:
             available_in.append("essencial")
         if config.available_in_profissional:
@@ -173,6 +175,7 @@ async def save_plan_features(
             existing.feature_name = feature["name"]
             existing.description = feature.get("description", "")
             existing.is_active = feature.get("is_active", True)
+            existing.available_in_basico = "basico" in available_in
             existing.available_in_essencial = "essencial" in available_in
             existing.available_in_profissional = "profissional" in available_in
             existing.available_in_premium = "premium" in available_in
@@ -183,6 +186,7 @@ async def save_plan_features(
                 feature_name=feature["name"],
                 description=feature.get("description", ""),
                 is_active=feature.get("is_active", True),
+                available_in_basico="basico" in available_in,
                 available_in_essencial="essencial" in available_in,
                 available_in_profissional="profissional" in available_in,
                 available_in_premium="premium" in available_in

@@ -41,7 +41,7 @@ export function InstitucionalFooter() {
           </p>
           <p style={{ marginTop: "16px", fontSize: "0.875rem" }}>
             <a href="mailto:contato@meudivaonline.com" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", display: "block" }}>contato@meudivaonline.com</a>
-            <span style={{ color: "rgba(255,255,255,0.8)" }}>(31) 2181-2810</span>
+            <span style={{ color: "rgba(255,255,255,0.8)" }}>(31) 98411-7772</span>
           </p>
           <p style={{ marginTop: "12px", opacity: 0.6, fontSize: "0.78rem", lineHeight: 1.6, color: "rgba(255,255,255,0.8)" }}>
             CNPJ: 37.655.845/0001-25

@@ -10,7 +10,7 @@ class Subscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     therapist_id = Column(Integer, ForeignKey("therapist_profiles.id"), nullable=False)
-    plan = Column(String(50), nullable=False, default="essencial")
+    plan = Column(String(50), nullable=False, default="basico")
     status = Column(String(50), nullable=False, default="active")  # active, past_due, cancelled, expired
     stripe_subscription_id = Column(String(255), nullable=True)
     stripe_customer_id = Column(String(255), nullable=True)

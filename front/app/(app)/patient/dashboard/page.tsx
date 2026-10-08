@@ -6,8 +6,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
-  LayoutDashboard, Search, Wallet, User, Calendar, CheckCircle, XCircle, BarChart3, ArrowRight, Video, X
+  LayoutDashboard, Search, Wallet, User, Calendar, CheckCircle, XCircle, BarChart3, ArrowRight, Video, X, ChevronRight, TrendingUp, Zap
 } from "lucide-react";
+import { AutoFitText } from "@/components/shared/AutoFitText";
 
 import type { Appointment, Therapist } from './types';
 import type { PatientProfile } from '@/types/patient';
@@ -23,8 +24,10 @@ import { InvitesCard } from './components/InvitesCard';
 import { QuickLinks } from './components/QuickLinks';
 import { MeetButton } from '@/components/meet/MeetButton';
 import { StatsCard } from './components/cards/StatsCard';
+import { MenuCard } from './components/cards/MenuCard';
 import { UpcomingSessionCard } from './components/cards/UpcomingSessionCard';
 import { SuccessModal } from "@/components/Modals/SuccessModal";
+import { PackagesCard } from './components/PackagesCard';
 
 const timeOptions = Array.from({ length: 24 }, (_, i) => i).flatMap(hour => [
   <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>{`${hour.toString().padStart(2, '0')}:00`}</option>,
@@ -53,6 +56,57 @@ function buildCalendarEventsFromAppointments(patientAppointments: Appointment[])
         extendedProps: { therapist: apt.therapist, status: apt.status, appointment: apt }
       };
     });
+}
+
+function ColumnLabel({ label, icon: Icon, gradient }: { label: string; icon: React.ElementType; gradient: string }) {
+  return (
+    <div className={`h-14 flex flex-col items-center justify-center gap-0.5 rounded-lg bg-gradient-to-br ${gradient} text-white text-center px-1`}>
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      <AutoFitText className="text-fluid-2xs font-medium leading-tight">{label}</AutoFitText>
+    </div>
+  );
+}
+
+// 🔥 Card "Consultar Mais Disponibilidades" — par do InvitesCard no carrossel
+function ConsultarDisponibilidadesCard() {
+  return (
+    <Link
+      href="/busca"
+      className="block bg-gradient-to-r from-[#2F80D3] to-[#2F80D3]/80 text-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Search className="w-5 h-5 text-white" />
+        <h3 className="text-lg font-semibold">Consultar Mais Disponibilidades</h3>
+      </div>
+      <p className="text-white/80 text-sm mb-4">Buscar terapeutas e horários disponíveis</p>
+      <div className="mt-2 text-sm text-white/90 flex items-center justify-end gap-1">
+        <span>Acessar busca</span>
+        <ChevronRight className="w-4 h-4" />
+      </div>
+    </Link>
+  );
+}
+
+// 🔥 Alterna Convites ⇄ Consultar Disponibilidades a cada 4s (mesmo padrão
+// do RotatingActionCard do dashboard do terapeuta). Os dois ficam sempre
+// montados (só a visibilidade alterna) pra não perder o estado já
+// carregado do InvitesCard a cada troca.
+function RotatingInviteCard() {
+  const [showInvites, setShowInvites] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => setShowInvites((v) => !v), 4000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div>
+      <div className={showInvites ? "" : "hidden"}><InvitesCard /></div>
+      <div className={showInvites ? "hidden" : ""}><ConsultarDisponibilidadesCard /></div>
+      <div className="flex justify-center gap-1.5 mt-2">
+        <div className={`h-1.5 rounded-full transition-all ${showInvites ? "w-4 bg-[#E03673]" : "w-1.5 bg-gray-300"}`} />
+        <div className={`h-1.5 rounded-full transition-all ${!showInvites ? "w-4 bg-[#2F80D3]" : "w-1.5 bg-gray-300"}`} />
+      </div>
+    </div>
+  );
 }
 
 export default function PatientDashboardPage() {
@@ -381,54 +435,14 @@ export default function PatientDashboardPage() {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
         <h1 className="text-2xl font-bold text-gray-900">Olá, {userFirstName}!</h1>
         <p className="text-sm text-gray-600 mt-1">Seu espaço de cuidado, escuta e saúde mental.</p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {[
-            { href: "/patient/dashboard", icon: <LayoutDashboard className="w-6 h-6 text-white" />, title: "Dashboard", desc: "Visão geral" },
-            { href: "/busca", icon: <Search className="w-6 h-6 text-white" />, title: "Buscar", desc: "Encontre terapeutas" },
-            { href: "/patient/wallet", icon: <Wallet className="w-6 h-6 text-white" />, title: "Carteira", desc: "Saldo e pagamentos" },
-            { href: "/patient/profile", icon: <User className="w-6 h-6 text-white" />, title: "Perfil", desc: "Suas informações" },
-          ].map(item => (
-            <Link key={item.href} href={item.href} className="bg-gradient-to-br from-[#2F80D3] to-[#2F80D3]/80 text-white p-4 rounded-xl shadow-md hover:shadow-lg transition-all hover:scale-105">
-              <div className="flex items-center gap-3">{item.icon}<div><p className="font-semibold">{item.title}</p><p className="text-xs text-white/80">{item.desc}</p></div></div>
-            </Link>
-          ))}
-        </div>
-
-        {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded border border-red-200">{error}</div>}
-        {success && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded border border-green-200">{success}</div>}
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {[
-            { icon: "calendar", value: stats.upcoming, label: "Próximas sessões", filter: "upcoming" },
-            { icon: "check", value: stats.completed, label: "Realizadas", filter: "completed" },
-            { icon: "x", value: stats.cancelled, label: "Canceladas", filter: "cancelled" },
-            { icon: "chart", value: stats.total, label: "Total de sessões", filter: "all" },
-          ].map(item => (
-            <StatsCard key={item.filter} icon={item.icon as any} value={item.value} label={item.label} filter={item.filter} activeFilter={activeFilter}
-              onFilterClick={(filter: string) => { applyFilter(filter as any); setShowSessionsModal(true); }}
-              onExpand={() => setShowSessionsModal(true)} />
-          ))}
-        </div>
-
-        {upcomingSessions.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#E03673]" />
-              Próximas sessões
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {upcomingSessions.map((session) => (
-                <UpcomingSessionCard key={session.id} session={session} onClick={setSelectedAppointment} formatDate={formatDate} getStatusText={getStatusText} onJoinMeet={handleJoinMeet} />
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {error && <div className="mb-2 p-3 bg-red-50 text-red-700 rounded border border-red-200">{error}</div>}
+        {success && <div className="mb-2 p-3 bg-green-50 text-green-700 rounded border border-green-200">{success}</div>}
 
         {showSessionsModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -470,27 +484,60 @@ export default function PatientDashboardPage() {
           </div>
         )}
 
-        {/* 🔥 GRID PRINCIPAL */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        {/* 🔥 GRID PRINCIPAL — 3 colunas, mesma estratégia do admin/terapeuta:
+            cada coluna gerencia sua própria altura (sem grid-rows
+            compartilhado entre colunas), altura externa via
+            calc(100vh-9rem) igual ao padrão já validado. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_0.4fr_0.6fr] gap-3">
+
+          {/* Coluna A: Calendário */}
+          <div className="min-h-0 lg:col-start-1">
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="w-5 h-5 text-[#E03673]" />
                 <h2 className="text-lg font-semibold">Minha Agenda</h2>
               </div>
-              <CalendarPatient 
-                events={calendarEvents} 
-                onEventClick={(apt) => setSelectedAppointment(apt)} 
-                onSlotClick={handleSlotClick} 
-                onCancel={handleCancel} 
-                onJoinMeet={handleJoinMeet} 
+              <CalendarPatient
+                events={calendarEvents}
+                onEventClick={(apt) => setSelectedAppointment(apt)}
+                onSlotClick={handleSlotClick}
+                onCancel={handleCancel}
+                onJoinMeet={handleJoinMeet}
               />
             </div>
           </div>
 
-          <div className="lg:col-span-1 space-y-6">
-            <InvitesCard />
-            <QuickLinks />
+          {/* Coluna B: Stats empilhados + carrossel Convites/Disponibilidades */}
+          <div className="flex flex-col gap-2 min-h-0 lg:col-start-2 lg:-mt-16">
+            <ColumnLabel label="Sessões" icon={TrendingUp} gradient="from-[#E03673] to-[#E03673]/80" />
+            {[
+              { icon: "calendar", value: stats.upcoming, label: "Próximas sessões", filter: "upcoming" },
+              { icon: "check", value: stats.completed, label: "Realizadas", filter: "completed" },
+              { icon: "x", value: stats.cancelled, label: "Canceladas", filter: "cancelled" },
+              { icon: "chart", value: stats.total, label: "Total de sessões", filter: "all" },
+            ].map(item => (
+              <StatsCard key={item.filter} icon={item.icon as any} value={item.value} label={item.label} filter={item.filter} activeFilter={activeFilter}
+                onFilterClick={(filter: string) => { applyFilter(filter as any); setShowSessionsModal(true); }}
+                onExpand={() => setShowSessionsModal(true)} />
+            ))}
+          </div>
+
+          {/* Coluna C: Próximas sessões + Agendamento Rápido */}
+          <div className="flex flex-col gap-3 min-h-0 lg:col-start-3 lg:-mt-16">
+            <ColumnLabel label="Ações" icon={Zap} gradient="from-[#2F80D3] to-[#2F80D3]/80" />
+            {upcomingSessions.length > 0 && (
+              <div className="bg-white rounded-lg shadow p-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-[#E03673]" />
+                  Próximas sessões
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {upcomingSessions.map((session) => (
+                    <UpcomingSessionCard key={session.id} session={session} onClick={setSelectedAppointment} formatDate={formatDate} getStatusText={getStatusText} onJoinMeet={handleJoinMeet} />
+                  ))}
+                </div>
+              </div>
+            )}
             <QuickBooking
               therapists={therapists}
               frequentTherapists={frequentTherapists}
@@ -509,6 +556,9 @@ export default function PatientDashboardPage() {
             />
           </div>
         </div>
+
+        {/* 🔥 Pacotes de sessões (some sozinho se o paciente não tem acesso) */}
+        <PackagesCard />
       </div>
 
       {/* 🔥 MODAL DE SUCESSO APÓS PAGAMENTO */}

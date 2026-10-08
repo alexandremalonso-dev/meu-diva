@@ -32,7 +32,7 @@ async def get_all_plans(
             "price_cents": price_map.get(plan, {}).get("price_cents", 0),
             "price_brl": price_map.get(plan, {}).get("price_brl", 0.0),
             "features": get_plan_features(plan),
-            "is_free": plan == "essencial"
+            "is_free": plan == "basico"
         }
         plans.append(plan_data)
     
@@ -58,7 +58,7 @@ async def get_current_plan(
         Subscription.status == "active"
     ).first()
     
-    current_plan = subscription.plan if subscription else "essencial"
+    current_plan = subscription.plan if subscription else "basico"
     
     # Buscar preços do banco
     plan_prices = db.query(PlanPrice).all()
@@ -66,6 +66,7 @@ async def get_current_plan(
     
     # Calcular savings em relação ao essencial (20% de comissão vs plano atual)
     commission_rates = {
+        "basico": 20.0,
         "essencial": 20.0,
         "profissional": 10.0,
         "premium": 3.0
@@ -84,7 +85,7 @@ async def get_current_plan(
         "features": get_plan_features(current_plan),
         "price_brl": price_map.get(current_plan, {}).get("price_brl", 0),
         "price_cents": price_map.get(current_plan, {}).get("price_cents", 0),
-        "is_free": current_plan == "essencial",
+        "is_free": current_plan == "basico",
         "example_saving": round(monthly_saving, 2),
         "upgrade_available": current_plan != "premium"
     }

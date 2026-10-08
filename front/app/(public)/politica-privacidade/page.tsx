@@ -166,7 +166,7 @@ function PoliticaPrivacidadeContent() {
                 </p>
                 <p className="text-gray-600 flex items-center gap-2">
                   <Phone className="w-4 h-4 text-[#E03673]" />
-                  <strong>Telefone:</strong> (31) 4042-5012
+                  <strong>Telefone:</strong> (31) 98411-7772
                 </p>
                 <p className="text-gray-600 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-[#E03673]" />

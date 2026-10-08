@@ -32,7 +32,17 @@ interface CardTerapeutaProps {
     id: number;
     user_id: number;
     full_name: string;
+    treatment?: string | null;
     specialties?: string;
+    professional_type?: string;
+    therapeutic_approach?: string;
+    integrative_practice?: string;
+    target_audience?: string;
+    demand_focus?: string;
+    service_modality?: string;
+    service_modalities?: string[];
+    approaches?: string[];
+    reasons?: string[];
     session_price?: number;
     foto_url?: string;
     rating?: number;
@@ -98,7 +108,8 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
   const [durationModal, setDurationModal] = useState<{ slot: any } | null>(null);
 
   const DIAS_POR_PAGINA = 7;
-  const nomeCompleto = terapeuta.full_name || "Nome não disponível";
+  const nomeBase = terapeuta.full_name || "Nome não disponível";
+  const nomeCompleto = terapeuta.treatment ? `${terapeuta.treatment} ${nomeBase}` : nomeBase;
   const fotoUrl = getFotoSrc(terapeuta.foto_url);
   const preco = terapeuta.session_price || 0;
   const precoFormatado = `R$ ${preco.toFixed(2)}`;
@@ -185,10 +196,6 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
 
   const getHorarios = (slots: any[]) =>
     (slots || [])
-      .filter(s => {
-        const h = parseInt(getHorarioStr(s.starts_at).split(':')[0])
-        return h >= 7 && h <= 22
-      })
       .sort((a, b) => getHorarioStr(a.starts_at).localeCompare(getHorarioStr(b.starts_at)))
 
   const periodoLabel = (() => {
@@ -324,9 +331,9 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
           )}
 
           {/* Especialidade em destaque */}
-          {terapeuta.specialties && (
+          {terapeuta.professional_type && (
             <span style={{ fontSize: "12px", color: CORES.cinzaTexto, textAlign: "center" }}>
-              {terapeuta.specialties}
+              {terapeuta.professional_type}
             </span>
           )}
 
@@ -366,7 +373,7 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
               backgroundColor: "#E8F4FD", color: CORES.azul, fontSize: "11px", fontWeight: "600",
               padding: "3px 10px", borderRadius: "20px", display: "inline-flex", alignItems: "center", gap: "4px", alignSelf: "flex-start"
             }}>
-              <Building2 size={11} /> Aceita plano empresa
+              <Building2 size={11} /> Aceita corporativo e pacotes
             </span>
           )}
         </div>
@@ -462,7 +469,7 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
           {terapeuta.accepts_corporate_sessions === true && (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
               <span style={{ backgroundColor: "#E8F4FD", color: CORES.azul, fontSize: "11px", fontWeight: "600", padding: "4px 10px", borderRadius: "20px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                <Building2 size={12} /> Aceita plano empresa
+                <Building2 size={12} /> Aceita corporativo e pacotes
               </span>
             </div>
           )}
@@ -482,11 +489,14 @@ export function CardTerapeuta({ terapeuta, isLoggedIn = false, viewMode = "list"
             </div>
           )}
 
-          {terapeuta.specialties && (
+          {terapeuta.professional_type && (
             <div style={{ marginTop: "12px" }}>
-              <p style={{ fontSize: "12px", color: CORES.cinzaTexto, display: "flex", alignItems: "center", gap: "4px" }}>
-                <Tag size={12} color={CORES.azul} />
-                <strong style={{ color: CORES.azul }}>Especialidades:</strong> {terapeuta.specialties}
+              <p style={{ fontSize: "12px", color: CORES.cinzaTexto, display: "flex", alignItems: "flex-start", gap: "4px" }}>
+                <Tag size={12} color={CORES.azul} style={{ marginTop: "2px", flexShrink: 0 }} />
+                <span>
+                  <strong style={{ color: CORES.azul }}>Especialidades:</strong>{" "}
+                  {terapeuta.professional_type}
+                </span>
               </p>
             </div>
           )}

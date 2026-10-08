@@ -36,6 +36,7 @@ interface Terapeuta {
   rating?: number;
   reviews_count?: number;
   abordagem?: string;
+  modalidade?: string;
   bio?: string;
   gender?: string;
   verified?: boolean;
@@ -53,6 +54,7 @@ interface Filtros {
   nome: string;
   especialidade: string;
   abordagem: string;
+  modalidade: string;
   genero: string;
   preco_min: number;
   preco_max: number;
@@ -91,6 +93,7 @@ function BuscaContent() {
     nome: searchParams?.get("nome") || "",
     especialidade: searchParams?.get("especialidade") || "",
     abordagem: searchParams?.get("abordagem") || "",
+    modalidade: searchParams?.get("modalidade") || "",
     genero: searchParams?.get("genero") || "",
     preco_min: Number(searchParams?.get("preco_min")) || 0,
     preco_max: Number(searchParams?.get("preco_max")) || 500,
@@ -103,7 +106,7 @@ function BuscaContent() {
 
   const [totalResultados, setTotalResultados] = useState(0);
   const [pagina, setPagina] = useState(Number(searchParams?.get("page")) || 1);
-  const limit = 10;
+  const [limit, setLimit] = useState(Number(searchParams?.get("limit")) || 10);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -127,6 +130,7 @@ function BuscaContent() {
       if (filtros.nome) params.append("nome", filtros.nome);
       if (filtros.especialidade) params.append("especialidade", filtros.especialidade);
       if (filtros.abordagem) params.append("abordagem", filtros.abordagem);
+      if (filtros.modalidade) params.append("modalidade", filtros.modalidade);
       if (filtros.genero) params.append("genero", filtros.genero);
       if (filtros.preco_min > 0) params.append("preco_min", filtros.preco_min.toString());
       if (filtros.preco_max < 500) params.append("preco_max", filtros.preco_max.toString());
@@ -137,6 +141,7 @@ function BuscaContent() {
       if (filtros.aceita_corporativo) params.append("aceita_corporativo", "true");
       params.append("page", pagina.toString());
       params.append("limit", limit.toString());
+      params.append("search", "true");
 
       const url = `${BACKEND_URL}/public/terapeutas?${params.toString()}`;
       const response = await fetch(url, {
@@ -147,12 +152,17 @@ function BuscaContent() {
 
       const data = await response.json();
       setTerapeutas(data);
-      setTotalResultados(data.length);
+      // 🔥 total de verdade vem do header X-Total-Count (antes usava
+      // data.length, que é só o tamanho da PÁGINA atual — por isso a
+      // paginação nunca passava de "página 1 de 1")
+      const totalHeader = response.headers.get("x-total-count");
+      setTotalResultados(totalHeader ? parseInt(totalHeader, 10) : data.length);
 
       const urlParams = new URLSearchParams();
       if (filtros.nome) urlParams.set("nome", filtros.nome);
       if (filtros.especialidade) urlParams.set("especialidade", filtros.especialidade);
       if (filtros.abordagem) urlParams.set("abordagem", filtros.abordagem);
+      if (filtros.modalidade) urlParams.set("modalidade", filtros.modalidade);
       if (filtros.genero) urlParams.set("genero", filtros.genero);
       if (filtros.preco_min > 0) urlParams.set("preco_min", filtros.preco_min.toString());
       if (filtros.preco_max < 500) urlParams.set("preco_max", filtros.preco_max.toString());
@@ -173,7 +183,7 @@ function BuscaContent() {
 
   useEffect(() => {
     buscarTerapeutas();
-  }, [filtros, pagina]);
+  }, [filtros, pagina, limit]);
 
   const aplicarFiltros = (novosFiltros: Partial<Filtros>) => {
     setFiltros({ ...filtros, ...novosFiltros });
@@ -182,7 +192,7 @@ function BuscaContent() {
 
   const limparFiltros = () => {
     setFiltros({
-      nome: "", especialidade: "", abordagem: "", genero: "",
+      nome: "", especialidade: "", abordagem: "", modalidade: "", genero: "",
       preco_min: 0, preco_max: 500,
       lgbtqia_ally: false, duracao_30min: false, duracao_50min: false, disponivel_agora: false,
       aceita_corporativo: false,
@@ -329,8 +339,24 @@ function BuscaContent() {
               ))}
             </div>
 
+            {totalResultados > 0 && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                <label className="text-sm text-gray-500">Mostrar</label>
+                <select
+                  value={limit}
+                  onChange={(e) => { setLimit(Number(e.target.value)); setPagina(1); }}
+                  className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="text-sm text-gray-500">por página</span>
+              </div>
+            )}
+
             {totalPaginas > 1 && (
-              <div className="flex justify-center gap-2 mt-8">
+              <div className="flex justify-center gap-2 mt-4">
                 <button
                   onClick={() => setPagina(pagina - 1)}
                   disabled={pagina === 1}

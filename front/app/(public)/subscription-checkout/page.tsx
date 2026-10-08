@@ -10,6 +10,14 @@ import { PublicFooter } from '@/components/layout/PublicFooter'
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || 'APP_USR-6dd38a4a-5036-4838-8104-92314dc8414a'
 
 const PLANS = {
+  essencial: {
+    name: 'Essencial',
+    price: 19.9,
+    commission: '20%',
+    color: '#6b7280',
+    icon: <Shield size={28} />,
+    features: ['Perfil na plataforma', 'Agenda e gestão de sessões', 'Videochamada integrada', 'Pagamento automático', 'Relatório financeiro'],
+  },
   profissional: {
     name: 'Profissional',
     price: 79,
@@ -70,22 +78,47 @@ function SuccessScreen({ planName }: { planName: string }) {
       </div>
       <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#1a1a2e', margin: 0 }}>Assinatura ativada!</h1>
       <p style={{ fontSize: '15px', color: '#6b7280', maxWidth: '360px', margin: 0, lineHeight: 1.6 }}>
-        Seu plano <strong>{planName}</strong> foi ativado com sucesso. Você já pode aproveitar todos os benefícios!
+        Seu plano <strong>{planName}</strong> foi ativado com sucesso. Falta só um passo: enviar seus documentos para validar o perfil e ganhar o selo de terapeuta verificado.
       </p>
       <button
-        onClick={() => router.push('/therapist/dashboard')}
+        onClick={() => router.push('/therapist/documents/required')}
         style={{ marginTop: '8px', padding: '13px 32px', background: 'linear-gradient(135deg, #E03673, #c42d63)', color: '#fff', fontSize: '15px', fontWeight: 600, border: 'none', borderRadius: '10px', cursor: 'pointer' }}
       >
-        Ir para o painel
+        Enviar documentos
+      </button>
+      <button
+        onClick={() => router.push('/therapist/dashboard')}
+        style={{ marginTop: '4px', padding: '8px 16px', background: 'transparent', color: '#6b7280', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+      >
+        Fazer depois
       </button>
     </div>
   )
 }
 
+// 🔥 A documentação do Mercado Pago orienta evitar novas tentativas imediatas
+// com os mesmos dados após uma recusa (o antifraude pode tratar como duplicada
+// e continuar recusando). O tempo abaixo é escolha nossa, não da documentação.
+const BLOCK_MINUTES = 3
+const BLOCK_KEY = 'mp_sub_block_until'
+
+// 🔥 Valida o dígito verificador do CPF (o Mercado Pago pede documento real do pagador)
+function cpfValido(raw: string): boolean {
+  const d = raw.replace(/\D/g, '')
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false
+  const dv = (len: number) => {
+    let sum = 0
+    for (let i = 0; i < len; i++) sum += Number(d[i]) * (len + 1 - i)
+    const r = (sum * 10) % 11
+    return r === 10 ? 0 : r
+  }
+  return dv(9) === Number(d[9]) && dv(10) === Number(d[10])
+}
+
 function SubscriptionCheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const planId = (searchParams.get('plan') || 'profissional') as 'profissional' | 'premium'
+  const planId = (searchParams.get('plan') || 'profissional') as 'essencial' | 'profissional' | 'premium'
   const plan = PLANS[planId] || PLANS.profissional
 
   const [name, setName] = useState('')
@@ -97,9 +130,46 @@ function SubscriptionCheckoutContent() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [userEmail, setUserEmail] = useState('')
+  const [blockedUntil, setBlockedUntil] = useState<number>(0)
+  const [nowTs, setNowTs] = useState<number>(Date.now())
+  const blocked = blockedUntil > nowTs
+
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(BLOCK_KEY) || 0)
+      if (saved > Date.now()) {
+        setBlockedUntil(saved)
+        const min = Math.ceil((saved - Date.now()) / 60000)
+        setError(`Por segurança, aguarde ${min} min antes de tentar novamente.`)
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (blockedUntil <= Date.now()) return
+    const t = setInterval(() => {
+      const n = Date.now()
+      setNowTs(n)
+      if (n >= blockedUntil) {
+        clearInterval(t)
+        setError(null)
+      }
+    }, 1000)
+    return () => clearInterval(t)
+  }, [blockedUntil])
 
   useEffect(() => {
     api('/api/users/me').then((me: any) => setUserEmail(me.email || '')).catch(() => {})
+  }, [])
+
+  // 🔥 Script de segurança do Mercado Pago (gera MP_DEVICE_SESSION_ID)
+  useEffect(() => {
+    if (document.getElementById('mp-security-script')) return
+    const s = document.createElement('script')
+    s.id = 'mp-security-script'
+    s.src = 'https://www.mercadopago.com/v2/security.js'
+    s.setAttribute('view', 'checkout')
+    document.head.appendChild(s)
   }, [])
 
   const maskCard = (v: string) => v.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19)
@@ -114,13 +184,26 @@ function SubscriptionCheckoutContent() {
 
   const handleSubmit = useCallback(async () => {
     if (!name.trim()) { setError('Informe o nome no cartão.'); return }
+    if (name.trim().split(/\s+/).length < 2) { setError('Informe nome e sobrenome, como estão no cartão.'); return }
     if (cardNumber.replace(/\s/g, '').length < 16) { setError('Número do cartão inválido.'); return }
     if (expiry.length < 5) { setError('Validade inválida.'); return }
     if (cvv.length < 3) { setError('CVV inválido.'); return }
-    if (cpf.replace(/\D/g, '').length < 11) { setError('CPF inválido.'); return }
+    if (!cpfValido(cpf)) { setError('CPF inválido. Confira os números.'); return }
+    if (blockedUntil > Date.now()) {
+      const min = Math.ceil((blockedUntil - Date.now()) / 60000)
+      setError(`Por segurança, aguarde ${min} min antes de tentar novamente.`)
+      return
+    }
 
     setLoading(true)
     setError(null)
+
+    let chamouAssinatura = false
+    const bloquearNovaTentativa = () => {
+      const until = Date.now() + BLOCK_MINUTES * 60000
+      setBlockedUntil(until)
+      try { localStorage.setItem(BLOCK_KEY, String(until)) } catch {}
+    }
 
     try {
       const mp = await loadMpSdk(MP_PUBLIC_KEY)
@@ -130,6 +213,8 @@ function SubscriptionCheckoutContent() {
       const tokenResult = await mp.createCardToken({
         cardNumber: rawCard,
         cardholderName: name,
+        identificationType: 'CPF',
+        identificationNumber: cpf.replace(/\D/g, ''),
         cardExpirationMonth: expMonth,
         cardExpirationYear: `20${expYear}`,
         securityCode: cvv,
@@ -139,6 +224,7 @@ function SubscriptionCheckoutContent() {
         throw new Error(tokenResult?.error?.message || 'Erro ao tokenizar cartão.')
       }
 
+      chamouAssinatura = true
       const result = await api('/api/payments/create-subscription', {
         method: 'POST',
         body: JSON.stringify({
@@ -146,20 +232,28 @@ function SubscriptionCheckoutContent() {
           card_token_id: tokenResult.id,
           payer_email: userEmail,
           payer_cpf: cpf.replace(/\D/g, ''),
+          device_id: (window as any).MP_DEVICE_SESSION_ID || '',
         }),
       })
 
       if (result.status === 'authorized' || result.status === 'active') {
         setSuccess(true)
       } else {
-        setError(result.detail || 'Assinatura não aprovada. Verifique os dados do cartão.')
+        setError(`${result.detail || 'Assinatura não aprovada. Verifique os dados do cartão.'} Por segurança, aguarde ${BLOCK_MINUTES} min antes de tentar novamente.`)
+        bloquearNovaTentativa()
       }
     } catch (e: any) {
-      setError(e.message || 'Erro ao processar assinatura.')
+      const base = e.message || 'Erro ao processar assinatura.'
+      if (chamouAssinatura) {
+        setError(`${base} Por segurança, aguarde ${BLOCK_MINUTES} min antes de tentar novamente.`)
+        bloquearNovaTentativa()
+      } else {
+        setError(base)
+      }
     } finally {
       setLoading(false)
     }
-  }, [name, cpf, cardNumber, expiry, cvv, planId, userEmail])
+  }, [name, cpf, cardNumber, expiry, cvv, planId, userEmail, blockedUntil])
 
   if (success) return (
     <main style={{ minHeight: '100vh', background: '#f9f7f8', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
@@ -212,7 +306,7 @@ function SubscriptionCheckoutContent() {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '12px', padding: '12px 16px' }}>
             <Shield size={18} color="#2F80D3" style={{ flexShrink: 0, marginTop: '1px' }} />
             <p style={{ fontSize: '13px', color: '#1d4ed8', margin: 0, fontWeight: 500, lineHeight: 1.5 }}>
-              Cancele quando quiser. Você volta ao plano Essencial sem perder acesso à plataforma.
+              Cancele quando quiser, sem perder acesso à plataforma.
             </p>
           </div>
         </aside>
@@ -254,7 +348,7 @@ function SubscriptionCheckoutContent() {
 
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || blocked}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                 width: '100%', padding: '16px',

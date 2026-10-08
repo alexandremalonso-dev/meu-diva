@@ -137,7 +137,7 @@ export default function MobileTerapeutaPage() {
   const getDiaMes = (dateStr: string) => { const [d, m] = dateStr.split("/"); return `${d}/${m}`; };
   const isHoje = (dateStr: string) => dateStr === hoje.toLocaleDateString("pt-BR");
   const getHorarios = (slots: any[]) =>
-    (slots || []).filter(s => { const h = new Date(s.starts_at).getHours(); return h >= 7 && h <= 22; })
+    (slots || [])
       .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 
   const handleAgendar = async (slot: any) => {
@@ -231,7 +231,7 @@ export default function MobileTerapeutaPage() {
             </div>
             {terapeuta.accepts_corporate_sessions && (
               <span style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, backgroundColor: "rgba(255,255,255,0.2)", color: "white", padding: "3px 8px", borderRadius: 10 }}>
-                <Building2 size={10} /> Aceita plano empresa
+                <Building2 size={10} /> Aceita corporativo e pacotes
               </span>
             )}
           </div>

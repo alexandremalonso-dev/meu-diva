@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,8 +17,15 @@ const PLAN_CONFIG: Record<string, {
   color: string; bgColor: string; borderColor: string; icon: React.ReactNode;
   features: string[];
 }> = {
+  basico: {
+    name: "Básico", price: "Grátis", commission: 20,
+    color: "from-gray-400 to-gray-500", bgColor: "bg-gray-50",
+    borderColor: "border-gray-300",
+    icon: <Shield className="w-6 h-6" />,
+    features: ["Perfil na plataforma", "Agenda e gestão de sessões", "Videochamada integrada", "Pagamento automático"]
+  },
   essencial: {
-    name: "Essencial", price: "Grátis", commission: 20,
+    name: "Essencial", price: "R$ 19,90/mês", commission: 20,
     color: "from-gray-500 to-gray-600", bgColor: "bg-gray-50",
     borderColor: "border-gray-300",
     icon: <Shield className="w-6 h-6" />,
@@ -99,6 +107,7 @@ export default function TherapistSubscriptionPage() {
   const [success, setSuccess] = useState("");
   const [showPlans, setShowPlans] = useState(false);
   const [showEarnings, setShowEarnings] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ action: "pause" | "resume" | "cancel"; message: string } | null>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -121,12 +130,15 @@ export default function TherapistSubscriptionPage() {
 
   async function handleAction(action: "pause" | "resume" | "cancel") {
     const confirmMessages = {
-      pause: "Pausar sua assinatura? Você voltará ao plano Essencial (20% de comissão) temporariamente e poderá reativar quando quiser.",
+      pause: "Pausar sua assinatura? Você voltará ao plano gratuito (20% de comissão) temporariamente e poderá reativar quando quiser.",
       resume: "Reativar sua assinatura?",
-      cancel: "Cancelar sua assinatura permanentemente? Você voltará ao plano Essencial (20% de comissão) ao final do período atual."
+      cancel: "Cancelar sua assinatura permanentemente? Você voltará ao plano gratuito (20% de comissão) ao final do período atual."
     };
-    if (!confirm(confirmMessages[action])) return;
+    setPendingAction({ action, message: confirmMessages[action] });
+  }
 
+  async function executeAction(action: "pause" | "resume" | "cancel") {
+    setPendingAction(null);
     setActionLoading(action);
     try {
       const endpoints = {
@@ -158,9 +170,9 @@ export default function TherapistSubscriptionPage() {
   }
 
   const sub = data?.subscription;
-  const plan = PLAN_CONFIG[sub?.plan || "essencial"];
+  const plan = PLAN_CONFIG[sub?.plan || "basico"] || PLAN_CONFIG.basico;
   const statusCfg = STATUS_CONFIG[sub?.status || "active"];
-  const isPaid = sub?.plan !== "essencial";
+  const isPaid = !!sub?.plan && sub.plan !== "basico";
   const isActive = sub?.status === "active";
   const isPaused = sub?.status === "paused";
   const isApple = sub?.payment_provider === "apple_iap";
@@ -168,6 +180,16 @@ export default function TherapistSubscriptionPage() {
 
   return (
     <>
+      <ConfirmDialog
+        open={!!pendingAction}
+        variant={pendingAction?.action === "cancel" ? "danger" : "default"}
+        title={pendingAction?.action === "cancel" ? "Cancelar assinatura" : pendingAction?.action === "pause" ? "Pausar assinatura" : "Reativar assinatura"}
+        message={pendingAction?.message || ""}
+        confirmLabel={pendingAction?.action === "cancel" ? "Cancelar assinatura" : pendingAction?.action === "pause" ? "Pausar" : "Reativar"}
+        cancelLabel="Voltar"
+        onConfirm={() => { if (pendingAction) executeAction(pendingAction.action); }}
+        onCancel={() => setPendingAction(null)}
+      />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 pb-2">
         <div className="flex items-center justify-between">
           <div>
@@ -314,8 +336,14 @@ export default function TherapistSubscriptionPage() {
             {/* Upgrade */}
             {!isPaid && (
               <div className="pt-2 border-t border-gray-100">
-                <p className="text-sm text-gray-500 mb-3">Reduza sua comissão e aumente seus ganhos:</p>
-                <div className="flex gap-2">
+                <p className="text-sm text-gray-500 mb-3">Conheça os planos para crescer na plataforma:</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => router.push("/subscription-checkout?plan=essencial")}
+                    className="flex-1 py-2.5 px-4 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Shield className="w-4 h-4" /> Essencial — R$19,90/mês
+                  </button>
                   <button
                     onClick={() => router.push("/subscription-checkout?plan=profissional")}
                     className="flex-1 py-2.5 px-4 rounded-lg bg-[#2F80D3] text-white text-sm font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
@@ -457,7 +485,7 @@ export default function TherapistSubscriptionPage() {
             <h3 className="font-semibold text-gray-900">Comparativo de Planos</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Object.entries(PLAN_CONFIG).map(([planId, cfg]) => {
+            {Object.entries(PLAN_CONFIG).filter(([planId]) => planId !== "basico").map(([planId, cfg]) => {
               const isCurrent = sub?.plan === planId;
               return (
                 <div key={planId} className={`rounded-xl border-2 p-4 transition-all ${isCurrent ? cfg.borderColor + " ring-2 ring-offset-1" : "border-gray-200"} ${cfg.bgColor}`}>
@@ -480,7 +508,7 @@ export default function TherapistSubscriptionPage() {
                       </li>
                     ))}
                   </ul>
-                  {!isCurrent && planId !== "essencial" && (
+                  {!isCurrent && (
                     <button
                       onClick={() => router.push(`/subscription-checkout?plan=${planId}`)}
                       className="mt-3 w-full py-1.5 text-xs rounded-lg bg-[#E03673] text-white font-medium hover:bg-pink-600 transition-colors"

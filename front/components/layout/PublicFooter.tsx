@@ -12,7 +12,7 @@ export function PublicFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer style={{ backgroundColor: "#2F80D3", width: "100%", marginTop: "64px" }}>
+    <footer style={{ backgroundColor: "#2F80D3", width: "100%" }}>
 
       {/* Grid principal — 6 colunas */}
       <div style={{ padding: "48px 32px 40px", display: "grid", gridTemplateColumns: "0.6fr 1.2fr 1fr 1fr 1fr 0.8fr", gap: "36px", maxWidth: "1200px", margin: "0 auto" }}>
@@ -41,7 +41,7 @@ export function PublicFooter() {
           </p>
           <p style={{ marginTop: "16px", fontSize: "0.875rem" }}>
             <a href="mailto:contato@meudivaonline.com" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", display: "block" }}>contato@meudivaonline.com</a>
-            <span style={{ color: "rgba(255,255,255,0.8)" }}>(31) 2181-2810</span>
+            <span style={{ color: "rgba(255,255,255,0.8)" }}>(31) 98411-7772</span>
           </p>
           <p style={{ marginTop: "12px", opacity: 0.6, fontSize: "0.78rem", lineHeight: 1.6, color: "rgba(255,255,255,0.8)" }}>
             CNPJ: 37.655.845/0001-25

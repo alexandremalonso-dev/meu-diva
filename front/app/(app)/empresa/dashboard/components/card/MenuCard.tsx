@@ -50,13 +50,14 @@ export function MenuCard({ href, icon, title, description, color = 'blue' }: Men
     <Link
       href={href}
       style={{ background: bgGradient }}
-      className="text-white p-2 sm:p-3 rounded-xl shadow-md hover:shadow-lg transition-all hover:scale-105 flex flex-col items-center justify-center gap-1.5 sm:gap-2 text-center min-h-[64px] sm:min-h-[72px] overflow-hidden"
+      className="text-white p-2 sm:p-3 rounded-xl shadow-md hover:shadow-lg transition-all hover:scale-105 flex flex-col items-center justify-center gap-1.5 sm:gap-2 text-center min-h-[72px] sm:min-h-[80px] overflow-hidden"
     >
       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
         {getIcon(icon)}
       </div>
       <div className="min-w-0 w-full px-0.5">
-        <p className="font-semibold text-[10px] sm:text-xs leading-tight truncate">{title}</p>
+        {/* 🔥 CORRIGIDO: line-clamp-2 em vez de truncate */}
+        <p className="font-semibold text-[10px] sm:text-xs leading-tight line-clamp-2">{title}</p>
         <p className="text-[9px] sm:text-[10px] lg:text-xs text-white/75 leading-tight truncate hidden sm:block">{description}</p>
       </div>
     </Link>

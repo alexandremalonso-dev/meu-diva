@@ -261,6 +261,20 @@ def upsert_profile(
                 existing.featured = payload.featured
             existing.session_duration_30min = payload.session_duration_30min if payload.session_duration_30min is not None else True
             existing.session_duration_50min = payload.session_duration_50min if payload.session_duration_50min is not None else True
+            existing.custom_session_duration = payload.custom_session_duration
+            # 🔥 aceita sessões corporativas e pacotes Meu Divã: só muda se a tela enviou o campo
+            _env = getattr(payload, "model_fields_set", None)
+            if _env is None:
+                _env = getattr(payload, "__fields_set__", set())
+            if "accepts_corporate_sessions" in _env and getattr(payload, "accepts_corporate_sessions", None) is not None:
+                existing.accepts_corporate_sessions = bool(payload.accepts_corporate_sessions)
+            existing.professional_type = payload.professional_type
+            existing.therapeutic_approach = payload.therapeutic_approach
+            existing.integrative_practice = payload.integrative_practice
+            existing.target_audience = payload.target_audience
+            existing.demand_focus = payload.demand_focus
+            existing.service_modality = payload.service_modality
+            existing.service_modalities = payload.service_modalities
             existing.cancellation_policy = payload.cancellation_policy
             
             db.commit()
@@ -316,6 +330,8 @@ def upsert_profile(
             featured=payload.featured or False,
             session_duration_30min=payload.session_duration_30min if payload.session_duration_30min is not None else True,
             session_duration_50min=payload.session_duration_50min if payload.session_duration_50min is not None else True,
+            custom_session_duration=payload.custom_session_duration,
+            accepts_corporate_sessions=bool(getattr(payload, "accepts_corporate_sessions", False) or False),
             cancellation_policy=payload.cancellation_policy,
         )
         db.add(profile)
@@ -432,6 +448,59 @@ async def upload_therapist_photo(
         raise
     except Exception as e:
         print(f"❌ Erro ao fazer upload: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro interno ao fazer upload: {str(e)}")
+
+
+@router.post("/me/profile/signature", response_model=dict)
+async def upload_therapist_signature(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin])),
+):
+    """
+    Recebe um PNG (com fundo transparente) gerado pelo componente de
+    assinatura digital no navegador do terapeuta e salva no GCS.
+    """
+    print(f"\n✍️ POST /therapists/me/profile/signature - Usuário: {current_user.id}")
+
+    try:
+        from app.core.storage import StorageService
+        storage_service = StorageService()
+
+        profile = db.execute(
+            select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
+        ).scalar_one_or_none()
+
+        if not profile:
+            raise HTTPException(status_code=404, detail="Perfil do terapeuta não encontrado")
+
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext != ".png":
+            raise HTTPException(status_code=400, detail="A assinatura deve ser um arquivo PNG")
+
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="Arquivo muito grande. Máximo 5MB")
+
+        signature_url = storage_service.upload_file(
+            file_content=file_content,
+            folder="signatures",
+            content_type="image/png"
+        )
+
+        profile.signature_url = signature_url
+        profile.updated_at = datetime.now()
+        db.commit()
+
+        print(f"✅ Assinatura salva no GCS: {signature_url}")
+        return {"signature_url": signature_url, "message": "Assinatura atualizada com sucesso"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Erro ao fazer upload da assinatura: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno ao fazer upload: {str(e)}")
@@ -713,10 +782,13 @@ def available_slots(
             raise HTTPException(status_code=404, detail="Perfil do terapeuta nao encontrado")
 
         durations_to_generate = []
-        if hasattr(therapist_profile, 'session_duration_30min') and therapist_profile.session_duration_30min:
-            durations_to_generate.append(30)
-        if hasattr(therapist_profile, 'session_duration_50min') and therapist_profile.session_duration_50min:
-            durations_to_generate.append(50)
+        if getattr(therapist_profile, 'custom_session_duration', None):
+            durations_to_generate.append(therapist_profile.custom_session_duration)
+        else:
+            if hasattr(therapist_profile, 'session_duration_30min') and therapist_profile.session_duration_30min:
+                durations_to_generate.append(30)
+            if hasattr(therapist_profile, 'session_duration_50min') and therapist_profile.session_duration_50min:
+                durations_to_generate.append(50)
         
         if not durations_to_generate:
             durations_to_generate = [50]
@@ -1011,7 +1083,7 @@ def cancel_therapist_subscription(
 
     old_plan = subscription.plan
     subscription.status = "cancelled"
-    subscription.plan = "essencial"
+    subscription.plan = "basico"
     subscription.cancel_at_period_end = False
     subscription.updated_at = datetime.now()
     db.commit()
@@ -1021,11 +1093,11 @@ def cancel_therapist_subscription(
     except Exception as e:
         print(f"⚠️ Erro notificação: {e}")
 
-    print(f"✅ Assinatura cancelada. Terapeuta voltou ao plano Essencial.")
+    print(f"✅ Assinatura cancelada. Terapeuta voltou ao plano gratuito.")
 
     return {
         "success": True,
-        "message": "Assinatura cancelada com sucesso. Você voltará ao plano Essencial.",
+        "message": "Assinatura cancelada com sucesso. Você voltará ao plano gratuito.",
         "will_cancel_at_period_end": False
     }
 

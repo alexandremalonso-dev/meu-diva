@@ -8,6 +8,7 @@ interface FiltrosBuscaProps {
     nome: string;
     especialidade: string;
     abordagem: string;
+    modalidade: string;
     genero: string;
     preco_min: number;
     preco_max: number;
@@ -27,6 +28,10 @@ const OPCOES_ABORDAGEM = [
   "", "Psicanálise", "Cognitivo-Comportamental", "Humanista", 
   "Gestalt", "Fenomenológico-Existencial", "Sistêmica", "Analítica",
   "Psicoterapia Corporal", "Psicodrama", "Arteterapia"
+];
+const OPCOES_MODALIDADE = [
+  "", "Atendimento individual", "Atendimento de casal", "Atendimento familiar",
+  "Atendimento em grupo", "Atendimento corporativo"
 ];
 const OPCOES_ESPECIALIDADE = [
   "", "Ansiedade", "Depressão", "Relacionamentos", "Autoestima",
@@ -200,6 +205,22 @@ export function FiltrosBusca({ filtros, onFiltrar, onLimpar }: FiltrosBuscaProps
             </select>
           </div>
 
+          {/* Modalidade de atendimento */}
+          <div>
+            <label className="text-xs font-medium text-[#E03673] mb-1 block">
+              Modalidade de atendimento
+            </label>
+            <select
+              value={localFiltros.modalidade}
+              onChange={(e) => handleChange("modalidade", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#E03673]/20 focus:border-[#E03673]"
+            >
+              {OPCOES_MODALIDADE.map((op) => (
+                <option key={op} value={op}>{op || "Todas"}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Gênero */}
           <div>
             <label className="text-xs font-medium text-[#E03673] mb-1 block">
@@ -295,7 +316,7 @@ export function FiltrosBusca({ filtros, onFiltrar, onLimpar }: FiltrosBuscaProps
               className="w-4 h-4 cursor-pointer accent-[#E03673]"
             />
             <Building2 size={14} className="text-[#E03673]" />
-            <span className="text-sm text-gray-600">Aceita plano empresa</span>
+            <span className="text-sm text-gray-600">Aceita sessões corporativas e pacotes Meu Divã</span>
           </label>
         </div>
 

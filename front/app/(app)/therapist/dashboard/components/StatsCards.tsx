@@ -1,7 +1,7 @@
 "use client";
 
 import type { Stats, FilterType } from '../types';
-import { Calendar, CheckCircle, XCircle, Clock, TrendingUp } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, Clock, DollarSign } from 'lucide-react';
 import { useState } from 'react';
 
 interface StatsCardsProps {
@@ -9,15 +9,21 @@ interface StatsCardsProps {
   activeFilter: FilterType;
   onFilterClick: (filter: FilterType) => void;
   onPeriodChange?: (period: 'week' | 'month' | 'year' | 'all', type: 'completed' | 'cancelled') => void;
+  currentMonthRevenue?: number;
+  currentMonthSessions?: number;
+  onRevenueClick?: () => void;
 }
 
-export function StatsCards({ 
-  stats, 
-  activeFilter, 
+export function StatsCards({
+  stats,
+  activeFilter,
   onFilterClick,
-  onPeriodChange
+  onPeriodChange,
+  currentMonthRevenue = 0,
+  currentMonthSessions = 0,
+  onRevenueClick,
 }: StatsCardsProps) {
-  
+
   const [completedPeriod, setCompletedPeriod] = useState<'week' | 'month' | 'year' | 'all'>('all');
   const [cancelledPeriod, setCancelledPeriod] = useState<'week' | 'month' | 'year' | 'all'>('all');
 
@@ -39,136 +45,79 @@ export function StatsCards({
     return 0;
   };
 
-  const periodLabels = {
-    week: '7 dias',
-    month: '30 dias',
-    year: '12 meses',
-    all: 'Todo período'
-  };
+  const periodLabels = { week: 'Sem', month: 'Mês', year: 'Ano', all: 'Todo' };
 
   const handlePeriodClick = (period: 'week' | 'month' | 'year' | 'all', type: 'completed' | 'cancelled') => {
-    if (type === 'completed') {
-      setCompletedPeriod(period);
-    } else {
-      setCancelledPeriod(period);
-    }
-    
-    if (onPeriodChange) {
-      onPeriodChange(period, type);
-    }
+    if (type === 'completed') setCompletedPeriod(period);
+    else setCancelledPeriod(period);
+    if (onPeriodChange) onPeriodChange(period, type);
   };
 
   const getUpcomingValue = (): number => {
     if (typeof stats.upcoming === 'number') return stats.upcoming;
-    if (stats.upcoming && typeof stats.upcoming === 'object') {
-      return (stats.upcoming as any).all || 0;
-    }
+    if (stats.upcoming && typeof stats.upcoming === 'object') return (stats.upcoming as any).all || 0;
     return 0;
   };
 
-  const getAvailabilityValue = (): number => {
-    return (stats as any).totalAvailability || (stats as any).availability || 0;
-  };
+  const getAvailabilityValue = (): number => (stats as any).totalAvailability || (stats as any).availability || 0;
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
   const cards = [
-    {
-      id: 'upcoming' as FilterType,
-      title: 'Próximas sessões',
-      value: getUpcomingValue(),
-      icon: <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />,
-      description: 'Agendadas para os próximos dias',
-      onClick: () => onFilterClick('upcoming'),
-      hasPeriodFilter: false
-    },
-    {
-      id: 'completed' as FilterType,
-      title: 'Sessões realizadas',
-      value: getCompletedValue(),
-      icon: <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />,
-      description: 'Já realizadas',
-      onClick: () => onFilterClick('completed'),
-      hasPeriodFilter: true,
-      currentPeriod: completedPeriod,
-      onPeriodClick: (period: 'week' | 'month' | 'year' | 'all') => handlePeriodClick(period, 'completed')
-    },
-    {
-      id: 'cancelled' as FilterType,
-      title: 'Cancelamentos',
-      value: getCancelledValue(),
-      icon: <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />,
-      description: 'Sessões canceladas',
-      onClick: () => onFilterClick('cancelled'),
-      hasPeriodFilter: true,
-      currentPeriod: cancelledPeriod,
-      onPeriodClick: (period: 'week' | 'month' | 'year' | 'all') => handlePeriodClick(period, 'cancelled')
-    },
-    {
-      id: 'availability' as FilterType,
-      title: 'Disponibilidade',
-      value: getAvailabilityValue(),
-      icon: <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 flex-shrink-0" />,
-      description: 'Horários configurados',
-      onClick: () => onFilterClick('availability'),
-      hasPeriodFilter: false
-    }
+    { id: 'upcoming' as FilterType, title: 'Próximas Sessões', value: getUpcomingValue(), icon: Calendar, onClick: () => onFilterClick('upcoming'), hasPeriodFilter: false },
+    { id: 'completed' as FilterType, title: 'Sessões Realizadas', value: getCompletedValue(), icon: CheckCircle, onClick: () => onFilterClick('completed'), hasPeriodFilter: true, currentPeriod: completedPeriod, onPeriodClick: (p: any) => handlePeriodClick(p, 'completed') },
+    { id: 'cancelled' as FilterType, title: 'Cancelamentos', value: getCancelledValue(), icon: XCircle, onClick: () => onFilterClick('cancelled'), hasPeriodFilter: true, currentPeriod: cancelledPeriod, onPeriodClick: (p: any) => handlePeriodClick(p, 'cancelled') },
+    { id: 'availability' as FilterType, title: 'Disponibilidade', value: getAvailabilityValue(), icon: Clock, onClick: () => onFilterClick('availability'), hasPeriodFilter: false },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      {cards.map((card) => (
-        <div
-          key={card.id}
-          className={`
-            w-full bg-gradient-to-br from-[#E03673] to-[#E03673]/80 
-            text-white rounded-lg shadow p-2.5 sm:p-3 lg:p-4
-            overflow-hidden min-w-0
-            transition-all hover:shadow-md
-            ${activeFilter === card.id ? 'ring-2 ring-white/50' : ''}
-          `}
-        >
-          <div 
+    // 🔥 Compacto e distribuído uniformemente (mesma estratégia do admin):
+    // flex-1 com piso mínimo — estica quando sobra espaço, nunca comprime
+    // a ponto de sobrepor os botões de período.
+    <div className="flex flex-col gap-1.5 h-full">
+      {cards.map((card) => {
+        const Icon = card.icon;
+        return (
+          <div
+            key={card.id}
             onClick={card.onClick}
-            className="cursor-pointer min-w-0"
+            className={`flex-1 ${card.hasPeriodFilter ? "min-h-[5.75rem]" : "min-h-[4.75rem]"} flex flex-col justify-center cursor-pointer bg-gradient-to-br from-[#E03673] to-[#E03673]/80 text-white rounded-lg shadow-sm px-3 py-2 transition-all hover:shadow-md hover:scale-[1.01] ${activeFilter === card.id ? "ring-2 ring-white/50 ring-offset-1" : ""}`}
           >
-            <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
-              <h3 className="text-[11px] sm:text-xs lg:text-sm font-medium text-white/80 truncate">{card.title}</h3>
-              {card.icon}
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <span className="text-fluid-2xs font-medium text-white/80 truncate">{card.title}</span>
+              <Icon className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
             </div>
-            <p className="text-2xl sm:text-3xl font-bold text-white truncate">{card.value}</p>
-            <p className="text-[10px] sm:text-[11px] lg:text-xs text-white/70 mt-1 truncate">{card.description}</p>
+            <p className="text-lg sm:text-xl font-bold truncate leading-tight">{card.value}</p>
+
+            {card.hasPeriodFilter && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {(['week', 'month', 'year', 'all'] as const).map((period) => (
+                  <button
+                    key={period}
+                    onClick={(e) => { e.stopPropagation(); card.onPeriodClick?.(period); }}
+                    className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${card.currentPeriod === period ? "bg-white/30 text-white font-medium" : "bg-white/10 hover:bg-white/20 text-white/80"}`}
+                  >
+                    {periodLabels[period]}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          
-          {card.hasPeriodFilter && (
-            <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-3 pt-2 border-t border-white/20">
-              {(['week', 'month', 'year', 'all'] as const).map((period) => (
-                <button
-                  key={period}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    card.onPeriodClick(period);
-                  }}
-                  className={`
-                    px-1.5 sm:px-2 py-1 rounded text-[10px] sm:text-[11px] lg:text-xs transition-colors cursor-pointer truncate
-                    ${card.currentPeriod === period 
-                      ? 'bg-white/30 text-white font-medium' 
-                      : 'bg-white/10 hover:bg-white/20 text-white/80'
-                    }
-                  `}
-                >
-                  {periodLabels[period]}
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {card.id === 'availability' && (
-            <div className="text-[10px] sm:text-[11px] lg:text-xs text-white/70 mt-2 flex items-center gap-1 min-w-0">
-              <TrendingUp className="w-3 h-3 flex-shrink-0" />
-              <span className="truncate">Horários configurados</span>
-            </div>
-          )}
+        );
+      })}
+
+      <div
+        onClick={onRevenueClick}
+        className="flex-1 min-h-[4.75rem] flex flex-col justify-center cursor-pointer bg-gradient-to-br from-[#E03673] to-[#E03673]/80 text-white rounded-lg shadow-sm px-3 py-2 transition-all hover:shadow-md hover:scale-[1.01]"
+      >
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <span className="text-fluid-2xs font-medium text-white/80 truncate">Receita Total</span>
+          <DollarSign className="w-3.5 h-3.5 text-white/80 flex-shrink-0" />
         </div>
-      ))}
+        <p className="text-lg sm:text-xl font-bold truncate leading-tight">{formatCurrency(currentMonthRevenue)}</p>
+        <p className="text-fluid-2xs text-white/70 truncate">{currentMonthSessions} sessões este mês</p>
+      </div>
     </div>
   );
 }

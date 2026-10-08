@@ -6,6 +6,7 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 from typing import Optional
 from datetime import datetime
 
@@ -16,6 +17,18 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 FROM_EMAIL = os.getenv("FROM_EMAIL", "contato@meudiva.com.br")
 FROM_NAME = os.getenv("FROM_NAME", "Meu Divã")
+
+# 🔥 Logo transparente usada em TODOS os templates de e-mail (mesma
+# proporção em todos, header maior/mais visível que antes)
+LOGO_URL = "https://app.meudivaonline.com/jitsi-watermark.png"
+
+# 🔥 Hostinger Mail API — usado no lugar do SMTP puro. O SMTP estava
+# sendo bloqueado pelo MailChannels (relay da Hostinger) antes mesmo de
+# sair ("550 5.7.1 [CS] Message blocked"), mesmo com SPF/DKIM corretos.
+# A API oficial passa pela infraestrutura autenticada deles e entrega
+# normalmente.
+HOSTINGER_API_TOKEN = os.getenv("HOSTINGER_API_TOKEN", "")
+HOSTINGER_MAILBOX_ID = os.getenv("HOSTINGER_MAILBOX_ID", "")
 
 
 class EmailService:
@@ -30,28 +43,65 @@ class EmailService:
         self.from_name = FROM_NAME
     
     def _send_email(self, to_email: str, subject: str, html_content: str) -> bool:
-        """Envia um e-mail"""
+        """
+        Envia um e-mail via API oficial da Hostinger (preferencial) ou,
+        se as credenciais da API não estiverem configuradas, cai pro
+        SMTP puro como fallback (mas o SMTP puro está sendo bloqueado
+        pelo MailChannels da Hostinger — ver comentário acima).
+        """
+        if HOSTINGER_API_TOKEN and HOSTINGER_MAILBOX_ID:
+            try:
+                import hostinger_mail_api
+                from hostinger_mail_api.models.v1_send_request import V1SendRequest
+                from hostinger_mail_api.rest import ApiException
+
+                configuration = hostinger_mail_api.Configuration(access_token=HOSTINGER_API_TOKEN)
+                with hostinger_mail_api.ApiClient(configuration) as api_client:
+                    send_api = hostinger_mail_api.SendApi(api_client)
+                    req = V1SendRequest(
+                        to=[to_email],
+                        display_name=self.from_name,
+                        subject=subject,
+                        html=html_content,
+                    )
+                    send_api.send_email(HOSTINGER_MAILBOX_ID, req)
+
+                print(f"✅ E-mail enviado para {to_email} (via API Hostinger)")
+                return True
+
+            except Exception as e:
+                print(f"❌ Erro ao enviar e-mail via API Hostinger: {e}")
+                return False
+
+        # 🔥 Fallback SMTP (só roda se a API não estiver configurada)
         try:
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
             msg['From'] = f"{self.from_name} <{self.from_email}>"
             msg['To'] = to_email
-            
-            # Anexa o conteúdo HTML
+            msg['Date'] = formatdate(localtime=True)
+            msg['Message-ID'] = make_msgid(domain=self.from_email.split('@')[-1])
+            msg['Reply-To'] = self.from_email
+
             msg.attach(MIMEText(html_content, 'html', 'utf-8'))
-            
-            # Conecta ao servidor SMTP
-            with smtplib.SMTP(self.host, self.port) as server:
-                server.starttls()
-                if self.user and self.password:
-                    server.login(self.user, self.password)
-                server.send_message(msg)
-            
-            print(f"✅ E-mail enviado para {to_email}")
+
+            if self.port == 465:
+                with smtplib.SMTP_SSL(self.host, self.port) as server:
+                    if self.user and self.password:
+                        server.login(self.user, self.password)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(self.host, self.port) as server:
+                    server.starttls()
+                    if self.user and self.password:
+                        server.login(self.user, self.password)
+                    server.send_message(msg)
+
+            print(f"✅ E-mail enviado para {to_email} (via SMTP)")
             return True
-            
+
         except Exception as e:
-            print(f"❌ Erro ao enviar e-mail: {e}")
+            print(f"❌ Erro ao enviar e-mail via SMTP: {e}")
             return False
     
     def send_appointment_confirmation(self, appointment, patient_email: str, therapist_email: str, meet_url: Optional[str] = None) -> tuple:
@@ -83,7 +133,7 @@ class EmailService:
             <style>
                 body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
                 .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #E03673; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .header {{ background: #ffffff; color: #E03673; padding: 24px 20px; text-align: center; border-radius: 10px 10px 0 0; border-bottom: 3px solid #E03673; }}
                 .content {{ background: #f9f5ff; padding: 30px; border-radius: 0 0 10px 10px; }}
                 .button {{ background: #E03673; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; margin-top: 20px; }}
                 .info {{ background: #fff; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #E03673; }}
@@ -94,6 +144,7 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
+                    <img src="{LOGO_URL}" alt="Meu Divã" width="100" height="100" style="display:block;margin:0 auto 8px;width:100px;height:100px;object-fit:contain;">
                     <h1>✅ Sessão Confirmada!</h1>
                 </div>
                 <div class="content">
@@ -140,7 +191,7 @@ class EmailService:
             <style>
                 body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
                 .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #2F80D3; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .header {{ background: #ffffff; color: #2F80D3; padding: 24px 20px; text-align: center; border-radius: 10px 10px 0 0; border-bottom: 3px solid #2F80D3; }}
                 .content {{ background: #f9f5ff; padding: 30px; border-radius: 0 0 10px 10px; }}
                 .info {{ background: #fff; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2F80D3; }}
                 .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
@@ -149,6 +200,7 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
+                    <img src="{LOGO_URL}" alt="Meu Divã" width="100" height="100" style="display:block;margin:0 auto 8px;width:100px;height:100px;object-fit:contain;">
                     <h1>✅ Nova Sessão Confirmada</h1>
                 </div>
                 <div class="content">
@@ -244,7 +296,7 @@ class EmailService:
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                 .container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                .header {{ background: #E03673; color: white; padding: 20px; text-align: center; }}
+                .header {{ background: #ffffff; color: #E03673; padding: 24px 20px; text-align: center; border-bottom: 3px solid #E03673; }}
                 .content {{ padding: 30px; }}
                 .receipt-box {{ background: #f9f5ff; border: 1px solid #E03673; border-radius: 8px; padding: 20px; margin: 20px 0; }}
                 .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; border-top: 1px solid #eee; }}
@@ -257,6 +309,7 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
+                    <img src="{LOGO_URL}" alt="Meu Divã" width="100" height="100" style="display:block;margin:0 auto 8px;width:100px;height:100px;object-fit:contain;">
                     <h1>Meu Divã</h1>
                     <p>Recibo de Sessão</p>
                 </div>
@@ -309,7 +362,7 @@ class EmailService:
         Envia notificação de nova mensagem no chat por e-mail.
         Similar ao ZenKlub — mostra as mensagens recentes e link para responder.
         """
-        logo_url = "https://meudivaonline.com/wp-content/uploads/favicon-meudiva.png"
+        logo_url = "https://app.meudivaonline.com/jitsi-watermark.png"
         chat_url = f"{app_url}/chat?thread={thread_id}"
 
         # Monta as bolhas de mensagem
@@ -319,6 +372,12 @@ class EmailService:
                 mensagens_html += """
                 <div style="background:#2F80D3;color:white;padding:10px 16px;border-radius:20px;margin-bottom:8px;display:inline-block;max-width:80%;">
                     📷 Imagem
+                </div><br>"""
+            elif msg.startswith('[DOC:'):
+                doc_filename = msg[5:msg.index(']')] if ']' in msg else 'Documento'
+                mensagens_html += f"""
+                <div style="background:#2F80D3;color:white;padding:10px 16px;border-radius:20px;margin-bottom:8px;display:inline-block;max-width:80%;">
+                    📎 {doc_filename}
                 </div><br>"""
             else:
                 mensagens_html += f"""
@@ -334,10 +393,16 @@ class EmailService:
             <div style="max-width:600px;margin:32px auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
 
                 <!-- Header com logo -->
-                <div style="background:#2F80D3;padding:20px 24px;display:flex;align-items:center;gap:12px;">
-                    <img src="{logo_url}" alt="Meu Divã" style="width:40px;height:40px;border-radius:8px;object-fit:contain;background:white;padding:2px;">
-                    <span style="color:white;font-size:1.2rem;font-weight:700;">Meu Divã</span>
-                </div>
+                <table role="presentation" width="100%" style="background:#ffffff;padding:22px 24px;border-collapse:collapse;border-bottom:3px solid #E03673;">
+                    <tr>
+                        <td style="width:130px;padding-right:16px;vertical-align:middle;">
+                            <img src="{logo_url}" alt="Meu Divã" width="120" height="120" style="display:block;width:120px;height:120px;object-fit:contain;">
+                        </td>
+                        <td style="vertical-align:middle;">
+                            <span style="color:#E03673;font-size:1.25rem;font-weight:700;white-space:nowrap;">Meu Divã</span>
+                        </td>
+                    </tr>
+                </table>
 
                 <!-- Corpo -->
                 <div style="padding:28px 24px;">
@@ -373,7 +438,7 @@ class EmailService:
 
                 <!-- Footer -->
                 <div style="border-top:1px solid #eee;padding:16px 24px;text-align:center;">
-                    <img src="{logo_url}" alt="Meu Divã" style="width:28px;height:28px;border-radius:6px;object-fit:contain;vertical-align:middle;margin-right:8px;">
+                    <img src="{logo_url}" alt="Meu Divã" width="48" height="48" style="width:48px;height:48px;object-fit:contain;vertical-align:middle;margin-right:8px;">
                     <span style="color:#aaa;font-size:0.78rem;">Meu Divã · contato@meudivaonline.com</span>
                     <br>
                     <a href="{app_url}/chat/unsubscribe?thread={thread_id}"
@@ -386,7 +451,10 @@ class EmailService:
         </html>
         """
 
-        subject = f"{sender_name} enviou uma mensagem para você - Meu Divã"
+        # 🔥 [ref:ID] no assunto — sobrevive a "Re:" nas respostas e
+        # permite ao webhook de e-mail recebido identificar a qual
+        # thread de chat a resposta pertence.
+        subject = f"{sender_name} enviou uma mensagem para você - Meu Divã [ref:{thread_id}]"
         return self._send_email(to_email, subject, html)
 
 

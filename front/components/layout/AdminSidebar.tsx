@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X, ChevronRight, ChevronLeft, MessageSquare,
   User, Search, Loader2, ArrowLeft, UserPlus,
-  Activity, CreditCard, Users, Wifi, WifiOff
+  Activity, CreditCard, Users, Wifi, WifiOff, Headphones
 } from "lucide-react";
 import { useApi } from "@/lib/useApi";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSidebar } from "@/contexts/SidebarContext";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { useUserPhotos } from "@/hooks/useUserPhotos";
@@ -82,7 +83,18 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
   const { enrichWithPhotos, getPhotoByUserId } = useUserPhotos();
 
   const [activeTab, setActiveTab] = useState<"monitor" | "online" | "assinaturas" | "chat">("monitor");
-  const [isMinimized, setIsMinimized] = useState(false);
+  const { isMinimized, setIsMinimized } = useSidebar();
+
+  // 🔥 CORRIGIDO: o contêiner abaixo (overflow-y-auto) é compartilhado
+  // entre as 4 abas (Monitor/Online/Assinaturas/Chat). Sem isso, trocar
+  // de aba não reseta a rolagem — causava o "pulo" ao abrir o Chat vindo
+  // de outra aba rolada pra baixo.
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollTop = 0;
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (openOnChat) {
@@ -134,6 +146,16 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
   const [usersList, setUsersList] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // 🔥 Ref do CONTAINER (não do fim da lista) — scrollIntoView() rola
+  // qualquer ancestral rolável, inclusive a página inteira (o "efeito
+  // bumerangue" empurrando pro rodapé). scrollTo() direto no container
+  // afeta só ele.
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const scrollMessagesToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  };
 
   // MONITOR: carrega usuarios + fotos dos perfis (VERSÃO SIMPLIFICADA)
   const loadMonitorUsers = useCallback(async () => {
@@ -271,7 +293,7 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
           user_id: t.user_id,
           name: t.name,
           email: t.email,
-          plan: t.plan || "essencial",
+          plan: t.plan || "basico",
           subscription_status: isOverdue ? "past_due" : (t.subscription_status || "canceled"),
           total_commission_paid: t.total_commission_paid || 0,
           total_sessions: t.total_sessions || 0,
@@ -279,7 +301,11 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
         };
       });
       
-      const withFotos = await enrichWithPhotos(processed) as Subscription[];
+      // 🔥 Só mostra quem realmente paga assinatura — exclui o plano
+      // "basico" (cortesia gratuita), que não é uma assinatura de verdade.
+      const pagantes = processed.filter((t: Subscription) => t.plan !== "basico");
+
+      const withFotos = await enrichWithPhotos(pagantes) as Subscription[];
       setSubscriptions(withFotos);
       
       setSubscriptionsStats({
@@ -357,14 +383,37 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
     }
   }, [apiCall, enrichWithPhotos]);
 
+  // 🔥 CORRIGIDO: essa função é chamada tanto no carregamento inicial
+  // quanto pelo polling automático a cada 5s (linha do setInterval abaixo).
+  // Antes, ela forçava scrollIntoView TODA VEZ que rodava — inclusive nas
+  // atualizações automáticas sem mensagem nova — causando o efeito
+  // "bumerangue". Agora só rola quando a QUANTIDADE de mensagens aumenta
+  // de verdade (mensagem nova de fato).
+  const prevMessageCountRef = useRef(0);
+  const lastMessageIdRef = useRef<number | null>(null);
   const loadMessages = useCallback(async (threadId: number) => {
     try {
       const data = await apiCall({
         url: `/api/chat/messages/${threadId}`,
         requireAuth: true
       });
-      setMessages(Array.isArray(data) ? data : []);
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      const newMessages = Array.isArray(data) ? data : [];
+      const newLastId = newMessages.length > 0 ? newMessages[newMessages.length - 1].id : null;
+
+      // 🔥 Se nada mudou desde a última checagem (mesma quantidade e mesma
+      // última mensagem), NEM atualiza o estado — evita qualquer
+      // re-renderização/reflow desnecessário que pudesse mexer na rolagem,
+      // mesmo sem nenhuma chamada explícita de scroll.
+      if (newMessages.length === prevMessageCountRef.current && newLastId === lastMessageIdRef.current) {
+        return;
+      }
+
+      setMessages(newMessages);
+      if (newMessages.length > prevMessageCountRef.current) {
+        setTimeout(() => scrollMessagesToBottom("smooth"), 50);
+      }
+      prevMessageCountRef.current = newMessages.length;
+      lastMessageIdRef.current = newLastId;
     } catch (err) {
       console.error("Erro ao carregar mensagens:", err);
     }
@@ -420,7 +469,7 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
         requireAuth: true
       });
       setMessages(prev => [...prev, newMsg]);
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      setTimeout(() => scrollMessagesToBottom("smooth"), 50);
       loadConversations();
     } catch (err) {
       console.error("Erro ao enviar mensagem:", err);
@@ -430,11 +479,16 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
     }
   };
 
+  // 🔥 CORRIGIDO: agora detecta se é imagem ou documento (antes sempre
+  // usava [IMAGE], mesmo para PDFs — quebrava a renderização, já que
+  // navegador não consegue exibir PDF dentro de uma tag <img>)
   const handleSendImage = async (file: File) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64 = e.target?.result as string;
-      await handleSendMessage(`[IMAGE]${base64}`);
+      const isImageFile = file.type.startsWith('image/');
+      const prefixed = isImageFile ? `[IMAGE]${base64}` : `[DOC:${file.name}]${base64}`;
+      await handleSendMessage(prefixed);
     };
     reader.readAsDataURL(file);
   };
@@ -462,7 +516,8 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
 
   const getPlanColor = (plan: string) => {
     switch (plan) {
-      case "essencial": return "bg-gray-100 text-gray-700";
+      case "basico": return "bg-gray-100 text-gray-700";
+      case "essencial": return "bg-emerald-100 text-emerald-700";
       case "profissional": return "bg-blue-100 text-blue-700";
       case "premium": return "bg-purple-100 text-purple-700";
       default: return "bg-gray-100 text-gray-700";
@@ -472,7 +527,8 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
   const getPlanLabel = (plan: string) => {
     if (plan === "profissional") return "Profissional";
     if (plan === "premium") return "Premium";
-    return "Essencial";
+    if (plan === "essencial") return "Essencial";
+    return "Básico";
   };
 
   const getStatusColor = (status: string) => {
@@ -492,6 +548,12 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
   const filteredUsers = monitorUsers.filter(u =>
     monitorFilter === "all" || u.role === monitorFilter
   );
+  // 🔥 CORRIGIDO: a lista era renderizada sem limite (todo o histórico de
+  // usuários já cadastrados), inflando a altura da coluna e empurrando o
+  // rodapé pra baixo. Mostra só os mais recentes; para o histórico
+  // completo, já existem os relatórios dedicados (/admin/users etc).
+  const MONITOR_DISPLAY_LIMIT = 15;
+  const displayedUsers = filteredUsers.slice(0, MONITOR_DISPLAY_LIMIT);
 
   const filteredOnlineUsers = onlineUsers.filter(u =>
     onlineFilter === "all" || u.user_role === onlineFilter
@@ -566,7 +628,7 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" ref={contentScrollRef}>
 
         {/* ABA MONITOR */}
         {activeTab === "monitor" && (
@@ -609,7 +671,7 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredUsers.map((u: any) => (
+                {displayedUsers.map((u: any) => (
                   <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
                     <UserAvatar foto_url={u.foto_url} name={u.full_name} size="md" />
                     <div className="flex-1 min-w-0">
@@ -626,6 +688,14 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
                 ))}
                 {filteredUsers.length === 0 && (
                   <p className="text-sm text-gray-400 text-center py-4">Nenhum usuario encontrado</p>
+                )}
+                {filteredUsers.length > MONITOR_DISPLAY_LIMIT && (
+                  <a
+                    href="/admin/users"
+                    className="block text-center text-sm text-[#E03673] hover:underline py-3"
+                  >
+                    Ver todos os {filteredUsers.length} usuários →
+                  </a>
                 )}
               </div>
             )}
@@ -883,7 +953,7 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2 px-4 py-2">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto space-y-2 px-4 py-2">
                   {messages.map(msg => (
                     <ChatMessage key={msg.id} id={msg.id} sender_id={msg.sender_id} message={msg.message}
                       is_read={msg.is_read} created_at={msg.created_at} read_at={msg.read_at} />
@@ -898,6 +968,22 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
             )}
           </div>
         )}
+      </div>
+
+      {/* 🔥 Suporte interno (Huggy.chat) — abre via API, a bolha padrão
+          do widget fica escondida (ver afterLoad em app/(app)/layout.tsx) */}
+      <div className="p-2 border-t border-gray-200 flex-shrink-0">
+        <div className="group relative w-12 h-12 mx-auto">
+          <button
+            onClick={() => (window as any).Huggy?.openBox()}
+            className="w-12 h-12 flex items-center justify-center rounded-lg text-gray-500 hover:bg-[#FDE8F0] hover:text-[#E03673] transition-all duration-200"
+          >
+            <Headphones className="w-5 h-5" />
+          </button>
+          <div className="fixed left-[calc(4rem+0.5rem)] top-auto transform -translate-y-1/2 px-3 py-1.5 bg-gray-900 text-white text-sm font-medium rounded-md whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[9999] shadow-lg pointer-events-none">
+            Suporte
+          </div>
+        </div>
       </div>
     </div>
   );

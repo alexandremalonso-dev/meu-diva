@@ -90,8 +90,15 @@ export function useWebSocket(threadId: number | null, options: UseWebSocketOptio
       return;
     }
 
+    // 🔥 CORRIGIDO: NEXT_PUBLIC_WS_URL nunca foi definida em nenhum .env,
+    // então sempre caía no fallback 'localhost:8000' — em produção isso
+    // fazia o WebSocket tentar conectar no localhost do NAVEGADOR do
+    // usuário (inexistente), falhando sempre (ERR_CONNECTION_REFUSED) e
+    // fazendo o chat depender só do polling de fallback. Derivando do
+    // NEXT_PUBLIC_API_URL (que já existe e funciona) em vez disso.
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = process.env.NEXT_PUBLIC_WS_URL || 'localhost:8000';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const host = apiUrl.replace(/^https?:\/\//, '');
     const wsUrl = `${protocol}//${host}/ws/chat/${currentThreadId}?token=${token}`;
     
     console.log(`🔌 Conectando WebSocket: thread ${currentThreadId}`);

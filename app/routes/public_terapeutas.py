@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select, and_, or_, func, cast, String
 from datetime import datetime, timedelta, timezone, date as date_type
 from typing import Optional, List
 
@@ -13,8 +13,12 @@ from app.models.appointment import Appointment
 from app.core.appointment_status import AppointmentStatus
 from app.schemas.therapist import TherapistProfileOut
 from app.schemas.slots import AvailableSlot, AvailableSlotsResponse
+from app.services.plan_priority import get_therapist_plan, PLAN_PRIORITY
 
 router = APIRouter(prefix="/public/terapeutas", tags=["público"])
+
+# 🔥 Mesmos planos elegíveis do endpoint /api/therapists/me/vanity-url
+VANITY_URL_ELIGIBLE_PLANS = {"profissional", "premium"}
 
 
 # ==========================
@@ -55,15 +59,55 @@ def _perfil_completo(t: TherapistProfile) -> bool:
     return tem_foto and tem_preco and tem_bio
 
 
+def _buscar_terapeuta_por_identifier(identifier: str, db: Session) -> Optional[TherapistProfile]:
+    """
+    Busca terapeuta por ID numérico (sempre válido) ou por slug (URL
+    personalizada — só válido enquanto o plano for Profissional/Premium).
+    Aplica também o filtro de validação/conta ativa (mesmo critério da
+    listagem pública) para não expor perfis não aprovados via link direto.
+    """
+    if identifier.isdigit():
+        profile = db.execute(
+            select(TherapistProfile).where(TherapistProfile.id == int(identifier))
+        ).scalar_one_or_none()
+    else:
+        profile = db.execute(
+            select(TherapistProfile).where(TherapistProfile.slug == identifier)
+        ).scalar_one_or_none()
+
+        if not profile:
+            return None
+
+        # 🔥 slug só resolve se o plano atual ainda for elegível
+        plan = get_therapist_plan(profile.user_id, db)
+        if plan not in VANITY_URL_ELIGIBLE_PLANS:
+            return None
+
+    if not profile:
+        return None
+
+    # 🔥 mesmo critério de aprovação/conta ativa usado na listagem pública
+    if profile.validation_status != "approved":
+        return None
+
+    user = db.get(User, profile.user_id)
+    if not user or not user.is_active:
+        return None
+
+    return profile
+
+
 # ==========================
 # LISTAR TERAPEUTAS COM FILTROS
 # ==========================
 @router.get("", response_model=List[TherapistProfileOut])
 def listar_terapeutas_publicos(
+    response: Response,
     db: Session = Depends(get_db),
     nome: Optional[str] = Query(None, description="Buscar por nome ou especialidade"),
     especialidade: Optional[str] = Query(None, description="Filtrar por especialidade"),
     abordagem: Optional[str] = Query(None, description="Filtrar por abordagem terapêutica"),
+    modalidade: Optional[str] = Query(None, description="Filtrar por modalidade de atendimento"),
     genero: Optional[str] = Query(None, description="Filtrar por gênero"),
     preco_min: Optional[float] = Query(None, description="Preço mínimo"),
     preco_max: Optional[float] = Query(None, description="Preço máximo"),
@@ -74,10 +118,25 @@ def listar_terapeutas_publicos(
     aceita_corporativo: Optional[bool] = Query(None, description="Aceita plano empresa"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    search: bool = Query(False, description="Força modo de busca paginada (usado pela página /busca, mesmo sem filtros marcados)"),
 ):
     print(f"\n📋 GET /public/terapeutas - limit={limit}")
 
-    query = select(TherapistProfile)
+    # 🔥 Só terapeutas com documentos aprovados e conta ativa aparecem
+    # na busca pública.
+    # 🔥 Não exige mais validation_status == "approved" aqui — perfis
+    # não verificados agora aparecem na busca, só que por último (regra
+    # de ordenação abaixo cuida disso).
+    # 🔥 Exclui contas de teste/revisão (ex: Apple Reviewer) da busca pública.
+    TEST_ACCOUNT_EMAILS = ["reviewer.therapist@meudivaonline.com"]
+    query = select(TherapistProfile).join(
+        User, User.id == TherapistProfile.user_id
+    ).where(
+        and_(
+            User.is_active == True,
+            User.email.notin_(TEST_ACCOUNT_EMAILS)
+        )
+    )
 
     if nome:
         termo = f"%{nome}%"
@@ -91,6 +150,8 @@ def listar_terapeutas_publicos(
         query = query.where(TherapistProfile.specialties.ilike(f"%{especialidade}%"))
     if abordagem:
         query = query.where(TherapistProfile.abordagem.ilike(f"%{abordagem}%"))
+    if modalidade:
+        query = query.where(cast(TherapistProfile.service_modalities, String).ilike(f'%"{modalidade}"%'))
     if genero:
         query = query.where(TherapistProfile.gender == genero)
     if preco_min is not None:
@@ -112,45 +173,109 @@ def listar_terapeutas_publicos(
     # Busca SEM limit do banco — ordena tudo no Python depois
     terapeutas = db.execute(query).scalars().all()
 
-    from app.services.plan_priority import get_therapist_plan, PLAN_PRIORITY
-
     def get_plan_priority(therapist):
         plan = get_therapist_plan(therapist.user_id, db)
         return PLAN_PRIORITY.get(plan, 1)
 
-    is_search = any([nome, especialidade, abordagem, genero, preco_min, preco_max,
+    def tem_foto(therapist) -> bool:
+        return bool(therapist.foto_url and therapist.foto_url.strip())
+
+    # 🔥 IDs de terapeutas com pelo menos 1 período de disponibilidade
+    # ainda válido (não vencido) — usado na regra de ordenação abaixo.
+    hoje = date_type.today()
+    ids_com_disponibilidade = {
+        row[0] for row in db.execute(
+            select(AvailabilityPeriod.therapist_profile_id)
+            .where(AvailabilityPeriod.end_date >= hoje)
+            .distinct()
+        ).all()
+    }
+
+    def tem_disponibilidade(therapist) -> bool:
+        return therapist.id in ids_com_disponibilidade
+
+    # 🔥 Regras de negócio da busca pública:
+    # 1) Pagos sempre no topo, em ordem de plano — MAS só enquanto o
+    #    perfil estiver COMPLETO (verificado + foto + disponibilidade).
+    #    Pagar não garante topo sozinho: falta algum pré-requisito, o
+    #    perfil cai pro grupo de baixo até completar tudo.
+    # 2) Perfis sem foto não aparecem — SALVO se forem pagos
+    # 3) Empate no mesmo plano: melhor rating primeiro, depois alfabético
+    # 4) Pagos têm prioridade DENTRO do grupo de perfis completos
+    # 5) Não verificados aparecem por último (mas aparecem)
+    # 🔥 Extra: entre os perfis incompletos, ter disponibilidade pesa
+    # mais que pagar — quem atende agora vem antes de quem não atende,
+    # independente de plano.
+    def eh_perfil_completo_para_ranking(therapist) -> bool:
+        is_verified = therapist.validation_status == "approved"
+        return is_verified and tem_foto(therapist) and tem_disponibilidade(therapist)
+
+    def sort_key(therapist):
+        plan_priority = get_plan_priority(therapist)
+        rating = float(therapist.rating or 0)
+        nome_para_ordenar = (therapist.full_name or "").lower()
+        completo = eh_perfil_completo_para_ranking(therapist)
+        disponivel = tem_disponibilidade(therapist)
+
+        if completo:
+            # Grupo de cima: ordena por plano, depois rating, depois nome
+            return (
+                0,                     # grupo "completo" vem antes
+                -plan_priority,
+                -rating,
+                nome_para_ordenar,
+            )
+        else:
+            # Grupo de baixo: disponibilidade pesa mais que plano
+            return (
+                1,                     # grupo "incompleto" vem depois
+                0 if disponivel else 1,
+                -rating,
+                nome_para_ordenar,
+            )
+
+    is_search = search or any([nome, especialidade, abordagem, modalidade, genero, preco_min, preco_max,
                      lgbtqia_ally, duracao_30min, duracao_50min])
 
     if is_search:
-        # 🔥 BUSCA: mostra todos, pagos primeiro, sem filtro de perfil completo
-        terapeutas_ordenados = sorted(terapeutas, key=get_plan_priority, reverse=True)
+        # 🔥 BUSCA: aplica a regra 2 (sem foto só aparece se for pago)
+        elegiveis = [
+            t for t in terapeutas
+            if tem_foto(t) or get_plan_priority(t) > 1
+        ]
+        terapeutas_ordenados = sorted(elegiveis, key=sort_key)
     else:
-        # 🔥 HOMEPAGE / WORDPRESS: só perfis completos (foto + preço + bio), pagos primeiro, limite 10
+        # 🔥 HOMEPAGE / WORDPRESS: só perfis completos (foto + preço + bio), limite 10
         completos = [t for t in terapeutas if _perfil_completo(t)]
-        terapeutas_ordenados = sorted(completos, key=get_plan_priority, reverse=True)[:10]
+        terapeutas_ordenados = sorted(completos, key=sort_key)[:10]
+
+    # 🔥 Total ANTES de cortar pela página — sem isso o front não
+    # consegue calcular quantas páginas existem de verdade (só via
+    # header, pra não quebrar o formato da resposta que já é usado em
+    # outros lugares como lista simples).
+    total_count = len(terapeutas_ordenados)
+    response.headers["X-Total-Count"] = str(total_count)
 
     # Paginação para busca
     if is_search:
         offset = (page - 1) * limit
         terapeutas_ordenados = terapeutas_ordenados[offset:offset + limit]
 
-    print(f"✅ Retornando {len(terapeutas_ordenados)} terapeutas (is_search={is_search})")
+    print(f"✅ Retornando {len(terapeutas_ordenados)} terapeutas de {total_count} (is_search={is_search})")
     return terapeutas_ordenados
 
 
 # ==========================
-# GET PERFIL PÚBLICO
+# GET PERFIL PÚBLICO (aceita ID numérico OU slug/vanity URL)
 # ==========================
-@router.get("/{terapeuta_id}", response_model=TherapistProfileOut)
+@router.get("/{identifier}", response_model=TherapistProfileOut)
 def get_terapeuta_publico(
-    terapeuta_id: int,
+    identifier: str,
     db: Session = Depends(get_db)
 ):
-    print(f"\n📢 GET /public/terapeutas/{terapeuta_id}")
+    print(f"\n📢 GET /public/terapeutas/{identifier}")
 
-    profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.id == terapeuta_id)
-    ).scalar_one_or_none()
+    profile = _buscar_terapeuta_por_identifier(identifier, db)
 
     if not profile:
         raise HTTPException(status_code=404, detail="Terapeuta não encontrado")
@@ -170,22 +295,20 @@ def get_terapeuta_publico(
 
 
 # ==========================
-# GET SLOTS DISPONÍVEIS (PÚBLICO)
+# GET SLOTS DISPONÍVEIS (PÚBLICO) — aceita ID numérico OU slug
 # ==========================
-@router.get("/{terapeuta_id}/slots", response_model=AvailableSlotsResponse)
+@router.get("/{identifier}/slots", response_model=AvailableSlotsResponse)
 def get_slots_disponiveis(
-    terapeuta_id: int,
+    identifier: str,
     start_date: Optional[str] = Query(None, description="Data de início (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Data de fim (YYYY-MM-DD)"),
     days: int = Query(30, description="Número de dias a partir de hoje (usado se start/end não informados)"),
     tz_offset: str = "-03:00",
     db: Session = Depends(get_db)
 ):
-    print(f"\n📢 GET /public/terapeutas/{terapeuta_id}/slots")
+    print(f"\n📢 GET /public/terapeutas/{identifier}/slots")
 
-    profile = db.execute(
-        select(TherapistProfile).where(TherapistProfile.id == terapeuta_id)
-    ).scalar_one_or_none()
+    profile = _buscar_terapeuta_por_identifier(identifier, db)
 
     if not profile:
         raise HTTPException(status_code=404, detail="Terapeuta não encontrado")
@@ -268,10 +391,14 @@ def get_slots_disponiveis(
     ]
 
     # 🔥 Granularidade da agenda pública:
+    # - custom_session_duration definida → usa só ela (permite 45min, 40min etc,
+    #   não só os dois valores fixos abaixo)
     # - Aceita ambas → slots de 30 em 30 (menor granularidade; paciente escolhe duração no modal)
     # - Só 30min → slots de 30 em 30
     # - Só 50min → slots de 50 em 50
-    if profile.session_duration_30min:
+    if profile.custom_session_duration:
+        durations_to_generate = [profile.custom_session_duration]
+    elif profile.session_duration_30min:
         durations_to_generate = [30]
     elif profile.session_duration_50min:
         durations_to_generate = [50]

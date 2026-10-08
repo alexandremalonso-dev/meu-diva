@@ -9,11 +9,20 @@ from typing import List, Optional
 
 # Mapeamento de recursos por plano
 PLAN_FEATURES = {
-    "essencial": {
+    "basico": {
         "max_patients": 10,
         "reports": False,
         "advanced_stats": False,
         "financial_report": False,
+        "chat_support": False,
+        "priority_support": False,
+        "commission_rate": 20.0
+    },
+    "essencial": {
+        "max_patients": 10,
+        "reports": False,
+        "advanced_stats": False,
+        "financial_report": True,
         "chat_support": False,
         "priority_support": False,
         "commission_rate": 20.0
@@ -46,7 +55,7 @@ def get_therapist_plan(therapist_user_id: int, db: Session) -> str:
     ).first()
     
     if not therapist_profile:
-        return "essencial"
+        return "basico"
     
     subscription = db.query(Subscription).filter(
         Subscription.therapist_id == therapist_profile.id,
@@ -54,7 +63,7 @@ def get_therapist_plan(therapist_user_id: int, db: Session) -> str:
     ).first()
     
     if not subscription:
-        return "essencial"
+        return "basico"
     
     return subscription.plan
 

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { PhotoUploadButton } from "@/components/ui/PhotoUploadButton";
+import { SignaturePadModal } from "@/components/ui/SignaturePadModal";
+import { BACKEND_URL } from "@/config";
 
 import { TherapistAddressList } from '@/components/therapist/profile/TherapistAddressList';
 import { EmailChangeModal } from '@/components/ui/EmailChangeModal';
@@ -20,6 +22,13 @@ type TherapistProfile = {
   user_id: number;
   bio: string | null;
   specialties: string | null;
+  professional_type?: string | null;
+  therapeutic_approach?: string | null;
+  integrative_practice?: string | null;
+  target_audience?: string | null;
+  demand_focus?: string | null;
+  service_modality?: string | null;
+  service_modalities?: string[] | null;
   session_price: number | null;
   foto_url?: string | null;
   experiencia?: string | null;
@@ -43,6 +52,7 @@ type TherapistProfile = {
   instagram_url?: string | null;
   session_duration_30min?: boolean;
   session_duration_50min?: boolean;
+  custom_session_duration?: number | null;
   phone?: string | null;
   birth_date?: string | null;
   show_phone_to_patients?: boolean;
@@ -97,6 +107,7 @@ export default function TherapistProfilePage() {
   const [profile, setProfile] = useState<TherapistProfile | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -111,14 +122,18 @@ export default function TherapistProfilePage() {
   const ethnicityOptions = ["branca", "preta", "parda", "amarela", "indigena"];
   const formationOptions = ["doutorado", "mestrado", "especializacao", "pos_graduacao"];
   const approachOptions = [
-    "Psicanálise", "Cognitivo-Comportamental", "Humanista", "Gestalt", 
-    "Fenomenológica", "Corporal", "Junguiana", "Logoterapia", "Neuropsicanálise",
-    "Psicanálise Winnicottiana", "Terapia de Casal", "Terapia Familiar"
+    "Psicanálise", "Psicanálise Winnicottiana", "Psicanálise Lacaniana", "Psicanálise Freudiana",
+    "Psicologia Analítica / Junguiana", "Terapia Cognitivo-Comportamental (TCC)", "Terapia Comportamental",
+    "Terapia Humanista", "Gestalt-terapia", "Abordagem Centrada na Pessoa", "Psicodrama",
+    "Terapia Sistêmica", "Terapia Familiar", "Cognitivo-Comportamental", "Humanista", "Gestalt",
+    "Fenomenológica", "Corporal", "Junguiana", "Logoterapia", "Neuropsicanálise", "Terapia de Casal"
   ];
   const reasonOptions = [
-    "Ansiedade", "Depressão", "Relacionamentos", "Autoestima", "Estresse",
-    "Burnout", "Luto", "Trauma", "Fobias", "TOC", "Pânico", "Dependência Química",
-    "Transtornos Alimentares", "Sexualidade", "Gênero", "Abuso", "Violência"
+    "Ansiedade", "Depressão", "Estresse", "Burnout", "Relacionamentos", "Luto",
+    "Autoestima", "Autoconhecimento", "Trabalho e carreira", "Conflitos familiares",
+    "Sexualidade", "Dependência emocional", "Transtornos alimentares", "Sono",
+    "Desenvolvimento pessoal", "Trauma", "Fobias", "TOC", "Pânico", "Dependência Química",
+    "Gênero", "Abuso", "Violência"
   ];
   // 🔥 service_types com label correto (texto livre salvo no banco)
   const serviceTypeOptions = [
@@ -142,6 +157,13 @@ export default function TherapistProfilePage() {
     full_name: "",
     bio: "",
     specialties: "",
+    professional_type: "",
+    therapeutic_approach: "",
+    integrative_practice: "",
+    target_audience: "",
+    demand_focus: "",
+    service_modality: "",
+    service_modalities: [] as string[],
     session_price: "",
     experiencia: "",
     abordagem: "",
@@ -160,6 +182,7 @@ export default function TherapistProfilePage() {
     instagram_url: "",
     session_duration_30min: true,
     session_duration_50min: true,
+    custom_session_duration: null,
     phone: "",
     birth_date: "",
     show_phone_to_patients: false,
@@ -185,6 +208,13 @@ export default function TherapistProfilePage() {
         full_name: profile.user?.full_name || user?.full_name || "",
         bio: profile.bio || "",
         specialties: profile.specialties || "",
+        professional_type: profile.professional_type || "",
+        therapeutic_approach: profile.therapeutic_approach || "",
+        integrative_practice: profile.integrative_practice || "",
+        target_audience: profile.target_audience || "",
+        demand_focus: profile.demand_focus || "",
+        service_modality: profile.service_modality || "",
+        service_modalities: profile.service_modalities || [],
         session_price: profile.session_price?.toString() || "",
         experiencia: profile.experiencia || "",
         abordagem: profile.abordagem || "",
@@ -203,6 +233,7 @@ export default function TherapistProfilePage() {
         instagram_url: profile.instagram_url || "",
         session_duration_30min: profile.session_duration_30min ?? true,
         session_duration_50min: profile.session_duration_50min ?? true,
+        custom_session_duration: profile.custom_session_duration ?? null,
         phone: profile.phone || "",
         birth_date: profile.birth_date ? new Date(profile.birth_date).toISOString().split('T')[0] : "",
         show_phone_to_patients: profile.show_phone_to_patients || false,
@@ -242,12 +273,14 @@ export default function TherapistProfilePage() {
         data = await api("/api/therapists/me/profile", {
           method: "POST",
           body: JSON.stringify({
-            bio: "", specialties: "", session_price: null, experiencia: "",
+            bio: "", specialties: "", professional_type: "", therapeutic_approach: "",
+            integrative_practice: "", target_audience: "", demand_focus: "", service_modality: "",
+            session_price: null, experiencia: "",
             abordagem: "", idiomas: "", foto_url: null, gender: "", ethnicity: "",
             lgbtqia_ally: false, formation: "", education_level: "", treatment: "",
             approaches: [], specialties_list: [], reasons: [], service_types: [],
             languages_list: [], instagram_url: "", session_duration_30min: true,
-            session_duration_50min: true, phone: null, birth_date: null,
+            session_duration_50min: true, custom_session_duration: null, phone: null, birth_date: null,
             show_phone_to_patients: false, show_birth_date_to_patients: false,
             signature_url: null, video_url: null, cnpj: null, cpf: null,
             bank_agency: null, bank_account: null, bank_account_digit: null,
@@ -348,6 +381,13 @@ export default function TherapistProfilePage() {
         body: JSON.stringify({
           bio: formData.bio,
           specialties: formData.specialties,
+          professional_type: formData.professional_type || null,
+          therapeutic_approach: formData.therapeutic_approach || null,
+          integrative_practice: formData.integrative_practice || null,
+          target_audience: formData.target_audience || null,
+          demand_focus: formData.demand_focus || null,
+          service_modality: formData.service_modality || null,
+          service_modalities: formData.service_modalities,
           session_price: formData.session_price ? Number(formData.session_price) : null,
           experiencia: formData.experiencia,
           abordagem: formData.abordagem,
@@ -366,6 +406,7 @@ export default function TherapistProfilePage() {
           instagram_url: formData.instagram_url || null,
           session_duration_30min: formData.session_duration_30min,
           session_duration_50min: formData.session_duration_50min,
+          custom_session_duration: formData.custom_session_duration || null,
           phone: formData.phone || null,
           birth_date: formData.birth_date || null,
           show_phone_to_patients: formData.show_phone_to_patients,
@@ -570,13 +611,22 @@ export default function TherapistProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Bio / Descrição</label>
                 <textarea value={formData.bio} onChange={(e) => handleChange("bio", e.target.value)} rows={4} className="w-full p-2 border rounded-lg" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Especialidades (texto livre)</label>
-                <input type="text" value={formData.specialties} onChange={(e) => handleChange("specialties", e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Ex: Psicanálise, TCC, Terapia de Casal" />
+              <div className="p-4 bg-gray-50 rounded-xl space-y-3">
+                <p className="text-sm font-medium text-gray-700">Especialidade/Profissão/Ocupação</p>
+                <p className="text-xs text-gray-500 -mt-2">Selecione a sua especialidade, pois, essa opção ajuda pacientes a te encontrar nos filtros de busca</p>
+                <div>
+                  <select value={formData.professional_type} onChange={(e) => handleChange("professional_type", e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-white">
+                    <option value="">Selecione...</option>
+                    {["Coach", "Nutricionista", "Psicanalista", "Psicólogo(a)", "Psiquiatra", "Terapeuta", "Terapeuta Integrativo/Holístico", "Terapeuta Ocupacional"].map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Abordagem</label>
-                <input type="text" value={formData.abordagem} onChange={(e) => handleChange("abordagem", e.target.value)} className="w-full p-2 border rounded-lg" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Especialização (breve descrição)</label>
+                <input type="text" maxLength={150} value={formData.abordagem} onChange={(e) => handleChange("abordagem", e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Uma ou duas linhas sobre você" />
+                <p className="text-xs text-gray-400 mt-1">{formData.abordagem.length}/150 caracteres</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Experiência</label>
@@ -586,8 +636,30 @@ export default function TherapistProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <PenTool className="w-4 h-4" />Assinatura digital (para recibos)
                 </label>
-                <input type="text" value={formData.signature_url} onChange={(e) => handleChange("signature_url", e.target.value)} className="w-full p-2 border rounded-lg" placeholder="URL da imagem da assinatura (fundo transparente)" />
-                <p className="text-xs text-gray-500 mt-1">A imagem deve ter fundo transparente para melhor visualização no recibo</p>
+                <div className="flex items-center gap-4">
+                  {formData.signature_url ? (
+                    <div className="w-40 h-20 border border-gray-200 rounded-lg bg-[repeating-conic-gradient(#f3f4f6_0%_25%,white_0%_50%)] bg-[length:16px_16px] flex items-center justify-center overflow-hidden">
+                      <img
+                        src={formData.signature_url.startsWith("http") ? formData.signature_url : `${BACKEND_URL}${formData.signature_url}`}
+                        alt="Assinatura"
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-40 h-20 border border-dashed border-gray-300 rounded-lg flex items-center justify-center text-xs text-gray-400">
+                      Sem assinatura
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowSignaturePad(true)}
+                    className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <PenTool className="w-4 h-4" />
+                    {formData.signature_url ? "Refazer assinatura" : "Assinar agora"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Assine na tela com o dedo (celular) ou o mouse (notebook) — salva automaticamente com fundo transparente.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
@@ -626,6 +698,35 @@ export default function TherapistProfilePage() {
                       <p className="text-xs text-gray-500">Duração padrão para terapia</p>
                     </div>
                   </label>
+
+                  <div className="p-2 border rounded-lg bg-white">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!formData.custom_session_duration}
+                        onChange={(e) => handleChange("custom_session_duration", e.target.checked ? 45 : null)}
+                        className="h-5 w-5 text-[#E03673] rounded"
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium">Outra duração</span>
+                        <p className="text-xs text-gray-500">Ex: 45min, 40min — substitui as opções acima quando marcada</p>
+                      </div>
+                    </label>
+                    {!!formData.custom_session_duration && (
+                      <div className="flex items-center gap-2 mt-2 pl-8">
+                        <input
+                          type="number"
+                          min={5}
+                          max={180}
+                          step={5}
+                          value={formData.custom_session_duration ?? ''}
+                          onChange={(e) => handleChange("custom_session_duration", e.target.value ? parseInt(e.target.value) : null)}
+                          className="w-24 p-2 border border-gray-200 rounded-lg text-sm"
+                        />
+                        <span className="text-sm text-gray-500">minutos</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -639,15 +740,15 @@ export default function TherapistProfilePage() {
                   <label className="flex items-center gap-3 p-2 border rounded-lg bg-white hover:bg-gray-50 cursor-pointer">
                     <input type="checkbox" checked={formData.accepts_corporate_sessions} onChange={(e) => handleChange("accepts_corporate_sessions", e.target.checked)} className="h-5 w-5 text-[#E03673] rounded" />
                     <div>
-                      <span className="font-medium">Aceito atender pacientes via plano empresa</span>
-                      <p className="text-xs text-gray-500">Sessões corporativas pagas pelo plano da empresa</p>
+                      <span className="font-medium">Aceito sessões corporativas e pacotes Meu Divã</span>
+                      <p className="text-xs text-gray-500">Sessões pagas pelo plano da empresa do paciente ou por um pacote de sessões do Meu Divã</p>
                     </div>
                   </label>
                   {formData.accepts_corporate_sessions && (
                     <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-xs text-blue-700 flex items-center gap-1">
                         <Info className="w-3 h-3" />
-                        O valor por sessão será definido pelo plano da empresa (R$ 40,00 a R$ 50,00 por sessão). A comissão da plataforma é calculada sobre este valor.
+                        O valor por sessão é fixo e definido pelo plano (hoje, de R$ 40,00 a R$ 50,00 por sessão) e vai para a sua carteira a cada sessão realizada.
                       </p>
                     </div>
                   )}
@@ -870,13 +971,14 @@ export default function TherapistProfilePage() {
               </div>
             </div>
 
-            {/* 🔥 Tipo de profissional — valores corrigidos com acentos */}
+            {/* 🔥 "Tipo de profissional" removido — substituído pelo select único
+                de "Tipo Profissional" no card Especialidades, acima. */}
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de profissional</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Modalidade de Atendimento</label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {serviceTypeOptions.map(opt => (
-                  <label key={opt.value} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={formData.service_types.includes(opt.value)} onChange={() => toggleArrayItem("service_types", opt.value)} className="h-4 w-4 text-[#E03673] rounded" />{opt.label}
+                {["Atendimento individual", "Atendimento de casal", "Atendimento familiar", "Atendimento em grupo", "Atendimento corporativo"].map(opt => (
+                  <label key={opt} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={formData.service_modalities.includes(opt)} onChange={() => toggleArrayItem("service_modalities", opt)} className="h-4 w-4 text-[#E03673] rounded" />{opt}
                   </label>
                 ))}
               </div>
@@ -938,6 +1040,18 @@ export default function TherapistProfilePage() {
         currentEmail={userData?.email || user?.email || ""}
         onSuccess={handleEmailChangeSuccess}
       />
+
+      {showSignaturePad && (
+        <SignaturePadModal
+          onClose={() => setShowSignaturePad(false)}
+          onSuccess={(url) => {
+            handleChange("signature_url", url);
+            setSuccess("Assinatura salva com sucesso!");
+            setTimeout(() => setSuccess(""), 3000);
+          }}
+          onError={(msg) => setError(msg)}
+        />
+      )}
     </>
   );
 }

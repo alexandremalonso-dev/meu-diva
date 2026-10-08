@@ -43,6 +43,13 @@ class TherapistProfile(Base):
     )
 
     # ==========================
+    # URL PERSONALIZADA (vanity URL) — só terapeutas Profissional/Premium
+    # Gerada automaticamente a partir do nome (ver app/core/slugify.py).
+    # Coluna já existia no banco, só não estava mapeada aqui ainda.
+    # ==========================
+    slug: Mapped[str | None] = mapped_column(String(120), nullable=True, unique=True, index=True)
+
+    # ==========================
     # DADOS PESSOAIS
     # ==========================
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -135,11 +142,28 @@ class TherapistProfile(Base):
     verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # 🔥 Aceita sessões corporativas e pacotes Meu Divã (o repasse fixo vem do plano; coluna já existe no banco)
+    accepts_corporate_sessions: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
     # ==========================
     # DURAÇÃO DAS SESSÕES
     # ==========================
     session_duration_30min: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     session_duration_50min: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # 🔥 Duração customizada (minutos) — quando definida, sobrepõe os dois
+    # booleans acima. Permite terapeutas com sessão de 45min, 40min etc,
+    # não só os dois valores fixos padrão.
+    custom_session_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # 🔥 Nova taxonomia estruturada de especialidades — substitui o antigo
+    # campo de texto livre. Cada terapeuta escolhe UMA opção por categoria.
+    professional_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    therapeutic_approach: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    integrative_practice: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    target_audience: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    demand_focus: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    service_modality: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    service_modalities: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # ==========================
     # POLÍTICA DE REMARCAÇÃO

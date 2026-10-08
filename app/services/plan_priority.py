@@ -6,7 +6,8 @@ from app.models.therapist_profile import TherapistProfile
 PLAN_PRIORITY = {
     "premium": 3,       # Primeiros na busca
     "profissional": 2,  # Depois
-    "essencial": 1      # Por último
+    "essencial": 1,     # Por último
+    "basico": 1         # Cortesia: mesmo nível do Essencial na busca
 }
 
 def get_therapist_plan(therapist_user_id: int, db: Session) -> str:
@@ -16,7 +17,7 @@ def get_therapist_plan(therapist_user_id: int, db: Session) -> str:
     ).first()
     
     if not therapist_profile:
-        return "essencial"
+        return "basico"
     
     subscription = db.query(Subscription).filter(
         Subscription.therapist_id == therapist_profile.id,
@@ -24,7 +25,7 @@ def get_therapist_plan(therapist_user_id: int, db: Session) -> str:
     ).first()
     
     if not subscription:
-        return "essencial"
+        return "basico"
     
     return subscription.plan
 

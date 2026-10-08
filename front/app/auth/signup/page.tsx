@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { Loader2, AlertCircle, CheckCircle, User, Briefcase, Building2, Crown, Star, Sparkles, Shield, TrendingUp } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// 🔥 Os planos não são mais escolhidos no cadastro: o terapeuta escolhe em /adesao, depois de entrar.
+const SHOW_PLANS_IN_SIGNUP = false as boolean;
 
 interface TherapistPlan {
   id: number;
@@ -50,10 +54,10 @@ function SignupForm() {
 
   // Buscar planos quando mudar o tipo de conta
   useEffect(() => {
-    if (formData.role === "therapist" && therapistPlans.length === 0 && !loadingPlanos) {
+    if (SHOW_PLANS_IN_SIGNUP && formData.role === "therapist" && therapistPlans.length === 0 && !loadingPlanos) {
       carregarPlanosTerapeuta();
     }
-    if (formData.role === "empresa" && empresaPlanos.length === 0 && !loadingPlanos) {
+    if (SHOW_PLANS_IN_SIGNUP && formData.role === "empresa" && empresaPlanos.length === 0 && !loadingPlanos) {
       carregarPlanosEmpresa();
     }
   }, [formData.role]);
@@ -76,7 +80,7 @@ function SignupForm() {
         if (plan.id === "profissional") {
           features = [
             "Tudo do Essencial",
-            "Perfil no marketplace",
+            "Mais destaque no marketplace",
             "Captação de novos pacientes",
             "Relatórios financeiros avançados",
             "Suporte prioritário",
@@ -85,7 +89,7 @@ function SignupForm() {
         } else if (plan.id === "premium") {
           features = [
             "Tudo do Profissional",
-            "Destaque no marketplace",
+            "Destaque máximo no marketplace",
             "Leads diretos da plataforma",
             "Acesso a pacientes corporativos",
             "Suporte dedicado",
@@ -185,12 +189,37 @@ function SignupForm() {
         }
       }
 
-      await api("/api/auth/register", {
+      const registered: any = await api("/api/auth/register", {
         method: "POST",
         body: JSON.stringify(payload)
       });
-      
+
+      if (registered?.verification_required) {
+        // 🔥 O e-mail precisa ser confirmado antes de entrar: vai para a tela do código
+        window.location.href = `/auth/verificar-email?email=${encodeURIComponent(formData.email)}`;
+        return;
+      }
+
       setSuccess("Cadastro realizado com sucesso! Redirecionando...");
+
+      if (formData.role === "therapist") {
+        // 🔥 Terapeuta: login automático e direto para a escolha do plano
+        try {
+          const loginData: any = await api("/api/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ email: formData.email, password: formData.password }),
+          });
+          if (loginData?.access_token) {
+            localStorage.setItem("access_token", loginData.access_token);
+            if (loginData.refresh_token) localStorage.setItem("refresh_token", loginData.refresh_token);
+            localStorage.setItem("biometric_email", formData.email);
+            window.location.href = "/adesao";
+            return;
+          }
+        } catch {
+          // sem login automático: segue o fluxo antigo (tela de login)
+        }
+      }
       
       setTimeout(() => {
         if (formData.role === "therapist") {
@@ -212,9 +241,33 @@ function SignupForm() {
 
   const handleSocialSignup = (provider: "google" | "microsoft") => {
     setSocialLoading(true);
+    if (formData.role === "empresa") {
+      setError("Para criar conta de empresa, use e-mail e senha.");
+      return;
+    }
     setError("");
-    window.location.href = `${BACKEND_URL}/api/auth/${provider}/login`;
+    window.location.href = `${BACKEND_URL}/api/auth/${provider}/login?role=${formData.role === "therapist" ? "therapist" : "patient"}`;
   };
+
+  // 🔥 Texto do painel de destaque (lado esquerdo) conforme o tipo de conta
+  const destaque =
+    formData.role === "therapist"
+      ? {
+          badge: "Para terapeutas",
+          titulo: "Sua prática clínica online, a partir de R$ 19,90 por mês.",
+          texto: "Agenda, prontuário digital, videochamada e relatórios financeiros em um só lugar. Escolha seu plano e comece a atender. Seu perfil fica visível no marketplace para quem busca terapia online.",
+        }
+      : formData.role === "empresa"
+      ? {
+          badge: "Para empresas",
+          titulo: "Saúde mental no seu time, com um plano sob medida.",
+          texto: "Os planos para empresas são definidos por proposta direta, de acordo com o tamanho e as necessidades do seu time.",
+        }
+      : {
+          badge: "Para pacientes",
+          titulo: "Encontre o terapeuta certo e comece sua terapia online.",
+          texto: "Escolha o profissional pelo perfil, agende no horário que combina com você e faça sua sessão por videochamada, de onde estiver.",
+        };
 
   const getCommissionByPlan = (plan: string) => {
     switch (plan) {
@@ -225,8 +278,45 @@ function SignupForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2F80D3]/10 to-[#E03673]/10 py-12 px-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 max-h-[90vh] overflow-y-auto">
+    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#111318] via-[#181b22] to-[#14161c] relative overflow-hidden px-4 py-10">
+      {/* Glow de fundo nas cores da marca */}
+      <div className="pointer-events-none absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full bg-[#2F80D3]/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 right-0 w-[32rem] h-[32rem] rounded-full bg-[#E03673]/25 blur-3xl" />
+
+      <div className="relative z-10 w-full max-w-6xl flex flex-col lg:flex-row items-center gap-6 lg:gap-16">
+
+        {/* ===== LADO ESQUERDO: destaque conforme o tipo de conta ===== */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="max-w-lg mx-auto lg:mx-0">
+            <div className="hidden lg:flex items-center gap-2 mb-10">
+              <div className="w-28 h-28 flex items-center justify-center">
+                <Image src="/jitsi-watermark.png" alt="Meu Divã" width={112} height={112} className="w-full h-full object-contain" priority />
+              </div>
+              <span className="text-white font-semibold text-2xl">Meu Divã</span>
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E03673]/15 border border-[#E03673]/30 text-xs font-medium text-[#ff8bb3] mb-4 lg:mb-5">
+              <Sparkles className="w-3.5 h-3.5" />
+              {destaque.badge}
+            </span>
+
+            <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold leading-tight mb-3 lg:mb-5 bg-gradient-to-r from-white via-white to-[#E03673] bg-clip-text text-transparent">
+              {destaque.titulo}
+            </h2>
+
+            <p className="hidden sm:block text-white/70 text-base sm:text-lg leading-relaxed">
+              {destaque.texto}
+            </p>
+
+            <p className="hidden lg:block mt-8 pt-6 border-t border-white/10 text-white/50 text-sm">
+              Quem busca terapia e quem atende, no mesmo lugar. Tudo online.
+            </p>
+          </div>
+        </div>
+
+        {/* ===== LADO DIREITO: formulário de cadastro ===== */}
+        <div className="w-full lg:w-[440px] flex-shrink-0">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto p-8 max-h-[90vh] overflow-y-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-[#E03673]">Meu Divã</h1>
           <p className="text-gray-600 mt-2">Crie sua conta</p>
@@ -375,8 +465,14 @@ function SignupForm() {
             </div>
           </div>
 
-          {/* SELEÇÃO DE PLANOS - para TERAPEUTA (BUSCA DO BANCO) */}
           {formData.role === "therapist" && (
+            <div className="mt-4 p-3 rounded-xl bg-[#E03673]/5 border border-[#E03673]/20 text-sm text-gray-700 leading-relaxed">
+              Depois de criar a conta, você escolhe seu plano (a partir de <strong>R$ 19,90/mês</strong>) e envia seus documentos para validar o perfil.
+            </div>
+          )}
+
+          {/* SELEÇÃO DE PLANOS - para TERAPEUTA (BUSCA DO BANCO) */}
+          {SHOW_PLANS_IN_SIGNUP && formData.role === "therapist" && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Escolha seu plano (você pode mudar depois)
@@ -391,6 +487,10 @@ function SignupForm() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-[#E03673]/5 border border-[#E03673]/20 text-sm text-gray-700 leading-relaxed">
+                    Comece no <strong>Essencial</strong> a partir de <strong>R$ 19,90/mês</strong> e evolua quando quiser. No Profissional e no Premium, a comissão cai para 10% e 3% e seu perfil ganha mais destaque no marketplace.
+                  </div>
+
                   {/* Plano Essencial (hardcoded - padrão) */}
                   <button
                     type="button"
@@ -406,22 +506,22 @@ function SignupForm() {
                         <div className="flex items-center gap-2">
                           <Sparkles className="w-5 h-5 text-gray-500" />
                           <h3 className="font-bold text-gray-900">Essencial</h3>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Grátis</span>
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Para começar</span>
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">Para começar sem risco</p>
+                        <p className="text-sm text-gray-500 mt-1">Para começar na plataforma</p>
                         <ul className="text-xs text-gray-400 mt-2 space-y-1">
                           <li>✓ Agenda online</li>
                           <li>✓ Prontuário digital</li>
                           <li>✓ Sessões via Jitsi Meet</li>
                           <li>✓ Atender seus próprios pacientes</li>
-                          <li className="text-gray-300">✗ Visibilidade no marketplace</li>
-                          <li className="text-gray-300">✗ Relatórios financeiros avançados</li>
+                          <li>✓ Relatório financeiro</li>
+                          <li>✓ Visibilidade no marketplace</li>
                         </ul>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-gray-600">Grátis</p>
+                        <p className="text-lg font-bold text-gray-600">R$ 19,90/mês</p>
                         <p className="text-xs text-gray-400 mt-2">Comissão: 20%</p>
-                        <span className="inline-block mt-1 text-xs text-[#E03673] font-medium">Começar grátis</span>
+                        <span className="inline-block mt-1 text-xs text-[#E03673] font-medium">Escolher plano</span>
                       </div>
                     </div>
                   </button>
@@ -487,8 +587,14 @@ function SignupForm() {
             </div>
           )}
 
-          {/* SELEÇÃO DE PLANOS - para EMPRESA (BUSCA DO BANCO) */}
           {formData.role === "empresa" && (
+            <div className="mt-4 p-3 rounded-xl bg-[#E03673]/5 border border-[#E03673]/20 text-sm text-gray-700 leading-relaxed">
+              Os planos para empresas são definidos por proposta direta, de acordo com o tamanho e as necessidades do seu time. Dúvidas: <a href="mailto:contato@meudivaonline.com" className="text-[#E03673] underline">contato@meudivaonline.com</a>
+            </div>
+          )}
+
+          {/* SELEÇÃO DE PLANOS - para EMPRESA (BUSCA DO BANCO) */}
+          {SHOW_PLANS_IN_SIGNUP && formData.role === "empresa" && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Escolha o plano da sua empresa
@@ -599,7 +705,7 @@ function SignupForm() {
           <p className="text-xs text-gray-400 text-center mb-3">Ou cadastre-se com</p>
           <div className="flex flex-col gap-3">
 
-            <button onClick={() => handleSocialSignup("google")} disabled={loading || socialLoading}
+            <button onClick={() => handleSocialSignup("google")} disabled={loading || socialLoading || formData.role === "empresa"}
               className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white">
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -610,7 +716,7 @@ function SignupForm() {
               <span className="text-sm text-gray-600 font-medium">Google</span>
             </button>
 
-            <button onClick={() => handleSocialSignup("microsoft")} disabled={loading || socialLoading}
+            <button onClick={() => handleSocialSignup("microsoft")} disabled={loading || socialLoading || formData.role === "empresa"}
               className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white">
               <svg className="w-5 h-5" viewBox="0 0 23 23">
                 <path fill="#f35325" d="M1 1h10v10H1z"/>
@@ -621,7 +727,7 @@ function SignupForm() {
               <span className="text-sm text-gray-600 font-medium">Microsoft</span>
             </button>
 
-            <button onClick={() => handleSocialSignup("apple")} disabled={loading || socialLoading}
+            <button onClick={() => handleSocialSignup("apple")} disabled={loading || socialLoading || formData.role === "empresa"}
               className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
@@ -633,6 +739,9 @@ function SignupForm() {
           {socialLoading && (
             <p className="text-xs text-center text-gray-400 mt-2">Redirecionando para o provedor...</p>
           )}
+          {formData.role === "empresa" && (
+            <p className="text-xs text-center text-gray-400 mt-2">Empresas: use e-mail e senha.</p>
+          )}
         </div>
         
         <p className="text-center text-sm text-gray-500 mt-6">
@@ -641,6 +750,8 @@ function SignupForm() {
             Faça login
           </Link>
         </p>
+      </div>
+        </div>
       </div>
     </div>
   );

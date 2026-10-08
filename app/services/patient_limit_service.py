@@ -6,6 +6,7 @@ from app.models.appointment import Appointment
 
 # Limites máximos de pacientes por plano
 PLAN_PATIENT_LIMITS = {
+    "basico": 10,
     "essencial": 10,
     "profissional": 50,
     "premium": 999999  # Ilimitado
@@ -18,7 +19,7 @@ def get_therapist_plan(therapist_user_id: int, db: Session) -> str:
     ).first()
     
     if not therapist_profile:
-        return "essencial"
+        return "basico"
     
     subscription = db.query(Subscription).filter(
         Subscription.therapist_id == therapist_profile.id,
@@ -26,7 +27,7 @@ def get_therapist_plan(therapist_user_id: int, db: Session) -> str:
     ).first()
     
     if not subscription:
-        return "essencial"
+        return "basico"
     
     return subscription.plan
 
@@ -53,7 +54,7 @@ def can_add_patient(therapist_user_id: int, db: Session, new_patient_id: int = N
         return True, ""
     
     if current_count >= max_patients:
-        plan_names = {"essencial": "Essencial", "profissional": "Profissional", "premium": "Premium"}
+        plan_names = {"basico": "Básico", "essencial": "Essencial", "profissional": "Profissional", "premium": "Premium"}
         plan_display = plan_names.get(plan, plan)
         return False, f"Limite de pacientes do plano {plan_display} atingido ({max_patients} pacientes). Faça upgrade para adicionar mais pacientes."
     
@@ -67,7 +68,7 @@ def get_patient_limit_info(therapist_user_id: int, db: Session) -> dict:
     max_patients = PLAN_PATIENT_LIMITS.get(plan, 10)
     current_count = get_current_patient_count(therapist_user_id, db)
     
-    plan_names = {"essencial": "Essencial", "profissional": "Profissional", "premium": "Premium"}
+    plan_names = {"basico": "Básico", "essencial": "Essencial", "profissional": "Profissional", "premium": "Premium"}
     
     return {
         "plan": plan,

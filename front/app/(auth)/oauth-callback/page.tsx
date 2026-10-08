@@ -92,7 +92,7 @@ function OAuthCallbackContent() {
       .then((user) => {
         setStatus('success');
         setTimeout(() => {
-          if (user.role === 'therapist') window.location.href = '/therapist/dashboard';
+          if (user.role === 'therapist') window.location.href = searchParams?.get('new_role') === 'therapist' ? '/adesao' : '/therapist/dashboard';
           else if (user.role === 'admin') window.location.href = '/admin/dashboard';
           else if (user.role === 'empresa') window.location.href = '/empresa/dashboard';
           else window.location.href = '/patient/dashboard';

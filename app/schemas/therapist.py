@@ -88,6 +88,15 @@ class TherapistProfileBase(BaseModel):
     # ==========================
     session_duration_30min: bool = True
     session_duration_50min: bool = True
+    accepts_corporate_sessions: bool = False
+    custom_session_duration: Optional[int] = None
+    professional_type: Optional[str] = None
+    therapeutic_approach: Optional[str] = None
+    integrative_practice: Optional[str] = None
+    target_audience: Optional[str] = None
+    demand_focus: Optional[str] = None
+    service_modality: Optional[str] = None
+    service_modalities: Optional[List[str]] = None
     
     # ==========================
     # 🔥 POLÍTICA DE REMARCAÇÃO
@@ -182,6 +191,15 @@ class TherapistProfileUpsert(BaseModel):
     # ==========================
     session_duration_30min: Optional[bool] = None
     session_duration_50min: Optional[bool] = None
+    accepts_corporate_sessions: Optional[bool] = None
+    custom_session_duration: Optional[int] = None
+    professional_type: Optional[str] = None
+    therapeutic_approach: Optional[str] = None
+    integrative_practice: Optional[str] = None
+    target_audience: Optional[str] = None
+    demand_focus: Optional[str] = None
+    service_modality: Optional[str] = None
+    service_modalities: Optional[List[str]] = None
     
     # ==========================
     # 🔥 POLÍTICA DE REMARCAÇÃO

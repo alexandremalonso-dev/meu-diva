@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_, or_, desc, func
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.db.database import get_db
 from app.core.permissions import require_roles
@@ -231,7 +231,7 @@ def get_conversations(
                 continue
             conversations.append(_build_conversation(thread, current_user.id, other_user, db))
 
-    conversations.sort(key=lambda x: x["last_message_at"] or datetime.min, reverse=True)
+    conversations.sort(key=lambda x: x["last_message_at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     print(f"✅ {len(conversations)} conversa(s) retornada(s)")
     return conversations
 
@@ -421,7 +421,7 @@ def get_admin_conversations(
 
         conversations.append(_build_conversation(thread, current_user.id, other_user, db))
 
-    conversations.sort(key=lambda x: x["last_message_at"] or datetime.min, reverse=True)
+    conversations.sort(key=lambda x: x["last_message_at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     return conversations
 
 

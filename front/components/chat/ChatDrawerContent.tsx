@@ -35,11 +35,26 @@ export function ChatDrawerContent({ userRole }: ChatDrawerContentProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [imageError, setImageError] = useState<string | null>(null);
 
+  // 🔥 CORRIGIDO DE VEZ: scrollIntoView() rola TODOS os containers
+  // roláveis ancestrais (inclusive a página inteira), não só o chat —
+  // era isso que causava o "bumerangue", mesmo com a lógica de "só
+  // quando eu mesmo envio" já corrigida antes. Setando scrollTop direto
+  // no container do próprio chat, nada fora dele é afetado.
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
   };
 
-  useEffect(() => { scrollToBottom(); }, [currentMessages]);
+  // 🔥 CORRIGIDO: só rola pra baixo quando a QUANTIDADE de mensagens
+  // aumenta de verdade (mensagem nova). Antes disparava em qualquer
+  // atualização de referência do array (inclusive o polling automático
+  // sem mensagem nova), causando o efeito "bumerangue" — puxando a tela
+  // pra baixo o tempo todo mesmo enquanto o usuário rolava pra cima.
+  // 🔥 REMOVIDO 100% — nenhum auto-scroll reagindo a currentMessages,
+  // nem por contagem. A rolagem só acontece de forma explícita, dentro de
+  // handleSendMessage/handleSendImage, logo após o PRÓPRIO usuário enviar
+  // algo. Nunca por causa do polling ou de mensagens recebidas.
 
   useEffect(() => {
     if (activeThreadId) setTimeout(() => scrollToBottom('instant'), 100);
@@ -62,11 +77,12 @@ export function ChatDrawerContent({ userRole }: ChatDrawerContentProps) {
     setTimeout(() => scrollToBottom('smooth'), 50);
   };
 
+  // 🔥 Aceita imagem OU documento — escolhe o prefixo certo conforme o tipo
   const handleSendImage = async (file: File) => {
     if (!activeThreadId) return;
     setImageError(null);
     if (file.size > 5 * 1024 * 1024) {
-      setImageError('Imagem muito grande. Máximo 5MB.');
+      setImageError('Arquivo muito grande. Máximo 5MB.');
       setTimeout(() => setImageError(null), 3000);
       return;
     }
@@ -74,12 +90,14 @@ export function ChatDrawerContent({ userRole }: ChatDrawerContentProps) {
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64 = e.target?.result as string;
-        await sendMessage(activeThreadId, `[IMAGE]${base64}`);
+        const isImageFile = file.type.startsWith('image/');
+        const prefixed = isImageFile ? `[IMAGE]${base64}` : `[DOC:${file.name}]${base64}`;
+        await sendMessage(activeThreadId, prefixed);
         setTimeout(() => scrollToBottom('smooth'), 50);
       };
       reader.readAsDataURL(file);
     } catch {
-      setImageError('Erro ao enviar imagem.');
+      setImageError('Erro ao enviar arquivo.');
       setTimeout(() => setImageError(null), 3000);
     }
   };

@@ -158,7 +158,7 @@ export default function TherapistFinancialReportPage() {
   const [filteredSessions, setFilteredSessions] = useState<FinancialSession[]>([]);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [subscriptionPlan, setSubscriptionPlan] = useState<string>("essencial");
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>("basico");
   const [summary, setSummary] = useState<FinancialSummary>({
     total_completed_sessions: 0,
     total_to_receive: 0,
@@ -259,9 +259,9 @@ export default function TherapistFinancialReportPage() {
           url: "/api/therapists/subscription",
           requireAuth: true
         });
-        setSubscriptionPlan(subData?.plan || "essencial");
+        setSubscriptionPlan(subData?.plan || "basico");
       } catch (err) {
-        setSubscriptionPlan("essencial");
+        setSubscriptionPlan("basico");
       }
       
       const therapistAppointments = appointmentsData.filter(
@@ -535,7 +535,8 @@ export default function TherapistFinancialReportPage() {
   const getPlanLabel = () => {
     if (subscriptionPlan === "profissional") return "Profissional";
     if (subscriptionPlan === "premium") return "Premium";
-    return "Essencial";
+    if (subscriptionPlan === "essencial") return "Essencial";
+    return "Básico";
   };
   
   if (loading) {

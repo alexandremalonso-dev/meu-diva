@@ -204,7 +204,7 @@ class NotificationService:
             user_id=therapist_user.id,
             notification_type="subscription_cancelled",
             title="Assinatura cancelada",
-            message=f"Seu plano {plan_name} foi cancelado. Você voltou para o plano Essencial.",
+            message=f"Seu plano {plan_name} foi cancelado. Você voltou para o plano gratuito.",
             data={"plan": plan_name},
             action_link="/therapist/subscription"
         )

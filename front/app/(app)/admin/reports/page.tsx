@@ -150,6 +150,24 @@ export default function ReportsMenuPage() {
           </div>
         </Link>
 
+        {/* Assinaturas de Pacientes (pacotes de sessões) */}
+        <Link href="/admin/reports/pacientes-assinaturas" className="group">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all hover:border-[#E03673]/20 h-full flex flex-col">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#E03673] to-[#E03673]/80 flex items-center justify-center mb-4">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 group-hover:text-[#E03673] transition-colors">
+              Assinaturas de Pacientes
+            </h2>
+            <p className="text-gray-500 text-sm mt-2 flex-1">
+              Pacotes de sessões vendidos aos pacientes. Assinantes, receita mensal e sessões disponíveis.
+            </p>
+            <div className="mt-4 text-xs text-gray-400">
+              planos: No Divã 01, 02, 04 e 08
+            </div>
+          </div>
+        </Link>
+
         {/* Relatório de Pagamentos aos Terapeutas */}
         <Link href="/admin/reports/payments" className="group">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all hover:border-[#E03673]/20 h-full flex flex-col">

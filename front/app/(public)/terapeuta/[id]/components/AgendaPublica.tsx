@@ -166,12 +166,13 @@ export function AgendaPublica({
     return dateStr === hojeStr
   }
 
+  // 🔥 REMOVIDO o filtro fixo de "horário comercial" (h >= 7 && h <= 22)
+  // que descartava horários fora dessa faixa mesmo quando o terapeuta
+  // configurou disponibilidade ali (ex: 06:30). A API já é a fonte da
+  // verdade sobre o que está disponível — não deveria haver um segundo
+  // filtro no front cortando isso de novo.
   const getHorarios = (slots: any[]) =>
     (slots || [])
-      .filter(s => {
-        const h = parseInt(getHorarioStr(s.starts_at).split(':')[0])
-        return h >= 7 && h <= 22
-      })
       .sort((a, b) => getHorarioStr(a.starts_at).localeCompare(getHorarioStr(b.starts_at)))
 
   const periodoLabel = (() => {

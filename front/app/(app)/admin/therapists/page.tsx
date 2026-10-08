@@ -7,8 +7,9 @@ import Link from "next/link";
 import { getFotoSrc } from '@/lib/utils';
 import {
   Users, Loader2, AlertCircle, Search, ArrowLeft, MoreVertical,
-  X, CheckCircle, XCircle, ChevronLeft, ChevronRight, Trash2, Power
+  X, CheckCircle, XCircle, ChevronLeft, ChevronRight, Trash2, Power, Eye
 } from "lucide-react";
+import { startImpersonation } from "@/lib/impersonation";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -182,6 +183,19 @@ export default function AdminTherapistsPage() {
     }
   }
 
+  // 🔥 Ver como (impersonação)
+  async function handleViewAs(therapist: any) {
+    setActionLoading(true);
+    try {
+      await startImpersonation(therapist.id);
+    } catch {
+      setError("Erro ao iniciar simulação de acesso");
+      setTimeout(() => setError(""), 3000);
+      setActionLoading(false);
+      setOpenMenuId(null);
+    }
+  }
+
   // 🔥 Excluir (após confirmação)
   async function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -348,6 +362,15 @@ export default function AdminTherapistsPage() {
                           </button>
                           {openMenuId === t.id && (
                             <div ref={menuRef} className="absolute right-3 top-10 z-20 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 text-left">
+                              <button
+                                onClick={() => handleViewAs(t)}
+                                disabled={actionLoading || !t.is_active}
+                                title={!t.is_active ? "Reative o terapeuta antes de simular o acesso" : undefined}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Ver como
+                              </button>
                               <button
                                 onClick={() => handleToggleActive(t)}
                                 disabled={actionLoading}
