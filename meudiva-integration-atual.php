@@ -525,10 +525,12 @@ add_action('wp_footer', function() {
                 <img src="<?php echo esc_url($home . '/wp-content/uploads/favicon-meudiva.png'); ?>" alt="Meu Div&#227;" style="width:160px;height:160px;object-fit:contain;">
             </a>
             <div style="width:48px;height:1px;background:rgba(255,255,255,0.25);margin:14px 0;"></div>
-            <img src="<?php echo esc_url($home . '/wp-content/uploads/logo-instituto-alonso.png'); ?>" alt="Instituto A Via" style="width:72px;height:72px;object-fit:contain;opacity:0.75;">
+            <a href="https://institutoalonso.com.br/" target="_blank" rel="noopener">
+                <img src="<?php echo esc_url($home . '/wp-content/uploads/logo-instituto-alonso.png'); ?>" alt="Instituto A Via" style="width:72px;height:72px;object-fit:contain;opacity:0.75;">
+            </a>
             <div style="text-align:center;margin-top:8px;opacity:0.6;font-size:0.72rem;line-height:1.6;color:rgba(255,255,255,0.8);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
                 Uma solu&#231;&#227;o do<br>
-                <strong style="opacity:1;color:white;font-size:0.78rem;">Instituto A Via</strong>
+                <a href="https://institutoalonso.com.br/" target="_blank" rel="noopener" style="opacity:1;color:white;font-size:0.78rem;font-weight:700;text-decoration:none;">Instituto A Via</a>
             </div>
         </div>
 
@@ -648,3 +650,14 @@ add_action('wp_footer', function() {
     </div>
 </footer>
 <?php }, 100);
+
+// ============================================
+// WIDGET DE AUTOATENDIMENTO — Huggy.chat
+// ============================================
+add_action('wp_footer', function () {
+    ?>
+    <!-- Init code Huggy.chat  //-->
+    <script>var $_Huggy = { defaultCountry: '+55', uuid: 'bb16ba4e-9ae7-45df-aaeb-1366fc78b1b8' , company: '328310' }; (function(i,s,o,g,r,a,m){ i[r]={context:{id:'1f67d9e29497fcb5b865e6c4c4cc64bf'}};a=o;o=s.createElement(o); o.async=1;o.src=g;m=s.getElementsByTagName(a)[0];m.parentNode.insertBefore(o,m); })(window,document,'script','https://js.huggy.chat/widget.min.js','pwz');</script>
+    <!-- End code Huggy.chat  //-->
+    <?php
+}, 200);

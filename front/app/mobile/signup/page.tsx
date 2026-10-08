@@ -54,7 +54,7 @@ function MobileSignupForm() {
 
     setLoading(true);
     try {
-      await api("/api/auth/register", {
+      const result = await api("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
           full_name: formData.full_name,
@@ -63,6 +63,10 @@ function MobileSignupForm() {
           role: formData.role,
         }),
       });
+      if (result?.verification_required) {
+        router.push(`/mobile/verificar-email?email=${encodeURIComponent(formData.email)}`);
+        return;
+      }
       setSuccess("Cadastro realizado! Redirecionando...");
       setTimeout(() => router.push("/mobile/login"), 1500);
     } catch (err: any) {

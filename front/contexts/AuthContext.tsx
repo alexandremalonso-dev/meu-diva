@@ -10,6 +10,11 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import {
+  getImpersonationInfo,
+  endImpersonation,
+  type ImpersonationInfo,
+} from "@/lib/impersonation";
 
 interface User {
   id: number;
@@ -70,11 +75,46 @@ function redirectByRole(role: string | undefined, native: boolean): string {
   return "/busca";
 }
 
+// 🔥 Banner fixo exibido durante uma sessão de simulação (admin "vendo como" outro usuário)
+function ImpersonationBanner({ info }: { info: ImpersonationInfo }) {
+  const [ending, setEnding] = useState(false);
+  const roleLabel = info.targetRole === "therapist" ? "Terapeuta" : info.targetRole === "empresa" ? "Empresa" : "Paciente";
+
+  const handleEnd = async () => {
+    setEnding(true);
+    try {
+      await endImpersonation();
+    } finally {
+      setEnding(false);
+    }
+  };
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[9999] bg-yellow-400 text-yellow-950 px-4 py-2 flex items-center justify-center gap-3 text-sm font-medium shadow-md">
+      <span>
+        👁️ Visualizando como: <strong>{info.targetName}</strong> ({roleLabel})
+      </span>
+      <button
+        onClick={handleEnd}
+        disabled={ending}
+        className="px-3 py-1 bg-yellow-950 text-yellow-50 rounded-full text-xs font-semibold hover:bg-yellow-900 transition-colors disabled:opacity-60"
+      >
+        {ending ? "Saindo..." : "Sair da simulação"}
+      </button>
+    </div>
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [impersonation, setImpersonation] = useState<ImpersonationInfo | null>(null);
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    setImpersonation(getImpersonationInfo());
+  }, []);
 
   const loadMe = useCallback(async () => {
     const data = await api("/api/users/me");
@@ -117,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "/auth/login",
       "/auth/signup",
       "/auth/forgot-password",
+      "/auth/verificar-email",
       "/busca",
       "/terapeuta",
       "/",
@@ -124,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "/precos",
       "/mobile/login",
       "/mobile/signup",
+      "/mobile/verificar-email",
       "/mobile/splash",
       "/politica-privacidade",
       "/termos-uso",
@@ -186,6 +228,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loadMe,
       }}
     >
+      {impersonation && (
+        <>
+          <ImpersonationBanner info={impersonation} />
+          <div className="h-10" />
+        </>
+      )}
       {children}
     </AuthContext.Provider>
   );

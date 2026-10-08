@@ -118,7 +118,12 @@ function LoginForm() {
       await login(email, password);
       setSuccess("Login realizado! Redirecionando...");
     } catch (err: any) {
-      setError(err.message || "Erro ao fazer login");
+      const msg = err?.message || "";
+      if (msg.includes("Confirme seu e-mail")) {
+        window.location.href = `/mobile/verificar-email?email=${encodeURIComponent(email)}`;
+        return;
+      }
+      setError(msg || "Erro ao fazer login");
     } finally {
       setLoading(false);
     }

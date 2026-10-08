@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   Video, Search, FileText,
   Mail, User, BarChart3, Clock, Users,
-  ChevronRight, Zap, Star, CheckCircle
+  ChevronRight, Zap, Star, CheckCircle, Package, CreditCard
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -156,6 +156,7 @@ export default function MobileDashboard() {
     { name: "Avaliações", desc: "Avaliar sessões", href: "/mobile/avaliacoes", icon: Star, color: COLORS.primaryLight, iconColor: COLORS.primary },
     { name: "Histórico", desc: "Sessões realizadas", href: "/mobile/sessoes-realizadas", icon: CheckCircle, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
     { name: "Meu Perfil", desc: "Dados e preferências", href: "/patient/profile", icon: User, color: "#F3F4F6", iconColor: "#374151" },
+    { name: "Meus pacotes", desc: "Combos de sessões", href: "/mobile/meus-pacotes", icon: Package, color: COLORS.primaryLight, iconColor: COLORS.primary },
   ];
 
   const therapistCards: NavCard[] = [
@@ -269,6 +270,7 @@ export default function MobileDashboard() {
             {[
               { name: "Relatório Financeiro", desc: "Ganhos e histórico", href: "/therapist/financial-report", icon: BarChart3, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
               { name: "Meu Perfil", desc: "Dados e disponibilidade", href: "/therapist/profile", icon: User, color: "#F3F4F6", iconColor: "#374151" },
+              { name: "Meu plano", desc: "Assinatura e recursos", href: "/mobile/meu-plano", icon: CreditCard, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
             ].map((item) => {
               const Icon = item.icon;
               return (
