@@ -275,6 +275,7 @@ export default function MobileDashboard() {
               { name: "Relatório Financeiro", desc: "Ganhos e histórico", href: "/mobile/terapeuta-financeiro", icon: BarChart3, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
               { name: "Meu Perfil", desc: "Dados e disponibilidade", href: "/therapist/profile", icon: User, color: "#F3F4F6", iconColor: "#374151" },
               { name: "Meu plano", desc: "Assinatura e recursos", href: "/mobile/meu-plano", icon: CreditCard, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
+              { name: "Documentos", desc: "Enviar documentos", href: "/mobile/terapeuta-documentos", icon: FileText, color: "#F3F4F6", iconColor: "#374151" },
             ].map((item) => {
               const Icon = item.icon;
               return (

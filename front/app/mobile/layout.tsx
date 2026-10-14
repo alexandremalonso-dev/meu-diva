@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { MobileNav } from "@/components/mobile/MobileNav";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 
 function isNativeApp(): boolean {
@@ -64,7 +65,8 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     <AuthProvider>
       <SidebarProvider>
         <DeepLinkListener />
-        {children}
+        <div style={{ paddingBottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}>{children}</div>
+        <MobileNav />
       </SidebarProvider>
     </AuthProvider>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Package, CalendarCheck, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
+import { ApplePackageCards } from "@/components/mobile/ApplePackageCards";
 
 const COLORS = { primary: "#E03673", secondary: "#2F80D3", dark: "#3A3B21" };
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -104,11 +105,8 @@ export function PackagesCard() {
       </div>
 
       {ios ? (
-        // iOS: sem preços, sem botão de compra — direciona para o site
-        <div style={{ background: "#FDF2F8", borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
-          <div style={{ fontSize: 13, color: COLORS.dark, marginBottom: 2 }}>Contrate um pacote em</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.primary }}>meudivaonline.com/pacotes</div>
-        </div>
+        // iOS: usa Apple IAP via ApplePackageCards
+        <ApplePackageCards />
       ) : (
         // Android/Web: cards individuais com preços e link para checkout
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
