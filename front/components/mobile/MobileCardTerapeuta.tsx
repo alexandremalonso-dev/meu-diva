@@ -139,7 +139,7 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
 
   const handleAgendar = async (slot: any) => {
     if (!isLoggedIn) {
-      router.push('/auth/login?redirect=/busca')
+      router.push('/mobile/login')
       return
     }
     if (isLoading) return;
