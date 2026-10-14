@@ -183,14 +183,14 @@ export default function MobileAgendarPage() {
         })
       });
       setModalData(null);
-      router.push(`/checkout?appointment_id=${bookingData.id}`);
+      router.push(`/mobile/checkout?appointment_id=${bookingData.id}`);
 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('ocupado') || err.message?.toLowerCase().includes('conflict')) {
         alert("Este horário já foi ocupado. Por favor escolha outro.");
         loadFrequentTherapists();
       } else {
-        alert(err.message || "Erro ao agendar");
+        alert(typeof err.message === "string" ? err.message : JSON.stringify(err.message) || "Erro ao agendar");
       }
     } finally {
       setIsBooking(null);

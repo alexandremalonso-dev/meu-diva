@@ -32,7 +32,9 @@ interface MobileCardTerapeutaProps {
     id: number;
     user_id: number;
     full_name: string;
+    treatment?: string | null;
     specialties?: string;
+    professional_type?: string;
     session_price?: number;
     foto_url?: string;
     rating?: number;
@@ -73,7 +75,8 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
   const [expanded, setExpanded] = useState(false);
 
   const DIAS_POR_PAGINA = 3;
-  const nomeCompleto = terapeuta.full_name || "Nome não disponível";
+  const nomeBase = terapeuta.full_name || "Nome não disponível";
+  const nomeCompleto = terapeuta.treatment ? `${terapeuta.treatment} ${nomeBase}` : nomeBase;
   const fotoUrl = getFotoSrc(terapeuta.foto_url);
   const preco = terapeuta.session_price || 0;
   const precoFormatado = `R$ ${preco.toFixed(2)}`;
@@ -132,10 +135,6 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
 
   const getHorarios = (slots: any[]) =>
     (slots || [])
-      .filter(s => {
-        const h = parseInt(getHorarioStr(s.starts_at).split(':')[0])
-        return h >= 7 && h <= 22
-      })
       .sort((a, b) => getHorarioStr(a.starts_at).localeCompare(getHorarioStr(b.starts_at)))
 
   const handleAgendar = async (slot: any) => {
@@ -193,7 +192,7 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
       });
 
       const appointmentId = bookingData.id;
-      router.push(`/checkout?appointment_id=${appointmentId}`);
+      router.push(`/mobile/checkout?appointment_id=${appointmentId}`);
 
     } catch (err: any) {
       console.error("Erro ao agendar:", err);
@@ -244,9 +243,9 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
             <span style={{ fontSize: 11, color: CORES.cinzaTexto }}>{reviewsCount} aval.</span>
           </div>
 
-          {terapeuta.specialties && (
+          {terapeuta.professional_type && (
             <p style={{ fontSize: 12, color: CORES.cinzaTexto, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {terapeuta.specialties}
+              {terapeuta.professional_type}
             </p>
           )}
 
@@ -254,7 +253,7 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
             <span style={{ fontSize: 15, fontWeight: 700, color: CORES.verdeEscuro }}>{precoFormatado}</span>
             {terapeuta.accepts_corporate_sessions && (
               <span style={{ fontSize: 10, backgroundColor: "#E8F4FD", color: CORES.azul, padding: "2px 8px", borderRadius: 10, display: "flex", alignItems: "center", gap: 3 }}>
-                <Building2 size={10} /> Empresa
+                <Building2 size={10} /> Corporativo e pacotes
               </span>
             )}
           </div>
