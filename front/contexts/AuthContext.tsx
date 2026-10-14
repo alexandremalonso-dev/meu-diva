@@ -166,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "/mobile/login",
       "/mobile/signup",
       "/mobile/verificar-email",
+      "/mobile/checkout",
       "/mobile/splash",
       "/politica-privacidade",
       "/termos-uso",

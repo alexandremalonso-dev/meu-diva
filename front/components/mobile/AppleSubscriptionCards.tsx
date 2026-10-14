@@ -28,7 +28,7 @@ const PLANS: PlanInfo[] = [
     id: "essencial",
     productId: "003",
     name: "Essencial",
-    priceLabel: "R$ 14,90/mês",
+    priceLabel: "R$ 19,90/mês",
     commission: "20% de comissão por sessão",
     features: ["Perfil na busca", "Agenda online", "Videochamadas"],
     icon: Sparkles,
@@ -228,7 +228,7 @@ export function AppleSubscriptionCards() {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {PLANS.filter((p) => p.id !== "essencial").map((plan) => {
+        {PLANS.map((plan) => {
           const Icon = plan.icon;
           const isPurchasing = purchasingPlan === plan.id;
           return (

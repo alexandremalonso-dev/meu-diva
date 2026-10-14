@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import MobileHeader from "@/components/mobile/MobileHeader";
 import { getFotoSrc } from "@/lib/utils";
 import { AppleSubscriptionCards } from "@/components/mobile/AppleSubscriptionCards";
+import { PackagesCard } from "@/components/mobile/PackagesCard";
 
 const COLORS = {
   primary: "#E03673",
@@ -148,11 +149,11 @@ export default function MobileDashboard() {
   ];
 
   const patientCards: NavCard[] = [
-    { name: "Sessões", desc: "Próximas sessões", href: "/patient/sessions/upcoming", icon: Video, color: COLORS.primaryLight, iconColor: COLORS.primary },
+    { name: "Sessões", desc: "Próximas sessões", href: "/mobile/sessoes", icon: Video, color: COLORS.primaryLight, iconColor: COLORS.primary },
     { name: "Buscar", desc: "Encontrar terapeuta", href: "/mobile/busca", icon: Search, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
     { name: "Queixas", desc: "Registrar queixa", href: "/mobile/queixas", icon: FileText, color: COLORS.primaryLight, iconColor: COLORS.primary },
     { name: "Agendar", desc: "Agende com seu terapeuta", href: "/mobile/agendar", icon: Zap, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
-    { name: "Convites", desc: "Convites recebidos", href: "/patient/invites", icon: Mail, color: COLORS.primaryLight, iconColor: COLORS.primary },
+    { name: "Convites", desc: "Convites recebidos", href: "/mobile/convites", icon: Mail, color: COLORS.primaryLight, iconColor: COLORS.primary },
     { name: "Avaliações", desc: "Avaliar sessões", href: "/mobile/avaliacoes", icon: Star, color: COLORS.primaryLight, iconColor: COLORS.primary },
     { name: "Histórico", desc: "Sessões realizadas", href: "/mobile/sessoes-realizadas", icon: CheckCircle, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
     { name: "Meu Perfil", desc: "Dados e preferências", href: "/patient/profile", icon: User, color: "#F3F4F6", iconColor: "#374151" },
@@ -160,10 +161,10 @@ export default function MobileDashboard() {
   ];
 
   const therapistCards: NavCard[] = [
-    { name: "Pacientes", desc: "Minha lista", href: "/therapist/patients", icon: Users, color: COLORS.primaryLight, iconColor: COLORS.primary },
-    { name: "Sessões", desc: "Próximas e passadas", href: "/therapist/sessions/upcoming", icon: Video, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
-    { name: "Disponibilidade", desc: "Gerenciar horários", href: "/therapist/availability", icon: Clock, color: COLORS.primaryLight, iconColor: COLORS.primary },
-    { name: "Convites", desc: "Acompanhar status", href: "/therapist/invites", icon: Mail, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
+    { name: "Pacientes", desc: "Minha lista", href: "/mobile/terapeuta-pacientes", icon: Users, color: COLORS.primaryLight, iconColor: COLORS.primary },
+    { name: "Sessões", desc: "Próximas e passadas", href: "/mobile/terapeuta-sessoes", icon: Video, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
+    { name: "Disponibilidade", desc: "Gerenciar horários", href: "/mobile/terapeuta-disponibilidade", icon: Clock, color: COLORS.primaryLight, iconColor: COLORS.primary },
+    { name: "Convites", desc: "Acompanhar status", href: "/mobile/terapeuta-convites", icon: Mail, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
   ];
 
   const currentStats = role === "patient" ? patientStats : therapistStats;
@@ -264,11 +265,14 @@ export default function MobileDashboard() {
           })}
         </div>
 
+        {/* PACOTES — só paciente */}
+        {role === "patient" && <PackagesCard />}
+
         {/* CARDS LARGOS — só terapeuta */}
         {role === "therapist" && (
           <>
             {[
-              { name: "Relatório Financeiro", desc: "Ganhos e histórico", href: "/therapist/financial-report", icon: BarChart3, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
+              { name: "Relatório Financeiro", desc: "Ganhos e histórico", href: "/mobile/terapeuta-financeiro", icon: BarChart3, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
               { name: "Meu Perfil", desc: "Dados e disponibilidade", href: "/therapist/profile", icon: User, color: "#F3F4F6", iconColor: "#374151" },
               { name: "Meu plano", desc: "Assinatura e recursos", href: "/mobile/meu-plano", icon: CreditCard, color: COLORS.secondaryLight, iconColor: COLORS.secondary },
             ].map((item) => {
