@@ -23,7 +23,7 @@ import { useStats } from "./components/hooks/useStats";
 import type { Appointment } from '@/types/appointment';
 import { ChartTooltip } from '@/components/ui/ChartTooltip';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 interface UserData {
   id: number;

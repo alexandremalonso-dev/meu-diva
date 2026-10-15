@@ -8,7 +8,7 @@ import { useState, useMemo } from "react";
 import { Calendar, X, Clock, DollarSign, User, Users } from "lucide-react";
 import { getFotoSrc } from '@/lib/utils';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 const CORES = {
   azul: "#2F80D3",

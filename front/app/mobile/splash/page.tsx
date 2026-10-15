@@ -30,7 +30,7 @@ export default function MobileSplash() {
           if (host.includes("app.meudivaonline.com") || host.includes("meudiva-frontend-prod")) {
             return "https://api.meudivaonline.com";
           }
-          return "http://localhost:8000";
+          return "https://api.meudivaonline.com";
         })();
 
         const res = await fetch(`${baseUrl}/api/auth/me`, {

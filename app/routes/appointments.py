@@ -387,6 +387,10 @@ def create_appointment(
             if not payload.patient_user_id:
                 raise HTTPException(status_code=400, detail="Terapeuta deve especificar o patient_user_id")
             patient_user_id = payload.patient_user_id
+            # 🔒 Privacidade: o terapeuta só agenda para quem já é paciente dele (agendou sozinho, pagou e realizou sessão)
+            from app.services.pacientes_terapeuta import eh_paciente_do_terapeuta
+            if not eh_paciente_do_terapeuta(db, current_user.id, payload.patient_user_id):
+                raise HTTPException(status_code=403, detail="Você só pode agendar para pacientes que já fizeram sessão com você.")
 
         saldo_insuficiente = False
         wallet_balance = 0
@@ -708,6 +712,11 @@ def list_my_appointments_with_details(
             or_(Appointment.patient_user_id == current_user.id, Appointment.therapist_user_id == current_user.id)
         ).order_by(Appointment.starts_at.desc())
         rows = db.execute(query).scalars().all()
+        # 🔒 O terapeuta só recebe sessões PAGAS (ou cobertas por pacote / plano da empresa). Sessão não paga,
+        # convite e tentativa cancelada não entram na agenda dele. O paciente continua vendo as próprias sessões.
+        if current_user.role == UserRole.therapist:
+            from app.services.pacientes_terapeuta import visiveis_para_terapeuta
+            rows = visiveis_para_terapeuta(db, rows, current_user.id)
         result = [_build_appointment_dict(apt, db) for apt in rows]
         print(f"✅ Retornando {len(result)} appointments")
         return result

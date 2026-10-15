@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { User, Calendar, Clock, Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { getFotoSrc } from '@/lib/utils';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 type Therapist = {
   id: number;

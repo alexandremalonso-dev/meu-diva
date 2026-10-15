@@ -5,7 +5,7 @@ import { useApi } from "@/lib/useApi";
 import Link from "next/link";
 import { Mail, Loader2, Search, User, X, ChevronLeft, ChevronRight, CheckCircle, XCircle, Clock, RefreshCw, AlertCircle } from "lucide-react";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 interface Invite {

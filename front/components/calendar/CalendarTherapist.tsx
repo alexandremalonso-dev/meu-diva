@@ -12,7 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Calendar, X, RefreshCw, CheckCircle, XCircle, Loader2, Clock, DollarSign, Video, Copy, FileText, Plus, Pencil, Trash2, Save, Search } from "lucide-react";
 import { getFotoSrc } from '@/lib/utils';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 const CORES = {
   azul: "#2F80D3",

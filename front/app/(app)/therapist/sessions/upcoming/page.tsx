@@ -151,19 +151,10 @@ export default function TherapistUpcomingSessionsPage() {
         new Date(apt.starts_at) > new Date()
       );
       setAppointments(futureAppointments);
-      const patientCount = new Map<number, { count: number; patient: Patient }>();
-      futureAppointments.forEach((apt: Appointment) => {
-        if (apt.patient && apt.patient_user_id) {
-          const current = patientCount.get(apt.patient_user_id) || { count: 0, patient: apt.patient };
-          current.count += 1;
-          patientCount.set(apt.patient_user_id, current);
-        }
-      });
-      const frequent = Array.from(patientCount.values())
-        .sort((a: any, b: any) => b.count - a.count)
-        .map((item: any) => item.patient)
-        .slice(0, 5);
-      setFrequentPatients(frequent);
+      // 🔒 A lista vem do servidor: só quem agendou sozinho, pagou e realizou sessão (2 ou mais, última em 60 dias)
+      apiCall({ url: "/api/invites/eligible-patients", requireAuth: true })
+        .then((fp: any) => setFrequentPatients((Array.isArray(fp) ? fp.slice(0, 5) : []) as any))
+        .catch(() => setFrequentPatients([]));
     } catch (error) {
       setError("Erro ao carregar sessões");
     } finally {

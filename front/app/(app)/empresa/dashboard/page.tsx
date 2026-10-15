@@ -20,7 +20,7 @@ import { MenuCard } from "@/app/(app)/therapist/dashboard/components/cards/MenuC
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { AutoFitText } from "@/components/shared/AutoFitText";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 interface ColaboradorData {
   id: number;

@@ -11,7 +11,7 @@ interface ChatDrawerContentProps {
   userRole: "therapist" | "patient";
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 const getFotoSrc = (url?: string | null) => {
   if (!url) return null;
   return url.startsWith("http") ? url : `${BACKEND_URL}${url}`;

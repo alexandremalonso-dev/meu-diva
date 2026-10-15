@@ -43,6 +43,14 @@ class PatientProfile(Base):
     access_ends_at = Column(DateTime(timezone=True), nullable=True, comment="Data de término do acesso do colaborador")
     inactivation_reason = Column(String(255), nullable=True, comment="Motivo da desativação do colaborador")
     
+    # 🔥 CAMPOS ADICIONAIS
+    gender = Column(String(50), nullable=True)
+    bio = Column(Text, nullable=True)
+    how_did_you_find_us = Column(String(100), nullable=True)
+    lgpd_consent = Column(Boolean, default=False, nullable=True)
+    lgpd_consent_date = Column(DateTime(timezone=True), nullable=True)
+    show_phone_to_patients = Column(Boolean, default=False, nullable=True)
+
     # Metadados
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

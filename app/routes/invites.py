@@ -17,6 +17,16 @@ from app.schemas.invite import InviteCreate, InviteOut
 
 router = APIRouter(prefix="/invites", tags=["convites"])
 
+
+@router.get("/eligible-patients")
+def eligible_patients(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist]))
+):
+    """Pacientes que ESTE terapeuta pode ver e convidar: agendaram sozinhos, pagaram e realizaram sessões com ele."""
+    from app.services.pacientes_terapeuta import pacientes_frequentes
+    return pacientes_frequentes(db, current_user.id)
+
 @router.post("", response_model=InviteOut, status_code=201)
 def create_invite(
     payload: InviteCreate,
@@ -53,6 +63,14 @@ def create_invite(
             raise HTTPException(
                 status_code=404, 
                 detail="Paciente não encontrado ou inativo"
+            )
+
+        # 🔒 Privacidade: só se convida quem JÁ é paciente do terapeuta (agendou sozinho, pagou e realizou sessão)
+        from app.services.pacientes_terapeuta import eh_paciente_do_terapeuta
+        if not eh_paciente_do_terapeuta(db, current_user.id, payload.patient_user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Você só pode convidar pacientes que já fizeram sessão com você."
             )
         
         # Buscar perfil do terapeuta para preço

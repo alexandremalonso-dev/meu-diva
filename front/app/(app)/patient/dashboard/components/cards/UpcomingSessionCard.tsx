@@ -8,7 +8,7 @@ import { Calendar, User, CheckCircle, AlertCircle, Video, Copy, MessageSquare } 
 import { ComplaintModal } from "@/components/Modals/ComplaintModal";
 import { getFotoSrc } from '@/lib/utils';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 interface UpcomingSessionCardProps {
   session: Appointment;

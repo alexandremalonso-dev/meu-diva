@@ -46,24 +46,10 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
   useEffect(() => {
     if (activeTab !== "frequentes" || userRole !== "therapist") return;
     setLoadingFrequent(true);
-    apiCall({ url: "/api/appointments/me/details", requireAuth: true })
+    apiCall({ url: "/api/invites/eligible-patients", requireAuth: true })
       .then((data: any[]) => {
-        const patientMap = new Map<number, any>();
-        data.forEach((apt: any) => {
-          if (!apt.patient) return;
-          const id = apt.patient_user_id;
-          const existing = patientMap.get(id);
-          if (existing) existing.session_count++;
-          else patientMap.set(id, {
-            id, full_name: apt.patient.full_name || apt.patient.email,
-            foto_url: apt.patient.foto_url, session_count: 1,
-          });
-        });
-        const list = Array.from(patientMap.values())
-          .filter(p => p.session_count >= 3)
-          .sort((a, b) => b.session_count - a.session_count)
-          .slice(0, 10);
-        setFrequentPatients(list);
+        // 🔒 A lista vem do servidor: só quem agendou sozinho, pagou e realizou sessão (2 ou mais, última em 60 dias)
+        setFrequentPatients(Array.isArray(data) ? data.slice(0, 10) : []);
       })
       .catch(() => setFrequentPatients([]))
       .finally(() => setLoadingFrequent(false));

@@ -183,7 +183,7 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
     const token = localStorage.getItem("access_token");
     if (!token) return;
 
-    const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
     const wsUrl = `${BACKEND_URL.replace("http", "ws")}/ws/online?token=${token}`;
     
     try {

@@ -29,7 +29,15 @@ class PatientProfileUpdate(BaseModel):
     phone: Optional[str] = None
     cpf: Optional[str] = None
     birth_date: Optional[date] = None  # 🔥 DATA DE NASCIMENTO
-    education_level: Optional[str] = None  # 🔥 NÍVEL DE ESCOLARIDADE
+    education_level: Optional[str] = None
+    gender: Optional[str] = None
+    bio: Optional[str] = None
+    how_did_you_find_us: Optional[str] = None
+    lgpd_consent: Optional[bool] = None
+    lgpd_consent_date: Optional[str] = None
+    show_phone_to_patients: Optional[bool] = None
+    timezone: Optional[str] = None
+    preferred_language: Optional[str] = None
     timezone: Optional[str] = None
     preferred_language: Optional[str] = None
     therapy_goals: Optional[List[str]] = None  # 🔥 Para atualização

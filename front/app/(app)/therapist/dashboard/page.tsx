@@ -46,7 +46,7 @@ import { SessionsList } from './components/SessionsList';
 
 import { AutoFitText } from "@/components/shared/AutoFitText";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 const timeOptions = Array.from({ length: 24 }, (_, i) => i).flatMap(hour => [
   <option key={`${hour}:00`} value={`${hour.toString().padStart(2, '0')}:00`}>
@@ -354,7 +354,10 @@ export default function TherapistDashboardPage() {
       const patientsList = Array.from(patientMap.values());
       patientsList.forEach(p => p.is_frequent = p.session_count >= 3);
       patientsList.sort((a, b) => b.session_count - a.session_count);
-      setFrequentPatients(patientsList);
+      // 🔒 A lista vem do servidor: só quem agendou sozinho, pagou e realizou sessão (2 ou mais, última em 60 dias)
+      apiCall({ url: "/api/invites/eligible-patients", requireAuth: true })
+        .then((fp: any) => setFrequentPatients((Array.isArray(fp) ? fp.map((p: any) => ({ ...p, last_session: p.last_session ? new Date(p.last_session) : undefined })) : []) as any))
+        .catch(() => setFrequentPatients([]));
       
       let personalEventsData: any[] = [];
       try { personalEventsData = await apiCall({ url: "/api/personal-events", requireAuth: true }); } catch (error) {}

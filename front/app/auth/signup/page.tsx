@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { Loader2, AlertCircle, CheckCircle, User, Briefcase, Building2, Crown, Star, Sparkles, Shield, TrendingUp } from "lucide-react";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 // 🔥 Os planos não são mais escolhidos no cadastro: o terapeuta escolhe em /adesao, depois de entrar.
 const SHOW_PLANS_IN_SIGNUP = false as boolean;

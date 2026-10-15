@@ -79,7 +79,7 @@ const DOCUMENT_TYPES = [
   { value: "certidao_trabalhista", label: "Certidão Trabalhista (CNDT)", required: false }
 ];
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 const getDocumentTypeLabel = (type: string) => DOCUMENT_TYPES.find(d => d.value === type)?.label || type;
 

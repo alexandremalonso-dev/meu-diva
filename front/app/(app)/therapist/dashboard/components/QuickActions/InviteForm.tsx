@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getFotoSrc } from '@/lib/utils';
 
 // 🔥 CONSTANTE BACKEND_URL PARA FOTOS
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 type AvailableSlot = {
   starts_at: string;

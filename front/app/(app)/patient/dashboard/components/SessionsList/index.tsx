@@ -7,7 +7,7 @@ import type { Appointment, Therapist } from "../../types";
 import { Calendar, User, Video, RefreshCw, XCircle, Clock, CheckCircle, Copy, Filter, ArrowUp, ArrowDown, MessageSquare, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
 import { getFotoSrc } from '@/lib/utils';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 interface SessionsListProps {
   appointments: Appointment[];

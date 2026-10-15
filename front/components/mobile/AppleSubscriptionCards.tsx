@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import { useEffect, useState } from "react";
 import { Check, Loader2, Crown, Star, Sparkles } from "lucide-react";
@@ -28,7 +29,7 @@ const PLANS: PlanInfo[] = [
     id: "essencial",
     productId: "003",
     name: "Essencial",
-    priceLabel: "R$ 14,90/mês",
+    priceLabel: "R$ 19,90/mês",
     commission: "20% de comissão por sessão",
     features: ["Perfil na busca", "Agenda online", "Videochamadas"],
     icon: Sparkles,
@@ -73,6 +74,7 @@ function isIOSNative(): boolean {
 }
 
 export function AppleSubscriptionCards() {
+  const router = useRouter();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasingPlan, setPurchasingPlan] = useState<PlanId | null>(null);
@@ -159,7 +161,28 @@ export function AppleSubscriptionCards() {
   };
 
   if (!isIOSNative()) {
-    return null;
+    // Android/Web: mostra cards com link para checkout MP
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+        <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 600, letterSpacing: "0.05em", marginBottom: 4 }}>UPGRADE DE PLANO</div>
+        {PLANS.map(plan => {
+          const Icon = plan.icon;
+          return (
+            <button key={plan.id} onClick={() => router.push(`/mobile/subscription-checkout?plan=${plan.id}`)}
+              style={{ background: "white", border: "0.5px solid #E5E7EB", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: plan.id === "premium" ? COLORS.primary + "15" : plan.id === "profissional" ? COLORS.secondary + "15" : "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon size={20} color={plan.id === "premium" ? COLORS.primary : plan.id === "profissional" ? COLORS.secondary : "#6B7280"} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.dark }}>{plan.name}</div>
+                <div style={{ fontSize: 12, color: "#6B7280" }}>{plan.commission} de comissão · {plan.priceLabel}</div>
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.primary, fontWeight: 500 }}>Assinar →</div>
+            </button>
+          );
+        })}
+      </div>
+    );
   }
 
   if (loading) {
@@ -228,7 +251,7 @@ export function AppleSubscriptionCards() {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {PLANS.filter((p) => p.id !== "essencial").map((plan) => {
+        {PLANS.map((plan) => {
           const Icon = plan.icon;
           const isPurchasing = purchasingPlan === plan.id;
           return (

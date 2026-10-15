@@ -32,7 +32,7 @@ export default function RequiredDocumentsPage() {
   // migração para Hostinger em junho/2026). Uploads caíam nesse endereço morto
   // sempre que NEXT_PUBLIC_API_URL não estava embutida no build, sem gerar
   // nenhum log no servidor atual — por isso pareciam "sumir" silenciosamente.
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
   useEffect(() => {
     const checkDocuments = async () => {

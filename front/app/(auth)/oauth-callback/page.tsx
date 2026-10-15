@@ -6,7 +6,7 @@ import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 function getApiBaseUrl(): string {
-  if (typeof window === 'undefined') return 'http://localhost:8000';
+  if (typeof window === 'undefined') return 'https://api.meudivaonline.com';
   const host = window.location.hostname;
   if (host.includes('app.meudivaonline.com') || host.includes('meudiva-frontend-prod')) {
     return 'https://api.meudivaonline.com';
@@ -14,7 +14,7 @@ function getApiBaseUrl(): string {
   if (host.includes('meudiva-frontend-non-prod') || host.includes('homologacao')) {
     return 'https://meudiva-api-non-prod-365415900882.southamerica-east1.run.app';
   }
-  return 'http://localhost:8000';
+  return 'https://api.meudivaonline.com';
 }
 
 export default function OAuthCallbackPage() {

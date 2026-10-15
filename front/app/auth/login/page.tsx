@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Loader2, AlertCircle, CheckCircle, ArrowRight, Sparkles } from "lucide-react";
 
 function getBackendUrl(): string {
-  if (typeof window === "undefined") return "http://localhost:8000";
+  if (typeof window === "undefined") return "https://api.meudivaonline.com";
   const host = window.location.hostname;
   if (host.includes("meudiva-frontend-non-prod") || host.includes("homologacao")) {
     return "https://meudiva-api-non-prod-365415900882.southamerica-east1.run.app";
@@ -15,7 +15,7 @@ function getBackendUrl(): string {
   if (host.includes("app.meudivaonline.com") || host.includes("meudiva-frontend-prod")) {
     return "https://api.meudivaonline.com";
   }
-  return "http://localhost:8000";
+  return "https://api.meudivaonline.com";
 }
 
 function LoginForm() {

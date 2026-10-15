@@ -15,7 +15,14 @@ import MobileHeader from "@/components/mobile/MobileHeader";
 import { getFotoSrc } from "@/lib/utils";
 import { api } from "@/lib/api";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function getBackendUrl(): string {
+  if (typeof window !== "undefined") {
+    const cap = (window as any).Capacitor;
+    if (cap?.isNativePlatform?.()) return "https://api.meudivaonline.com";
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
+}
+const BACKEND_URL = typeof window !== "undefined" ? getBackendUrl() : "https://api.meudivaonline.com";
 
 const COLORS = {
   primary: "#E03673",
@@ -171,7 +178,7 @@ export default function MobileTerapeutaPage() {
         method: "POST",
         body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
       });
-      router.push(`/checkout?appointment_id=${bookingData.id}`);
+      router.push(`/mobile/checkout?appointment_id=${bookingData.id}`);
     } catch (err: any) {
       alert(err.message || "Erro ao agendar");
     } finally {

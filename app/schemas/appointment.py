@@ -19,8 +19,8 @@ class AppointmentCreate(BaseModel):
             raise ValueError("Informe duration_minutes ou ends_at.")
         
         if self.duration_minutes is not None:
-            if self.duration_minutes not in (30, 50):
-                raise ValueError("duration_minutes deve ser 30 ou 50.")
+            if self.duration_minutes < 15 or self.duration_minutes > 180:
+                raise ValueError("duration_minutes deve ser entre 15 e 180.")
             if self.ends_at is None:
                 self.ends_at = self.starts_at + timedelta(
                     minutes=self.duration_minutes
@@ -83,8 +83,8 @@ class RescheduleRequest(BaseModel):
             raise ValueError("Informe duration_minutes ou ends_at.")
         
         if self.duration_minutes is not None:
-            if self.duration_minutes not in (30, 50):
-                raise ValueError("duration_minutes deve ser 30 ou 50.")
+            if self.duration_minutes < 15 or self.duration_minutes > 180:
+                raise ValueError("duration_minutes deve ser entre 15 e 180.")
             if self.ends_at is None:
                 self.ends_at = self.starts_at + timedelta(
                     minutes=self.duration_minutes

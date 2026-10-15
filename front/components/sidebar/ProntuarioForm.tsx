@@ -5,7 +5,7 @@ import { useApi } from "@/lib/useApi";
 import { ReagendamentoModal } from "@/components/Modals/ReagendamentoModal";
 import { getFotoSrc } from '@/lib/utils';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 const outcomeOptions = [
   { value: "EM_ACOMPANHAMENTO", label: "Em acompanhamento" },

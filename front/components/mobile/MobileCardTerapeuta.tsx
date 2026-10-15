@@ -10,7 +10,14 @@ import {
   Tag, Brain, CheckCircle, Award, Building2, FileText
 } from "lucide-react";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function getBackendUrl(): string {
+  if (typeof window !== "undefined") {
+    const cap = (window as any).Capacitor;
+    if (cap?.isNativePlatform?.()) return "https://api.meudivaonline.com";
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
+}
+const BACKEND_URL = typeof window !== "undefined" ? getBackendUrl() : "https://api.meudivaonline.com";
 
 const CORES = {
   azul: "#2F80D3",
@@ -139,7 +146,7 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
 
   const handleAgendar = async (slot: any) => {
     if (!isLoggedIn) {
-      router.push('/auth/login?redirect=/busca')
+      router.push('/mobile/login')
       return
     }
     if (isLoading) return;
@@ -192,7 +199,7 @@ export function MobileCardTerapeuta({ terapeuta, isLoggedIn = false }: MobileCar
       });
 
       const appointmentId = bookingData.id;
-      router.push(`/checkout?appointment_id=${appointmentId}`);
+      router.push(`/mobile/checkout?appointment_id=${appointmentId}`);
 
     } catch (err: any) {
       console.error("Erro ao agendar:", err);

@@ -84,7 +84,7 @@ export default function MobileSessoesRealizadasPage() {
 
   const printReceipt = () => {
     if (!selectedReceipt) return;
-    const win = window.open("", "_blank");
+    // download via blob na mesma janela
     if (!win) return;
     win.document.write(`
       <html>

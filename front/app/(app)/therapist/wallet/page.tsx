@@ -6,7 +6,7 @@ import { useApi } from "@/lib/useApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { Wallet, Filter, Loader2, AlertCircle, TrendingUp, TrendingDown, Crown, Star, Sparkles } from "lucide-react";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
 interface Commission {
   id: number;

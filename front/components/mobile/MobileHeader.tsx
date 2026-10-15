@@ -64,7 +64,7 @@ export default function MobileHeader({ title, showBack = false, backTo }: Mobile
     router.push("/mobile/login");
   };
 
-  const profileLink = user?.role === "therapist" ? "/therapist/profile" : "/patient/profile";
+  const profileLink = user?.role === "therapist" ? "/mobile/perfil-terapeuta" : "/mobile/perfil-paciente";
 
   const fotoSrc = getFotoSrc(userData?.foto_url);
   const initials = user?.full_name
@@ -123,7 +123,7 @@ export default function MobileHeader({ title, showBack = false, backTo }: Mobile
 
           {/* CHAT */}
           <button
-            onClick={() => setShowChat(true)}
+            onClick={() => router.push("/mobile/chat")}
             style={{ background: "none", border: "none", cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
           >
             <MessageCircle size={22} color="rgba(255,255,255,0.9)" />

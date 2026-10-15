@@ -5,11 +5,22 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, Clock, User, Loader2, Search, Star, X, ChevronRight } from "lucide-react";
-import MobileHeader from "@/components/mobile/MobileHeader";
 import { api } from "@/lib/api";
-import { getFotoSrc } from "@/lib/utils";
+import MobileHeader from "@/components/mobile/MobileHeader";
+function getFotoSrc(url?: string): string | null {
+  if (!url) return null;
+  if (url.startsWith("http") || url.startsWith("blob:")) return url;
+  return `https://api.meudivaonline.com${url}`;
+}
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function getBackendUrl(): string {
+  if (typeof window !== "undefined") {
+    const cap = (window as any).Capacitor;
+    if (cap?.isNativePlatform?.()) return "https://api.meudivaonline.com";
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
+}
+const BACKEND_URL = typeof window !== "undefined" ? getBackendUrl() : "https://api.meudivaonline.com";
 
 const COLORS = {
   primary: "#E03673",
@@ -183,14 +194,14 @@ export default function MobileAgendarPage() {
         })
       });
       setModalData(null);
-      router.push(`/checkout?appointment_id=${bookingData.id}`);
+      router.push(`/mobile/checkout?appointment_id=${bookingData.id}`);
 
     } catch (err: any) {
       if (err.message?.toLowerCase().includes('ocupado') || err.message?.toLowerCase().includes('conflict')) {
         alert("Este horário já foi ocupado. Por favor escolha outro.");
         loadFrequentTherapists();
       } else {
-        alert(err.message || "Erro ao agendar");
+        alert(typeof err.message === "string" ? err.message : JSON.stringify(err.message) || "Erro ao agendar");
       }
     } finally {
       setIsBooking(null);
@@ -207,7 +218,8 @@ export default function MobileAgendarPage() {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: COLORS.gray, paddingBottom: 32 }}>
-      <MobileHeader title="Agendar Sessão" showBack backTo="/mobile/dashboard" />
+
+      <MobileHeader />
 
       <div style={{ backgroundColor: COLORS.secondary, padding: "16px 16px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

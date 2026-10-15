@@ -12,7 +12,7 @@ import {
 import type { Appointment } from "../../dashboard/types";
 import { ReagendamentoModal } from "@/components/Modals/ReagendamentoModal";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 type AvailableSlot = { starts_at: string; ends_at: string; duration_minutes: number };

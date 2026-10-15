@@ -140,6 +140,12 @@ def get_patient_profile(
             "foto_url": profile.foto_url,
             "timezone": profile.timezone,
             "preferred_language": profile.preferred_language,
+            "gender": profile.gender,
+            "bio": profile.bio,
+            "how_did_you_find_us": profile.how_did_you_find_us,
+            "lgpd_consent": profile.lgpd_consent,
+            "lgpd_consent_date": profile.lgpd_consent_date,
+            "show_phone_to_patients": profile.show_phone_to_patients,
             "created_at": profile.created_at,
             "updated_at": profile.updated_at,
             "addresses": addresses,
@@ -192,6 +198,10 @@ def update_patient_profile(
             "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,
             "education_level": profile.education_level, "foto_url": profile.foto_url,
             "timezone": profile.timezone, "preferred_language": profile.preferred_language,
+            "gender": profile.gender, "bio": profile.bio,
+            "how_did_you_find_us": profile.how_did_you_find_us,
+            "lgpd_consent": profile.lgpd_consent, "lgpd_consent_date": profile.lgpd_consent_date,
+            "show_phone_to_patients": profile.show_phone_to_patients,
             "created_at": profile.created_at, "updated_at": profile.updated_at,
             "addresses": addresses, "goals": goals
         }

@@ -37,3 +37,23 @@ def list_patients(
         })
     
     return result
+
+@router.get("/cep/{cep}")
+async def lookup_cep(cep: str):
+    """Proxy para a API ViaCEP"""
+    import httpx
+    clean = "".join(c for c in cep if c.isdigit())
+    if len(clean) != 8:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="CEP inválido")
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"https://viacep.com.br/ws/{clean}/json/", timeout=5)
+            data = r.json()
+            if data.get("erro"):
+                from fastapi import HTTPException
+                raise HTTPException(status_code=404, detail="CEP não encontrado")
+            return data
+    except httpx.TimeoutException:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=504, detail="Timeout ao consultar CEP")
