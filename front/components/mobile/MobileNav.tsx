@@ -22,7 +22,7 @@ export function MobileNav() {
     { label: "Buscar", icon: Search, path: "/mobile/busca" },
     { label: "Sessões", icon: Calendar, path: "/mobile/sessoes" },
     { label: "Chat", icon: MessageSquare, path: "/mobile/chat" },
-    { label: "Perfil", icon: User, path: "/patient/profile" },
+    { label: "Perfil", icon: User, path: "/mobile/perfil-paciente" },
   ];
 
   const therapistNav = [
@@ -30,7 +30,7 @@ export function MobileNav() {
     { label: "Pacientes", icon: User, path: "/mobile/terapeuta-pacientes" },
     { label: "Sessões", icon: Calendar, path: "/mobile/terapeuta-sessoes" },
     { label: "Chat", icon: MessageSquare, path: "/mobile/chat" },
-    { label: "Perfil", icon: User, path: "/therapist/profile" },
+    { label: "Perfil", icon: User, path: "/mobile/perfil-terapeuta" },
   ];
 
   const navItems = role === "therapist" ? therapistNav : patientNav;

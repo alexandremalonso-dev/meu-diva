@@ -1,7 +1,7 @@
 // ✅ Detecta o backend correto baseado no hostname
 function getApiBaseUrl(): string {
   if (typeof window === "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    return process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
   }
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
@@ -24,7 +24,7 @@ function getApiBaseUrl(): string {
   ) {
     return "https://meudiva-api-non-prod-365415900882.southamerica-east1.run.app";
   }
-  return "http://localhost:8000";
+  return "https://api.meudivaonline.com";
 }
 
 let isRefreshing = false;

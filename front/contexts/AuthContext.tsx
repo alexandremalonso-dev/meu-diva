@@ -168,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "/mobile/verificar-email",
       "/mobile/checkout",
       "/mobile/adesao",
+      "/mobile/delete-account",
       "/mobile/pacotes",
       "/mobile/subscription-checkout",
       "/mobile/pacote-checkout",
