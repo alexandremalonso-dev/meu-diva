@@ -13,7 +13,8 @@ PACIENTE DO TERAPEUTA: tem pelo menos 1 sessão com ele que foi
   AGENDADA PELO PRÓPRIO PACIENTE (o evento de criação da primeira sessão da cadeia é do paciente; convite ou
   agendamento feito pelo terapeuta não conta), PAGA (ou coberta) e REALIZADA (status completed).
 
-PACIENTE FREQUENTE: paciente do terapeuta com pelo menos 2 dessas sessões e a última nos últimos 60 dias.
+PACIENTE FREQUENTE: paciente do terapeuta com pelo menos 2 dessas sessões e a última nos últimos 60 dias (JANELA_DIAS;
+passar dias=None desliga o prazo).
 """
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -22,7 +23,7 @@ from sqlalchemy import text
 
 MIN_SESSOES_RELACAO = 1
 MIN_SESSOES_FREQUENTE = 2
-JANELA_DIAS = 60
+JANELA_DIAS = 60  # dias; None = sem limite de tempo
 PROFUNDIDADE = 10  # limite de reagendamentos encadeados
 
 _SQL_COBERTAS = """
@@ -132,36 +133,54 @@ def eh_paciente_do_terapeuta(db, terapeuta_id: int, paciente_id: int) -> bool:
     return len(_sessoes_qualificadas(db, terapeuta_id, paciente_id)) >= MIN_SESSOES_RELACAO
 
 
-def pacientes_frequentes(db, terapeuta_id: int, min_sessoes: int = MIN_SESSOES_FREQUENTE, dias: int = JANELA_DIAS, agora=None) -> list:
-    agora = agora or datetime.now(timezone.utc)
-    limite = agora - timedelta(days=dias)
+def _agrupar(db, terapeuta_id: int) -> dict:
     por = defaultdict(list)
     for pid, ini in _sessoes_qualificadas(db, terapeuta_id):
         por[pid].append(ini)
-    achados = [(pid, len(d), max(d)) for pid, d in por.items() if len(d) >= min_sessoes and max(d) >= limite]
-    achados.sort(key=lambda x: (x[1], x[2]), reverse=True)  # mais sessões primeiro; empate: a mais recente
-    out = []
+    return por
+
+
+def _montar(db, achados) -> list:
+    """
+    achados: [(paciente_id, n_sessoes, ultima_sessao)]. Devolve só o que o terapeuta pode ver: identificação e foto.
+    NUNCA telefone nem e-mail (contato por fora da plataforma). 'email' e 'phone' vão vazios só para as telas antigas não quebrarem.
+    """
     try:
         from app.routes import appointments as _ap  # usa os modelos que o sistema já carrega
         User, PatientProfile = _ap.User, _ap.PatientProfile
     except Exception:
         User = PatientProfile = None
+    out = []
     for pid, n, ultima in achados:
-        nome = email = telefone = foto = None
+        nome = foto = None
         if User is not None:
             try:
                 u = db.get(User, pid)
                 pp = db.query(PatientProfile).filter(PatientProfile.user_id == pid).first()
-                email = getattr(u, "email", None)
-                nome = (getattr(pp, "full_name", None) or getattr(u, "full_name", None) or email)
-                telefone = getattr(pp, "phone", None) or getattr(u, "phone", None) or ""
+                nome = getattr(pp, "full_name", None) or getattr(u, "full_name", None)
                 foto = getattr(pp, "foto_url", None)
             except Exception:
                 pass
-        out.append({"id": pid, "user_id": pid, "full_name": nome or f"Paciente #{pid}", "email": email, "phone": telefone or "",
+        out.append({"id": pid, "user_id": pid, "full_name": nome or f"Paciente #{pid}", "email": "", "phone": "",
                     "foto_url": foto, "session_count": n, "last_session": ultima.isoformat() if ultima else None,
-                    "is_frequent": True, "is_blocked": False})
+                    "is_frequent": n >= MIN_SESSOES_FREQUENTE, "is_blocked": False})
     return out
+
+
+def pacientes_do_terapeuta(db, terapeuta_id: int) -> list:
+    """Todos os pacientes DESTE terapeuta (>= 1 sessão agendada por eles, paga e realizada), mais recentes primeiro."""
+    achados = [(pid, len(d), max(d)) for pid, d in _agrupar(db, terapeuta_id).items() if len(d) >= MIN_SESSOES_RELACAO]
+    achados.sort(key=lambda x: x[2], reverse=True)
+    return _montar(db, achados)
+
+
+def pacientes_frequentes(db, terapeuta_id: int, min_sessoes: int = MIN_SESSOES_FREQUENTE, dias=JANELA_DIAS, agora=None) -> list:
+    agora = agora or datetime.now(timezone.utc)
+    limite = (agora - timedelta(days=dias)) if dias is not None else None
+    achados = [(pid, len(d), max(d)) for pid, d in _agrupar(db, terapeuta_id).items()
+               if len(d) >= min_sessoes and (limite is None or max(d) >= limite)]
+    achados.sort(key=lambda x: (x[1], x[2]), reverse=True)  # mais sessões primeiro; empate: a mais recente
+    return _montar(db, achados)
 
 
 def visiveis_para_terapeuta(db, rows, terapeuta_id: int) -> list:

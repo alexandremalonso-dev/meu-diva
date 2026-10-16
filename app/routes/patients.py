@@ -16,8 +16,12 @@ def list_patients(
     current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin]))
 ):
     """
-    Lista todos os pacientes (acessível por terapeutas e admin)
+    Admin: todos os pacientes. Terapeuta: SOMENTE os pacientes dele (agendaram sozinhos, pagaram e realizaram pelo
+    menos uma sessão com ele), sem e-mail nem telefone (contato por fora da plataforma).
     """
+    if current_user.role == UserRole.therapist:
+        from app.services.pacientes_terapeuta import pacientes_do_terapeuta
+        return pacientes_do_terapeuta(db, current_user.id)
     patients = db.execute(
         select(User).where(User.role == UserRole.patient)
     ).scalars().all()

@@ -98,6 +98,11 @@ def get_patient_data_by_appointment(
     
     if appointment.therapist_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Acesso negado. Esta sessão não pertence a você.")
+
+    # 🔒 Dados do paciente (CPF, endereço) só para sessão PAGA ou coberta (pacote / plano da empresa)
+    from app.services.pacientes_terapeuta import ids_pagas
+    if appointment.id not in ids_pagas(db, [appointment.id]):
+        raise HTTPException(status_code=403, detail="Os dados do paciente só ficam disponíveis para sessões pagas.")
     
     patient = db.execute(
         select(User).where(User.id == appointment.patient_user_id)
@@ -122,7 +127,6 @@ def get_patient_data_by_appointment(
         "email": patient.email,
         "cpf": patient.cpf if hasattr(patient, 'cpf') else None,
         "birth_date": patient.birth_date.isoformat() if hasattr(patient, 'birth_date') and patient.birth_date else None,
-        "phone": patient_profile.phone if patient_profile else None,
         "address": {
             "street": address.street if address else None,
             "number": address.number if address else None,

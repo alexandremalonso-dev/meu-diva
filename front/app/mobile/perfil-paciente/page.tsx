@@ -342,7 +342,6 @@ export default function PerfilPacientePage() {
     full_name:"", phone:"", birth_date:"", cpf:"", education_level:"", gender:"", bio:"", how_did_you_find_us:"",
     timezone:"America/Sao_Paulo", preferred_language:"pt-BR",
     lgpd_consent:false, lgpd_consent_date:"",
-    show_phone_to_patients:false,
   });
 
   useEffect(() => { load(); }, []);
@@ -365,7 +364,6 @@ export default function PerfilPacientePage() {
         preferred_language: pd.preferred_language || "pt-BR",
         lgpd_consent: pd.lgpd_consent || false,
         lgpd_consent_date: pd.lgpd_consent_date || "",
-        show_phone_to_patients: pd.show_phone_to_patients || false,
       });
     } catch { setError("Erro ao carregar perfil."); }
     finally { setLoading(false); }
@@ -387,7 +385,6 @@ export default function PerfilPacientePage() {
         timezone: form.timezone || null,
         preferred_language: form.preferred_language || null,
         lgpd_consent: form.lgpd_consent,
-        show_phone_to_patients: form.show_phone_to_patients,
       };
       await api("/api/patient/profile", { method:"PUT", body:JSON.stringify(payload) });
       setSuccess("Perfil salvo com sucesso!");
@@ -582,13 +579,6 @@ export default function PerfilPacientePage() {
                     <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>Seus dados serão utilizados apenas para fins de agendamento e atendimento terapêutico.</div>
                     {form.lgpd_consent_date && <div style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Consentimento em: {new Date(form.lgpd_consent_date).toLocaleDateString("pt-BR")}</div>}
                   </div>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <button onClick={()=>setForm(f=>({...f,show_phone_to_patients:!f.show_phone_to_patients}))}
-                    style={{width:44,height:24,borderRadius:12,background:form.show_phone_to_patients?COLORS.primary:"#D1D5DB",border:"none",cursor:"pointer",position:"relative",flexShrink:0}}>
-                    <div style={{width:18,height:18,borderRadius:"50%",background:"white",position:"absolute",top:3,left:form.show_phone_to_patients?23:3,transition:"left 0.2s"}} />
-                  </button>
-                  <span style={{fontSize:14,color:COLORS.dark}}>Mostrar telefone para terapeutas</span>
                 </div>
 
                 {/* Exclusão de conta — colapsável */}

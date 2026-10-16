@@ -144,8 +144,7 @@ def get_patient_profile(
             "bio": profile.bio,
             "how_did_you_find_us": profile.how_did_you_find_us,
             "lgpd_consent": profile.lgpd_consent,
-            "lgpd_consent_date": profile.lgpd_consent_date,
-            "show_phone_to_patients": profile.show_phone_to_patients,
+            "lgpd_consent_date": (profile.lgpd_consent_date.isoformat() if profile.lgpd_consent_date else None),
             "created_at": profile.created_at,
             "updated_at": profile.updated_at,
             "addresses": addresses,
@@ -175,6 +174,15 @@ def update_patient_profile(
         update_data = profile_data.model_dump(exclude_unset=True)
         if 'cpf' in update_data and update_data['cpf'] == '':
             update_data['cpf'] = None
+        # 🔒 LGPD: o servidor registra QUANDO o consentimento foi dado; o cliente nunca define a data
+        update_data.pop('lgpd_consent_date', None)
+        update_data.pop('show_phone_to_patients', None)
+        _consent_novo = update_data.get('lgpd_consent')
+        if _consent_novo is not None:
+            if _consent_novo and not profile.lgpd_consent:
+                profile.lgpd_consent_date = datetime.now().astimezone()
+            elif not _consent_novo:
+                profile.lgpd_consent_date = None
         name_updated = False
         new_name = None
         for field, value in update_data.items():
@@ -200,8 +208,7 @@ def update_patient_profile(
             "timezone": profile.timezone, "preferred_language": profile.preferred_language,
             "gender": profile.gender, "bio": profile.bio,
             "how_did_you_find_us": profile.how_did_you_find_us,
-            "lgpd_consent": profile.lgpd_consent, "lgpd_consent_date": profile.lgpd_consent_date,
-            "show_phone_to_patients": profile.show_phone_to_patients,
+            "lgpd_consent": profile.lgpd_consent, "lgpd_consent_date": (profile.lgpd_consent_date.isoformat() if profile.lgpd_consent_date else None),
             "created_at": profile.created_at, "updated_at": profile.updated_at,
             "addresses": addresses, "goals": goals
         }
