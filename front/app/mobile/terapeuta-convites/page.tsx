@@ -97,7 +97,8 @@ export default function TerapeutaConvitesPage() {
         startsAt = new Date(selectedSlot.starts_at);
         endsAt = new Date(selectedSlot.ends_at);
       }
-      await api("/api/invites/send", { method: "POST", body: JSON.stringify({ patient_user_id: selectedPatient.id, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), duration_minutes: duration }) });
+      const me = await api("/api/users/me");
+      await api("/api/invites", { method: "POST", body: JSON.stringify({ therapist_user_id: me.id, patient_user_id: selectedPatient.id, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), duration_minutes: duration }) });
       setShowModal(false); setSuccess("✅ Convite enviado com sucesso!"); setTimeout(() => setSuccess(""), 3000); await load();
     } catch (e: any) { setError(e.message || "Erro ao enviar convite."); }
     finally { setSendingInvite(false); }

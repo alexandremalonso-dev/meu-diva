@@ -275,7 +275,7 @@ export default function PerfilTerapeutaPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const [newEmail, setNewEmail] = useState("");
-  const [emailPassword, setEmailPassword] = useState("");
+  const [emailPassword, setEmailPassword] = useState(""); const [emailStep, setEmailStep] = useState<"email" | "code">("email"); const [emailCode, setEmailCode] = useState("");
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailError, setEmailError] = useState("");
 
@@ -419,7 +419,13 @@ export default function PerfilTerapeutaPage() {
   async function handleEmailChange() {
     setEmailSaving(true); setEmailError("");
     try {
-      await api("/api/auth/change-email", { method:"POST", body:JSON.stringify({ new_email:newEmail, password:emailPassword }) });
+      if (emailStep === "email") {
+        await api("/api/auth/request-email-change", { method: "POST", body: JSON.stringify({ new_email: newEmail }) });
+        setEmailStep("code"); setEmailSaving(false);
+        return;
+      }
+      await api("/api/auth/verify-email-change", { method: "POST", body: JSON.stringify({ code: emailCode }) });
+      setEmailStep("email"); setEmailCode("");
       setUserData((prev: any) => ({...prev, email:newEmail}));
       setShowEmailModal(false); setNewEmail(""); setEmailPassword("");
       setSuccess("E-mail alterado! Verifique sua caixa de entrada.");
@@ -651,18 +657,17 @@ export default function PerfilTerapeutaPage() {
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:50 }}>
           <div style={{ background:"white", borderRadius:"16px 16px 0 0", padding:24, width:"100%", maxWidth:480 }}>
             <div style={{ fontSize:16, fontWeight:600, marginBottom:4, color:COLORS.dark }}>Alterar e-mail</div>
-            <div style={{ fontSize:13, color:"#6B7280", marginBottom:16 }}>Digite o novo e-mail e sua senha atual.</div>
+            <div style={{ fontSize:13, color:"#6B7280", marginBottom:16 }}>{emailStep==="email" ? "Digite o novo e-mail. Enviaremos um código de confirmação para o seu e-mail atual." : "Digite o código de 6 dígitos que enviamos para o seu e-mail atual."}</div>
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <div><label style={{ fontSize:12, color:"#6B7280", marginBottom:4, display:"block" }}>Novo e-mail</label>
-                <input value={newEmail} onChange={e=>setNewEmail(e.target.value)} type="email" style={inputSt} /></div>
-              <div><label style={{ fontSize:12, color:"#6B7280", marginBottom:4, display:"block" }}>Senha atual</label>
-                <input value={emailPassword} onChange={e=>setEmailPassword(e.target.value)} type="password" style={inputSt} /></div>
+                <input value={newEmail} onChange={e=>setNewEmail(e.target.value)} type="email" disabled={emailStep==="code"} style={inputSt} /></div>
+              {emailStep==="code" && <div><label style={{fontSize:12,color:"#6B7280",marginBottom:4,display:"block"}}>Código enviado ao seu e-mail atual</label><input value={emailCode} onChange={e=>setEmailCode(e.target.value)} inputMode="numeric" maxLength={6} style={inputSt}/></div>}
               {emailError && <div style={{ background:"#FEE2E2", color:"#991B1B", borderRadius:10, padding:"10px 14px", fontSize:13 }}>{emailError}</div>}
               <div style={{ display:"flex", gap:10 }}>
-                <button onClick={()=>{setShowEmailModal(false);setEmailError("");}} style={{ flex:1, background:"#F3F4F6", border:"none", borderRadius:10, padding:"12px 0", fontSize:14, cursor:"pointer" }}>Cancelar</button>
+                <button onClick={()=>{setShowEmailModal(false);setEmailError("");setEmailStep("email");setEmailCode("");}} style={{ flex:1, background:"#F3F4F6", border:"none", borderRadius:10, padding:"12px 0", fontSize:14, cursor:"pointer" }}>Cancelar</button>
                 <button onClick={handleEmailChange} disabled={emailSaving}
                   style={{ flex:1, background:COLORS.primary, color:"white", border:"none", borderRadius:10, padding:"12px 0", fontSize:14, fontWeight:600, cursor:"pointer", opacity:emailSaving?0.7:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-                  {emailSaving ? <Loader2 size={14} className="animate-spin" /> : "Confirmar"}
+                  {emailSaving ? <Loader2 size={14} className="animate-spin" /> : (emailStep==="email" ? "Enviar código" : "Confirmar")}
                 </button>
               </div>
             </div>
