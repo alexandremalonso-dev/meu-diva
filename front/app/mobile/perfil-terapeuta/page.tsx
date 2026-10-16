@@ -546,7 +546,7 @@ export default function PerfilTerapeutaPage() {
           <div style={{ display:"flex", flexDirection:"column", gap:12, paddingTop:12 }}>
             <div><label style={{ fontSize:12, color:"#6B7280", marginBottom:4, display:"block" }}>Gênero</label>
               <select value={form.gender} onChange={e=>set("gender",e.target.value)} style={{...inputSt}}>
-                <option value="">Selecione</option>{["homem","mulher","nao_binario","genero_fluido"].map(g=><option key={g} value={g}>{g}</option>)}
+                <option value="">Selecione</option>{["homem","mulher","nao_binario","genero_fluido"].map(g=><option key={g} value={g}>{({homem:"Homem",mulher:"Mulher",nao_binario:"Não binário",genero_fluido:"Gênero fluido"} as Record<string,string>)[g] ?? g}</option>)}
               </select></div>
             <div><label style={{ fontSize:12, color:"#6B7280", marginBottom:4, display:"block" }}>Etnia</label>
               <select value={form.ethnicity} onChange={e=>set("ethnicity",e.target.value)} style={{...inputSt}}>

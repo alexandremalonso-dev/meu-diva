@@ -914,7 +914,7 @@ export default function TherapistProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Gênero</label>
                 <select value={formData.gender} onChange={(e) => handleChange("gender", e.target.value)} className="w-full p-2 border rounded-lg">
                   <option value="">Selecione</option>
-                  {genderOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  {genderOptions.map(opt => <option key={opt} value={opt}>{({homem:"Homem",mulher:"Mulher",nao_binario:"Não binário",genero_fluido:"Gênero fluido"} as Record<string,string>)[opt] ?? opt}</option>)}
                 </select>
               </div>
               <div>

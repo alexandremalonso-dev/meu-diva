@@ -524,7 +524,7 @@ export default function PerfilPacientePage() {
                 <div><label style={{fontSize:12,color:"#6B7280",marginBottom:4,display:"block"}}>Gênero</label>
                   <select value={form.gender} onChange={e=>setForm(f=>({...f,gender:e.target.value}))} style={{...inputSt}}>
                     <option value="">Selecione</option>
-                    {["homem","mulher","nao_binario","genero_fluido"].map(g=><option key={g} value={g}>{g}</option>)}
+                    {["homem","mulher","nao_binario","genero_fluido"].map(g=><option key={g} value={g}>{({homem:"Homem",mulher:"Mulher",nao_binario:"Não binário",genero_fluido:"Gênero fluido"} as Record<string,string>)[g] ?? g}</option>)}
                   </select></div>
                 <div><label style={{fontSize:12,color:"#6B7280",marginBottom:4,display:"block"}}>Como nos encontrou?</label>
                   <select value={form.how_did_you_find_us} onChange={e=>setForm(f=>({...f,how_did_you_find_us:e.target.value}))} style={{...inputSt}}>
