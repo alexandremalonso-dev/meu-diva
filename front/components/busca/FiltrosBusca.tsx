@@ -232,7 +232,7 @@ export function FiltrosBusca({ filtros, onFiltrar, onLimpar }: FiltrosBuscaProps
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#E03673]/20 focus:border-[#E03673]"
             >
               {OPCOES_GENERO.map((op) => (
-                <option key={op} value={op}>{op || "Todos"}</option>
+                <option key={op} value={op}>{op ? ({homem:"Homem",mulher:"Mulher",nao_binario:"Não binário",genero_fluido:"Gênero fluido"} as Record<string,string>)[op] ?? op : "Todos"}</option>
               ))}
             </select>
           </div>
