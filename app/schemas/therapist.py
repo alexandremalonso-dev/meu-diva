@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator, Field
 from datetime import datetime, date
 from typing import Optional, List, Dict
 from enum import Enum
@@ -240,6 +240,22 @@ class TherapistProfileOut(TherapistProfileBase):
     cancellation_policy: Optional[str] = None
     # 🔥 is_available_now herdado do TherapistProfileBase
     
+    @field_validator("approaches", "specialties_list", "reasons", "languages_list", "service_types", "service_modalities", mode="before")
+    @classmethod
+    def parse_json_list(cls, v):
+        import json
+        if v is None:
+            return []
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
+                return parsed if isinstance(parsed, list) else [parsed]
+            except Exception:
+                return [s.strip() for s in v.split(",") if s.strip()]
+        return v
+
     class Config:
         from_attributes = True
 

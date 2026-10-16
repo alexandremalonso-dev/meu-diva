@@ -17,6 +17,12 @@ class PatientProfileBase(BaseModel):
     timezone: str = "America/Sao_Paulo"
     preferred_language: str = "pt-BR"
     therapy_goals: Optional[List[str]] = None  # 🔥 Objetivos terapêuticos
+    gender: Optional[str] = None
+    bio: Optional[str] = None
+    how_did_you_find_us: Optional[str] = None
+    lgpd_consent: Optional[bool] = False
+    lgpd_consent_date: Optional[str] = None
+    show_phone_to_patients: Optional[bool] = False
 
 # ============================================
 # CREATE / UPDATE
