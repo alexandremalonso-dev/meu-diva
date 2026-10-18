@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import { useEffect, useState } from "react";
 import { Check, Loader2, Crown, Star, Sparkles } from "lucide-react";
@@ -73,6 +74,7 @@ function isIOSNative(): boolean {
 }
 
 export function AppleSubscriptionCards() {
+  const router = useRouter();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasingPlan, setPurchasingPlan] = useState<PlanId | null>(null);
@@ -159,7 +161,28 @@ export function AppleSubscriptionCards() {
   };
 
   if (!isIOSNative()) {
-    return null;
+    // Android/Web: mostra cards com link para checkout MP
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+        <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 600, letterSpacing: "0.05em", marginBottom: 4 }}>UPGRADE DE PLANO</div>
+        {PLANS.map(plan => {
+          const Icon = plan.icon;
+          return (
+            <button key={plan.id} onClick={() => router.push(`/mobile/subscription-checkout?plan=${plan.id}`)}
+              style={{ background: "white", border: "0.5px solid #E5E7EB", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: plan.id === "premium" ? COLORS.primary + "15" : plan.id === "profissional" ? COLORS.secondary + "15" : "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon size={20} color={plan.id === "premium" ? COLORS.primary : plan.id === "profissional" ? COLORS.secondary : "#6B7280"} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.dark }}>{plan.name}</div>
+                <div style={{ fontSize: 12, color: "#6B7280" }}>{plan.commission} de comissão · {plan.priceLabel}</div>
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.primary, fontWeight: 500 }}>Assinar →</div>
+            </button>
+          );
+        })}
+      </div>
+    );
   }
 
   if (loading) {
@@ -293,13 +316,29 @@ export function AppleSubscriptionCards() {
         })}
       </div>
 
+      <button
+        onClick={async () => {
+          try {
+            const { NativePurchases } = await import("@capgo/native-purchases");
+            await NativePurchases.restoreTransactions();
+            alert("Compras restauradas com sucesso!");
+          } catch (e: any) {
+            if (!e.message?.toLowerCase().includes("cancel")) {
+              alert("Não foi possível restaurar as compras. Tente novamente.");
+            }
+          }
+        }}
+        style={{ width:"100%", background:"transparent", border:"1px solid #E5E7EB", borderRadius:10, padding:"10px 0", fontSize:13, color:"#6B7280", cursor:"pointer", marginTop:10, marginBottom:4 }}>
+        Restaurar compras
+      </button>
+
       <div style={{ marginTop: 14, textAlign: "center", padding: "0 4px" }}>
         <p style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.5, margin: 0 }}>
           Assinaturas com renovação automática mensal, cobradas através da sua conta Apple ID.
           Cancele quando quiser em "Gerenciar assinatura". Ao assinar, você concorda com nossos{" "}
-          <a href="/termos-uso" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Termos de Uso</a>
+          <a href="https://meudivaonline.com/termos-uso" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Termos de Uso</a>
           {" "}e nossa{" "}
-          <a href="/politica-privacidade" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Política de Privacidade</a>.
+          <a href="https://meudivaonline.com/politica-privacidade" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Política de Privacidade</a>.
         </p>
       </div>
     </div>

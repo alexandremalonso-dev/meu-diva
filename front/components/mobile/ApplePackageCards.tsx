@@ -104,8 +104,27 @@ export function ApplePackageCards() {
         })}
       </div>
 
+      <button
+        onClick={async () => {
+          try {
+            const { NativePurchases } = await import("@capgo/native-purchases");
+            await NativePurchases.restoreTransactions();
+            alert("Compras restauradas com sucesso!");
+          } catch (e: any) {
+            if (!e.message?.toLowerCase().includes("cancel")) {
+              alert("Não foi possível restaurar as compras. Tente novamente.");
+            }
+          }
+        }}
+        style={{ width:"100%", background:"transparent", border:"1px solid #E5E7EB", borderRadius:10, padding:"10px 0", fontSize:13, color:"#6B7280", cursor:"pointer", marginBottom:8 }}>
+        Restaurar compras
+      </button>
+
       <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", lineHeight: 1.5 }}>
-        Pagamento processado pela App Store. As sessões valem dentro do mês vigente.
+        Pagamento processado pela App Store. As sessões valem dentro do mês vigente.{" "}
+        <a href="https://meudivaonline.com/termos-uso" style={{ color: "#2F80D3" }}>Termos de Uso</a>
+        {" "}e{" "}
+        <a href="https://meudivaonline.com/politica-privacidade" style={{ color: "#2F80D3" }}>Política de Privacidade</a>.
       </div>
     </div>
   );
