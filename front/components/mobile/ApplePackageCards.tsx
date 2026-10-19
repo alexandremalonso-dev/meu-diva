@@ -73,7 +73,7 @@ export function ApplePackageCards() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {PACKAGES.map(pkg => {
           const isLoading = loading === pkg.productId;
           return (

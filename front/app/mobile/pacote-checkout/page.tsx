@@ -84,6 +84,7 @@ function PacoteCheckoutContent() {
   const params = useSearchParams()
   const planKey = (params.get('plan')||'').toLowerCase()
 
+  const [isIOS, setIsIOS] = useState(false)
   const [plan, setPlan] = useState<Plan|null>(null)
   const [planError, setPlanError] = useState<string|null>(null)
   const [loadingPlan, setLoadingPlan] = useState(true)
