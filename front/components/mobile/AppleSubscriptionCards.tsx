@@ -316,13 +316,29 @@ export function AppleSubscriptionCards() {
         })}
       </div>
 
+      <button
+        onClick={async () => {
+          try {
+            const { NativePurchases } = await import("@capgo/native-purchases");
+            await NativePurchases.restoreTransactions();
+            alert("Compras restauradas com sucesso!");
+          } catch (e: any) {
+            if (!e.message?.toLowerCase().includes("cancel")) {
+              alert("Não foi possível restaurar as compras. Tente novamente.");
+            }
+          }
+        }}
+        style={{ width:"100%", background:"transparent", border:"1px solid #E5E7EB", borderRadius:10, padding:"10px 0", fontSize:13, color:"#6B7280", cursor:"pointer", marginTop:10, marginBottom:4 }}>
+        Restaurar compras
+      </button>
+
       <div style={{ marginTop: 14, textAlign: "center", padding: "0 4px" }}>
         <p style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.5, margin: 0 }}>
           Assinaturas com renovação automática mensal, cobradas através da sua conta Apple ID.
           Cancele quando quiser em "Gerenciar assinatura". Ao assinar, você concorda com nossos{" "}
-          <a href="/termos-uso" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Termos de Uso</a>
+          <a href="https://meudivaonline.com/termos-uso" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Termos de Uso</a>
           {" "}e nossa{" "}
-          <a href="/politica-privacidade" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Política de Privacidade</a>.
+          <a href="https://meudivaonline.com/politica-privacidade" style={{ color: COLORS.secondary, textDecoration: "underline" }}>Política de Privacidade</a>.
         </p>
       </div>
     </div>
