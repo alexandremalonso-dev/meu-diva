@@ -1,4 +1,4 @@
-// SEO-MEUDIVA v1: título, descrição, endereço oficial, imagem do link e dados estruturados do perfil público (roda no servidor)
+// SEO-MEUDIVA v2: título, descrição, endereço oficial, imagem do link e dados estruturados do perfil público (roda no servidor)
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -10,6 +10,7 @@ type Perfil = {
   full_name?: string | null;
   treatment?: string | null;
   specialties?: string | null;
+  professional_type?: string | null;
   bio?: string | null;
   foto_url?: string | null;
   session_price?: number | null;
@@ -36,6 +37,21 @@ async function buscarPerfil(identificador: string): Promise<Resultado> {
 function nomeCompleto(p: Perfil): string {
   return [p.treatment, p.full_name].filter(Boolean).join(" ").trim() || "Terapeuta";
 }
+// Profissão no gênero certo quando o cadastro vem como "Psicólogo(a)": usa o tratamento (Sra./Dra. = feminino; Sr./Dr. = masculino)
+function profissao(p: Perfil): string {
+  const base = (p.professional_type || "").trim();
+  if (!base) return "";
+  if (/\(a\)/i.test(base)) {
+    const t = (p.treatment || "").trim().toLowerCase();
+    if (t.startsWith("sra") || t.startsWith("dra")) return base.replace(/o\(a\)/i, "a").replace(/\(a\)/i, "");  // Psicólogo(a) -> Psicóloga
+    if (t.startsWith("sr") || t.startsWith("dr")) return base.replace(/\(a\)/i, "");  // Psicólogo(a) -> Psicólogo
+  }
+  return base;
+}
+// O que aparece depois do nome: a especialidade que o terapeuta escreveu; se estiver vazia, a profissão.
+function cargo(p: Perfil): string {
+  return (p.specialties || "").trim() || profissao(p);
+}
 function limpar(texto: string): string {
   return texto.replace(/https?:\/\/\S+/g, " ").replace(/(^|\s)@[\w.]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -53,7 +69,7 @@ function cortarPalavras(texto: string, max: number): string {
 const SUFIXO_TITULO = " | Meu Divã";
 function titulo(p: Perfil): string {
   const nome = nomeCompleto(p);
-  const completo = `${nome}${p.specialties ? ", " + p.specialties : ""}${SUFIXO_TITULO}`;
+  const completo = `${nome}${cargo(p) ? ", " + cargo(p) : ""}${SUFIXO_TITULO}`;
   if (completo.length <= 60) return completo;
   const curto = `${nome}${SUFIXO_TITULO}`;
   if (curto.length <= 60) return curto;
@@ -63,7 +79,7 @@ function descricao(p: Perfil): string {
   const paragrafos = (p.bio || "").split(/\n\s*\n/).map(limpar).filter((t) => t.length > 0);
   const base = paragrafos.slice(0, 2).join(" ");
   if (base.length >= 60) return cortarPalavras(base, 155);
-  const esp = p.specialties ? `, ${p.specialties}` : "";
+  const esp = cargo(p) ? `, ${cargo(p)}` : "";
   return cortarPalavras(`Agende sessões de terapia online com ${nomeCompleto(p)}${esp}. Atendimento por vídeo, com privacidade e segurança, no Meu Divã.`, 155);
 }
 
@@ -109,7 +125,7 @@ export default async function Layout({ children, params }: { children: ReactNode
       description: descricao(p),
       worksFor: { "@type": "Organization", name: "Meu Divã", url: "https://meudivaonline.com" },
     };
-    if (p.specialties) jsonLd.jobTitle = p.specialties;
+    if (cargo(p)) jsonLd.jobTitle = cargo(p);
     if (p.foto_url) jsonLd.image = p.foto_url;
     if (p.instagram_url && /^https?:\/\//.test(p.instagram_url)) jsonLd.sameAs = [p.instagram_url];
     if (p.session_price && p.session_price > 0) {
