@@ -112,7 +112,7 @@ export default function PaginaPublicaTerapeuta() {
         // a validação de qual é qual acontece no backend.
         if (!therapistId) throw new Error("Identificador do terapeuta inválido");
 
-        const responseTerapeuta = await fetch(`${BACKEND_URL}/public/terapeutas/${therapistId}`);
+        const responseTerapeuta = await fetch(`${BACKEND_URL}/public/terapeutas/${therapistId}`, { headers: (typeof window !== "undefined" && localStorage.getItem("access_token")) ? { Authorization: `Bearer ${localStorage.getItem("access_token")}` } : {} });
         if (!responseTerapeuta.ok) {
           let errorMsg = `Erro ${responseTerapeuta.status}`;
           try { const d = await responseTerapeuta.json(); errorMsg = d.detail || d.message || errorMsg; } catch {}

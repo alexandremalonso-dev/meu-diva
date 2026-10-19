@@ -98,6 +98,51 @@ def _buscar_terapeuta_por_identifier(identifier: str, db: Session) -> Optional[T
 
 
 # ==========================
+# 🔒 PRIVACIDADE DA API PÚBLICA: contato só para PACIENTE LOGADO (e só se o terapeuta marcou "mostrar");
+# a assinatura e o e-mail do terapeuta nunca saem por aqui.
+# ==========================
+def _usuario_opcional(request, db):
+    """Usuário logado (token de acesso válido) ou None. Nunca levanta erro: visitante e Google são anônimos."""
+    try:
+        from app.core.security import get_token_from_request, decode_token
+        token = get_token_from_request(request)
+        if not token:
+            return None
+        payload = decode_token(token)
+        if payload.get("type") != "access" or not payload.get("sub"):
+            return None
+        return db.get(User, int(payload["sub"]))
+    except Exception:
+        return None
+
+
+def _eh_paciente(usuario) -> bool:
+    if not usuario:
+        return False
+    papel = getattr(usuario, "role", None)
+    return str(getattr(papel, "value", papel)).lower() == "patient"
+
+
+def _sanear_publico(d: dict, ver_contato: bool) -> dict:
+    d = dict(d)
+    d["signature_url"] = None
+    if not (ver_contato and d.get("show_phone_to_patients") and d.get("phone")):
+        d["phone"] = None
+        d["show_phone_to_patients"] = False
+    if not (ver_contato and d.get("show_birth_date_to_patients") and d.get("birth_date")):
+        d["birth_date"] = None
+        d["show_birth_date_to_patients"] = False
+    return d
+
+
+def _publico_dict(t, ver_contato: bool = False) -> dict:
+    return _sanear_publico(TherapistProfileOut.model_validate(t, from_attributes=True).model_dump(), ver_contato)
+
+
+from starlette.requests import Request
+
+
+# ==========================
 # LISTAR TERAPEUTAS COM FILTROS
 # ==========================
 @router.get("", response_model=List[TherapistProfileOut])
@@ -262,7 +307,28 @@ def listar_terapeutas_publicos(
         terapeutas_ordenados = terapeutas_ordenados[offset:offset + limit]
 
     print(f"✅ Retornando {len(terapeutas_ordenados)} terapeutas de {total_count} (is_search={is_search})")
-    return terapeutas_ordenados
+    return [_publico_dict(t, False) for t in terapeutas_ordenados]
+
+
+# ==========================
+# 🔎 LISTA ENXUTA PARA O MAPA DO SITE (SEO): só quem pode ser indexado
+# (aprovado, conta ativa, perfil completo e fora da conta de teste)
+# ==========================
+@router.get("/seo/mapa")
+def mapa_seo_terapeutas(db: Session = Depends(get_db)):
+    contas_teste = ["reviewer.therapist@meudivaonline.com"]
+    linhas = db.execute(
+        select(TherapistProfile).join(User, User.id == TherapistProfile.user_id).where(
+            and_(User.is_active == True, User.email.notin_(contas_teste), TherapistProfile.validation_status == "approved")
+        )
+    ).scalars().all()
+    saida = []
+    for t in linhas:
+        if not _perfil_completo(t):
+            continue
+        quando = getattr(t, "updated_at", None)
+        saida.append({"id": t.id, "atualizado_em": quando.isoformat() if quando else None})
+    return saida
 
 
 # ==========================
@@ -271,6 +337,7 @@ def listar_terapeutas_publicos(
 @router.get("/{identifier}", response_model=TherapistProfileOut)
 def get_terapeuta_publico(
     identifier: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     print(f"\n📢 GET /public/terapeutas/{identifier}")
@@ -288,7 +355,10 @@ def get_terapeuta_publico(
 
     profile_dict['instagram_url'] = profile.instagram_url
     profile_dict['video_url'] = profile.video_url
-    profile_dict['user'] = {"email": user.email if user else None} if user else None
+    profile_dict['user'] = {"email": ""} if user else None  # 🔒 o e-mail do terapeuta nunca sai na API pública
+
+    visitante = _usuario_opcional(request, db)
+    profile_dict = _sanear_publico(profile_dict, _eh_paciente(visitante))
 
     print(f"✅ Perfil público retornado: {profile.id}, nome: {profile.full_name}")
     return profile_dict
