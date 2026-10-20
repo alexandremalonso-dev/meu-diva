@@ -146,6 +146,61 @@ def get_patient_data_by_appointment(
 # ==========================
 # 🔥 GET PROFILE
 # ==========================
+# 👁️ VISIBILIDADE NA BUSCA: a situação do PRÓPRIO terapeuta (mesmas regras de /public/terapeutas)
+# ==========================
+@router.get("/me/visibilidade")
+def minha_visibilidade(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist])),
+):
+    """Plano, se o perfil está completo para a busca e o que falta. Só devolve a situação do terapeuta logado."""
+    from datetime import date as _date
+    from app.services.plan_priority import get_therapist_plan as _plano_do_terapeuta
+    from app.models.availability import AvailabilityPeriod as _Periodo
+
+    nomes = {"premium": "Premium", "profissional": "Profissional", "essencial": "Essencial", "basico": "Básico"}
+    perfil = db.execute(select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)).scalar_one_or_none()
+    if not perfil:
+        return {"plano": "basico", "plano_nome": "Básico", "completo": False, "introducao": "", "motivos": []}
+    plano = str(_plano_do_terapeuta(current_user.id, db) or "").strip().lower()
+    if plano not in nomes:
+        plano = "basico"
+    pago = plano != "basico"
+    aprovado = perfil.validation_status == "approved"
+    foto = bool(perfil.foto_url and perfil.foto_url.strip())
+    horario = db.execute(
+        select(_Periodo.id).where(and_(_Periodo.therapist_profile_id == perfil.id, _Periodo.end_date >= _date.today())).limit(1)
+    ).first() is not None
+    bio = bool(perfil.bio and perfil.bio.strip())
+    preco = bool(perfil.session_price and perfil.session_price > 0)
+    completo = aprovado and foto and horario  # a mesma regra do grupo "completo" da busca
+
+    motivos = []
+    if not aprovado:
+        motivos.append({"codigo": "em_analise", "titulo": "Cadastro em análise",
+                        "texto": "Seu cadastro ainda está em análise. Assim que for aprovado, seu perfil passa a competir na busca pela posição do seu plano.",
+                        "acao": {"rotulo": "Ver documentos", "caminho": "/therapist/documents/required"}})
+    if not foto:
+        texto = ("Seu perfil não tem foto. Com o plano Básico, um perfil sem foto não aparece na busca, nem na página inicial, nem no Google."
+                 if not pago else
+                 "Seu perfil não tem foto. Sem ela, ele fica mais abaixo na busca e não aparece na página inicial nem no Google.")
+        motivos.append({"codigo": "sem_foto", "titulo": "Falta a foto do perfil", "texto": texto,
+                        "acao": {"rotulo": "Enviar foto", "caminho": "/therapist/profile"}})
+    if not horario:
+        motivos.append({"codigo": "sem_horario", "titulo": "Você não tem horários disponíveis",
+                        "texto": "Na busca, quem tem horário disponível aparece primeiro, e o plano só decide a posição entre os perfis disponíveis.",
+                        "acao": {"rotulo": "Cadastrar horários", "caminho": "/therapist/availability"}})
+    if aprovado and (not bio or not preco):
+        falta = "a apresentação e o valor da sessão" if (not bio and not preco) else ("a apresentação" if not bio else "o valor da sessão")
+        motivos.append({"codigo": "perfil_incompleto", "titulo": "Complete o seu perfil",
+                        "texto": f"Falta {falta}. Sem isso, seu perfil não aparece na página inicial do Meu Divã nem no Google.",
+                        "acao": {"rotulo": "Completar perfil", "caminho": "/therapist/profile"}})
+    introducao = (f"Você está no plano {nomes[plano]}, mas seu perfil ainda não aproveita todo o destaque que o plano dá na busca:"
+                  if pago else "Estes pontos deixam seu perfil mais abaixo na busca, ou fora dela:")
+    return {"plano": plano, "plano_nome": nomes[plano], "completo": completo, "introducao": introducao, "motivos": motivos[:3]}
+
+
+# ==========================
 @router.get("/me/profile", response_model=TherapistProfileOut)
 def get_my_profile(
     db: Session = Depends(get_db),

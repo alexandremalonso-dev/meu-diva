@@ -40,6 +40,7 @@ import { useStats } from './hooks/useStats';
 import { useFilters } from './hooks/useFilters';
 
 import { StatsCards } from './components/StatsCards';
+import { VisibilidadeAviso } from './components/VisibilidadeAviso';
 import { InviteForm } from './components/QuickActions/InviteForm';
 import { CalendarTherapist } from "@/components/calendar/CalendarTherapist";
 import { SessionsList } from './components/SessionsList';
@@ -580,6 +581,8 @@ export default function TherapistDashboardPage() {
             </div>
           </div>
         )}
+
+        <VisibilidadeAviso />
       </div>
     </>
   );
