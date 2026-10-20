@@ -110,10 +110,17 @@ export default function AdminTherapistsPage() {
       const therapistsList = usersData.filter((u:any) => u.role === "therapist");
       const processed: Therapist[] = [];
 
+      // Perfis buscados em PARALELO, em lotes de 8 (antes: uma chamada por terapeuta, uma de cada vez, em fila)
+      const perfis = new Map<number, any>();
+      const LOTE = 8;
+      for (let n = 0; n < therapistsList.length; n += LOTE) {
+        await Promise.all(therapistsList.slice(n, n + LOTE).map(async (u: any) => {
+          try { perfis.set(u.id, await apiCall({ url: `/api/admin/therapists/${u.id}/profile`, requireAuth: true })); } catch {}
+        }));
+      }
+
       for (const t of therapistsList) {
-        let profile = null;
-        // 🔥 CORRIGIDO: endpoint de admin (era /api/therapists/{id}/profile, que não existe)
-        try { profile = await apiCall({ url: `/api/admin/therapists/${t.id}/profile`, requireAuth: true }); } catch {}
+        const profile: any = perfis.get(t.id) ?? null;
         const tApts = apts.filter((a:any) => a.therapist_user_id === t.id);
         const completed = tApts.filter((a:any) => a.status === "completed");
         
