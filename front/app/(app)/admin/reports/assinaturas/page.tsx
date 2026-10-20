@@ -415,7 +415,7 @@ export default function AdminAssinaturasReportPage() {
         {[
           { label: "Assinantes Pagos", value: summary.total_assinantes, sub: "Profissional + Premium", icon: <Users className="w-5 h-5 text-[#F59E0B]" /> },
           { label: "Assinaturas Ativas", value: summary.total_ativos, sub: "planos pagos em dia", icon: <CheckCircle className="w-5 h-5 text-green-500" /> },
-          { label: "Em Atraso", value: summary.total_atraso, sub: "status past_due no MP", icon: <AlertTriangle className="w-5 h-5 text-red-500" /> },
+          { label: "Em Atraso", value: summary.total_atraso, sub: "pagamento da renovação não aprovado", icon: <AlertTriangle className="w-5 h-5 text-red-500" /> },
           { label: "Canceladas", value: summary.total_cancelados, sub: "assinaturas", icon: <XCircle className="w-5 h-5 text-gray-500" /> },
           { label: "Receita Mensal Real", value: formatCurrency(summary.receita_total_mensal), sub: "último ciclo MP", icon: <CreditCard className="w-5 h-5 text-green-500" /> },
           { label: "Total Histórico MP", value: formatCurrency(summary.receita_total_historico), sub: "desde o início", icon: <TrendingUp className="w-5 h-5 text-blue-500" /> },
