@@ -143,6 +143,13 @@ from starlette.requests import Request
 
 
 # ==========================
+# 🔒 ORDEM DOS PLANOS NA BUSCA (do mais alto para o mais baixo): Premium > Profissional > Essencial > Básico.
+# O PLAN_PRIORITY (usado em outros pontos) tem Essencial = Básico = 1; a busca usa esta escala própria.
+# ==========================
+PLAN_RANK_BUSCA = {"premium": 4, "profissional": 3, "essencial": 2, "basico": 1}
+
+
+# ==========================
 # LISTAR TERAPEUTAS COM FILTROS
 # ==========================
 @router.get("", response_model=List[TherapistProfileOut])
@@ -220,7 +227,7 @@ def listar_terapeutas_publicos(
 
     def get_plan_priority(therapist):
         plan = get_therapist_plan(therapist.user_id, db)
-        return PLAN_PRIORITY.get(plan, 1)
+        return PLAN_RANK_BUSCA.get(str(plan or "").strip().lower(), 1)
 
     def tem_foto(therapist) -> bool:
         return bool(therapist.foto_url and therapist.foto_url.strip())
@@ -275,6 +282,7 @@ def listar_terapeutas_publicos(
             return (
                 1,                     # grupo "incompleto" vem depois
                 0 if disponivel else 1,
+                -plan_priority,        # entre quem tem (ou não tem) horário, o plano decide
                 -rating,
                 nome_para_ordenar,
             )
