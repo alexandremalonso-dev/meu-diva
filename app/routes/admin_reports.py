@@ -98,11 +98,146 @@ def get_therapists_by_plan(
             "email": user.email,
             "plan": subscription.plan if subscription else "basico",
             "subscription_status": subscription.status if subscription else "active",
+            "payment_provider": getattr(subscription, "payment_provider", None) if subscription else None,
             "total_commission_paid": float(total_commission),
             "total_sessions": total_sessions,
             "current_period_end": subscription.current_period_end.isoformat() if subscription and subscription.current_period_end else None
         })
     return result
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# 🔥 Receita REAL das assinaturas: cobranças efetivamente PAGAS no Mercado Pago (não é projeção).
+# "Paga" = cobrança (authorized_payment) cujo pagamento tem status "approved". Confere com o resumo (summarized) do próprio MP.
+# Cache de 10 min em memória (?force=true atualiza; resultado parcial não é guardado). Apple (apple_iap) não tem valor cobrado
+# aqui: vai à parte, como ESTIMADO (preço do plano). Resposta de erro (502/503) em vez de número inventado.
+# ---------------------------------------------------------------------------------------------------------------
+_MP_RECEITA_CACHE: Dict[str, Any] = {"ts": 0.0, "data": None}
+_MP_RECEITA_TTL = 600
+
+
+def _mp_receita_get(path: str, params: Optional[Dict[str, Any]] = None):
+    import os
+    import requests
+    token = os.getenv("MP_ACCESS_TOKEN", "")
+    base = os.getenv("MP_API_BASE_URL", "https://api.mercadopago.com")
+    resp = requests.get(base + path, params=params, headers={"Authorization": f"Bearer {token}"}, timeout=15)
+    try:
+        corpo = resp.json()
+    except Exception:
+        corpo = {}
+    return resp.status_code, corpo
+
+
+def _mp_receita_calcular(db: Session) -> Dict[str, Any]:
+    import os
+    from sqlalchemy import text
+    if not os.getenv("MP_ACCESS_TOKEN", ""):
+        raise HTTPException(status_code=503, detail="MP_ACCESS_TOKEN não configurado: receita real indisponível")
+    linhas = db.execute(text(
+        "SELECT s.id, s.plan, s.status::text, s.payment_provider::text, s.stripe_subscription_id, p.price_brl "
+        "FROM subscriptions s JOIN plan_prices p ON p.plan = s.plan ORDER BY s.id"
+    )).all()
+    mp = [l for l in linhas if (l[3] or "") == "mercadopago" and l[4]]
+    apple = [l for l in linhas if (l[3] or "") == "apple_iap"]
+    corte = (datetime.now() - timedelta(days=31)).strftime("%Y-%m-%d")
+    mapa_status = {"active": "authorized", "paused": "paused", "cancelled": "cancelled", "canceled": "cancelled"}
+
+    def _data(r):
+        return str(r.get("debit_date") or r.get("date_created") or "")[:10]
+
+    total = 0.0
+    recente = 0.0
+    itens: List[Dict[str, Any]] = []
+    erros: List[Dict[str, Any]] = []
+    por_plano: Dict[str, Dict[str, Any]] = {}
+    for sid, plano, st_sis, _prov, pre, _preco in mp:
+        try:
+            c, p = _mp_receita_get(f"/preapproval/{pre}")
+            if c != 200:
+                raise RuntimeError(f"MP respondeu {c} ao consultar a assinatura")
+            resumo = p.get("summarized") or {}
+            todas: List[Dict[str, Any]] = []
+            total_lista = 0
+            for _pagina in range(60):
+                c2, p2 = _mp_receita_get("/authorized_payments/search", {"preapproval_id": pre, "limit": 12, "offset": len(todas)})
+                if c2 != 200:
+                    raise RuntimeError(f"MP respondeu {c2} ao listar as cobranças")
+                rs = p2.get("results") or []
+                todas.extend(rs)
+                total_lista = (p2.get("paging") or {}).get("total", len(todas))
+                if not rs or len(todas) >= total_lista:
+                    break
+            if len(todas) < total_lista:
+                raise RuntimeError("lista de cobranças incompleta")
+            pagas = [r for r in todas if str((r.get("payment") or {}).get("status")) == "approved"]
+            rejeitadas = [r for r in todas if str((r.get("payment") or {}).get("status")) == "rejected"]
+            soma = round(sum(float(r.get("transaction_amount") or 0) for r in pagas), 2)
+            rec = round(sum(float(r.get("transaction_amount") or 0) for r in pagas if _data(r) >= corte), 2)
+            datas = sorted(_data(r) for r in pagas)
+            r_val = resumo.get("charged_amount")
+            if r_val is None:
+                conf = "sem_valor_no_resumo"
+            else:
+                conf = "igual" if abs(float(r_val) - soma) < 0.005 else "diferente"
+            st_mp = p.get("status")
+            itens.append({
+                "subscription_id": sid, "plano": plano, "status_sistema": st_sis, "status_mp": st_mp,
+                "divergente": mapa_status.get(str(st_sis), str(st_sis)) != st_mp,
+                "periodo_gratis": bool((p.get("auto_recurring") or {}).get("free_trial")),
+                "cobrancas_pagas": len(pagas), "cobrancas_rejeitadas": len(rejeitadas),
+                "total_pago": soma, "pago_ultimos_31_dias": rec,
+                "primeira_cobranca_paga": datas[0] if datas else None, "ultima_cobranca_paga": datas[-1] if datas else None,
+                "nunca_pagou": len(pagas) == 0, "conferencia_resumo_mp": conf,
+            })
+            total += soma
+            recente += rec
+            acc = por_plano.setdefault(plano, {"assinaturas": 0, "total_pago": 0.0, "pago_ultimos_31_dias": 0.0})
+            acc["assinaturas"] += 1
+            acc["total_pago"] = round(acc["total_pago"] + soma, 2)
+            acc["pago_ultimos_31_dias"] = round(acc["pago_ultimos_31_dias"] + rec, 2)
+        except Exception as e:
+            erros.append({"subscription_id": sid, "plano": plano, "motivo": str(e) if isinstance(e, RuntimeError) else type(e).__name__})
+    if mp and len(erros) == len(mp):
+        raise HTTPException(status_code=502, detail="Mercado Pago indisponível ou recusou todas as consultas de receita")
+    ativas_apple = [l for l in apple if str(l[2]) == "active"]
+    return {
+        "fonte": "mercadopago",
+        "criterio": "cobranças com pagamento aprovado (approved) no Mercado Pago",
+        "atualizado_em": datetime.now().isoformat(timespec="seconds"),
+        "total_cobrado_historico": round(total, 2),
+        "total_mensal_real": round(recente, 2),
+        "janela_mensal_dias": 31,
+        "assinaturas_mp_total": len(mp),
+        "assinaturas_mp_consultadas": len(mp) - len(erros),
+        "assinaturas_que_nunca_pagaram": sum(1 for i in itens if i["nunca_pagou"]),
+        "parcial": bool(erros),
+        "erros": erros,
+        "por_plano": por_plano,
+        "por_assinatura": itens,
+        "apple": {
+            "assinaturas_ativas": len(ativas_apple),
+            "mensal_estimado": round(sum(float(l[5]) for l in ativas_apple), 2),
+            "observacao": "ESTIMADO pelo preço do plano: a Apple não informa aqui o valor realmente cobrado",
+        },
+    }
+
+
+@router.get("/subscriptions-revenue-real")
+def get_subscriptions_revenue_real(
+    force: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.admin]))
+):
+    import time
+    agora = time.time()
+    if not force and _MP_RECEITA_CACHE["data"] is not None and agora - _MP_RECEITA_CACHE["ts"] < _MP_RECEITA_TTL:
+        return _MP_RECEITA_CACHE["data"]
+    dados = _mp_receita_calcular(db)
+    if not dados["parcial"]:
+        _MP_RECEITA_CACHE["ts"] = agora
+        _MP_RECEITA_CACHE["data"] = dados
+    return dados
 
 
 @router.get("/commissions")
