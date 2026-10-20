@@ -16,6 +16,48 @@ UPLOAD_DIR = "uploads/therapist_documents"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+def _avisar_admins_documento_enviado(db, therapist_user, profile_id: int, document_type: str):
+    """🔔 Avisa cada admin ativo (no sino) que há documento para validar.
+    Agrupa por terapeuta: se já existe um aviso NÃO lido deste terapeuta, atualiza em vez de criar outro.
+    Quem chama protege com try/except: um erro aqui nunca pode derrubar o envio do documento."""
+    from datetime import datetime as _dt
+    from app.services import notification_service as _ns
+    NotificationService = _ns.NotificationService
+    Notification = getattr(_ns, "Notification", None)
+    if Notification is None:
+        from app.models.notification import Notification
+    nomes = {"diploma": "o diploma", "registration": "o registro profissional"}
+    nome = getattr(therapist_user, "full_name", None) or getattr(therapist_user, "email", None) or "Um terapeuta"
+    servico = NotificationService(db)
+    admins = db.query(User).filter(User.role == UserRole.admin, User.is_active == True).all()
+    for admin in admins:
+        abertos = db.query(Notification).filter(
+            Notification.user_id == admin.id,
+            Notification.type == "document_submitted",
+            Notification.is_read == False
+        ).all()
+        atual = next((n for n in abertos if isinstance(n.data, dict) and n.data.get("therapist_id") == profile_id), None)
+        tipos = [document_type]
+        if atual is not None:
+            tipos = sorted(set(list(atual.data.get("document_types") or []) + [document_type]))
+        texto = f"{nome} enviou {' e '.join(nomes.get(t, t) for t in tipos)} para validação."
+        dados = {"therapist_id": profile_id, "therapist_user_id": therapist_user.id, "document_types": tipos}
+        if atual is not None:
+            atual.message = texto
+            atual.data = dados
+            atual.created_at = _dt.utcnow()
+            db.commit()
+        else:
+            servico.create_notification(
+                user_id=admin.id,
+                notification_type="document_submitted",
+                title="Documentos para validação",
+                message=texto,
+                data=dados,
+                action_link="/admin/therapists/validation"
+            )
+
+
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -93,6 +135,16 @@ async def upload_document(
     # Atualizar status do terapeuta para pendente
     therapist_profile.validation_status = "pending"
     db.commit()
+
+    # 🔔 Avisa os admins (sino) que há documento para validar. Nunca derruba o envio se a notificação falhar.
+    try:
+        _avisar_admins_documento_enviado(db, current_user, therapist_profile.id, document_type)
+    except Exception as e:
+        print(f"⚠️ Não foi possível avisar os admins sobre o documento enviado: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     return {
         "success": True,
