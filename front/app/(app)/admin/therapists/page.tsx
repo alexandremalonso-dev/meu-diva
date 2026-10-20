@@ -110,13 +110,11 @@ export default function AdminTherapistsPage() {
       const therapistsList = usersData.filter((u:any) => u.role === "therapist");
       const processed: Therapist[] = [];
 
-      // Perfis buscados em PARALELO, em lotes de 8 (antes: uma chamada por terapeuta, uma de cada vez, em fila)
+      // Perfis vêm da lista /api/therapists (já buscada acima): uma chamada só, em vez de uma por terapeuta
+      // (a rota /api/admin/therapists/ID/profile não existe: respondia 404 e deixava especialidade, valor e nota vazios)
       const perfis = new Map<number, any>();
-      const LOTE = 8;
-      for (let n = 0; n < therapistsList.length; n += LOTE) {
-        await Promise.all(therapistsList.slice(n, n + LOTE).map(async (u: any) => {
-          try { perfis.set(u.id, await apiCall({ url: `/api/admin/therapists/${u.id}/profile`, requireAuth: true })); } catch {}
-        }));
+      if (therapistsData.status === "fulfilled" && Array.isArray(therapistsData.value)) {
+        therapistsData.value.forEach((p: any) => { if (p.user_id) perfis.set(p.user_id, p); });
       }
 
       for (const t of therapistsList) {
