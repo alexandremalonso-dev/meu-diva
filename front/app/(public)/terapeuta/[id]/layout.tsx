@@ -1,4 +1,4 @@
-// SEO-MEUDIVA v2: título, descrição, endereço oficial, imagem do link e dados estruturados do perfil público (roda no servidor)
+// SEO-MEUDIVA v3: título, descrição, endereço oficial, imagem do link e dados estruturados do perfil público (roda no servidor)
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -67,13 +67,40 @@ function cortarPalavras(texto: string, max: number): string {
   return palavras.join(" ").replace(/[\s,.;:]+$/, "") + "…";
 }
 const SUFIXO_TITULO = " | Meu Divã";
+// Encurta o cargo em palavra inteira, sem reticências e sem conectivo solto; devolve "" se nem a primeira palavra couber.
+function encurtarCargo(texto: string, max: number): string {
+  if (texto.length <= max) return texto;
+  let corte = texto.slice(0, max);
+  if (texto[max] !== " ") {
+    const e = corte.lastIndexOf(" ");
+    if (e <= 0) return "";
+    corte = corte.slice(0, e);
+  }
+  const palavras = corte.split(" ");
+  while (palavras.length > 0 && PALAVRAS_SOLTAS.has(palavras[palavras.length - 1].toLowerCase().replace(/[.,;:]+$/, ""))) palavras.pop();
+  return palavras.join(" ").replace(/[\s,.;:]+$/, "");
+}
+// Título com até 60 caracteres. Ordem de sacrifício: para a busca o CARGO vale mais que o tratamento (Sra., Dr.):
+// 1) tratamento + nome + cargo; 2) nome + cargo; 3) nome + cargo encurtado; 4) só o nome; 5) nome cortado. A marca fica sempre.
 function titulo(p: Perfil): string {
-  const nome = nomeCompleto(p);
-  const completo = `${nome}${cargo(p) ? ", " + cargo(p) : ""}${SUFIXO_TITULO}`;
-  if (completo.length <= 60) return completo;
-  const curto = `${nome}${SUFIXO_TITULO}`;
-  if (curto.length <= 60) return curto;
-  return cortarPalavras(nome, 60 - SUFIXO_TITULO.length) + SUFIXO_TITULO; // nome longo: corta o nome e preserva a marca
+  const cg = cargo(p);
+  const comTrat = nomeCompleto(p);
+  const simples = (p.full_name || "").trim() || comTrat;
+  const monta = (n: string, c: string) => `${n}${c ? ", " + c : ""}${SUFIXO_TITULO}`;
+  if (cg) {
+    for (const n of [comTrat, simples]) {
+      const t = monta(n, cg);
+      if (t.length <= 60) return t;
+    }
+    const folga = 60 - (simples.length + 2 + SUFIXO_TITULO.length);
+    const encurtado = folga >= 8 ? encurtarCargo(cg, folga) : "";
+    if (encurtado) return monta(simples, encurtado);
+  }
+  for (const n of [comTrat, simples]) {
+    const t = monta(n, "");
+    if (t.length <= 60) return t;
+  }
+  return cortarPalavras(simples, 60 - SUFIXO_TITULO.length) + SUFIXO_TITULO; // nome muito longo: corta o nome e preserva a marca
 }
 function descricao(p: Perfil): string {
   const paragrafos = (p.bio || "").split(/\n\s*\n/).map(limpar).filter((t) => t.length > 0);
