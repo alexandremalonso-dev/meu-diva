@@ -48,9 +48,10 @@ function profissao(p: Perfil): string {
   }
   return base;
 }
-// O que aparece depois do nome: a especialidade que o terapeuta escreveu; se estiver vazia, a profissão.
+// O que aparece depois do nome: a Especialidade/Profissão/Ocupação (escolha única, o "Tipo Profissional" do cadastro).
+// O texto livre "Especialidades" (temas de atendimento, vários valores) não entra no título, na descrição nem no dado estruturado.
 function cargo(p: Perfil): string {
-  return (p.specialties || "").trim() || profissao(p);
+  return profissao(p);
 }
 function limpar(texto: string): string {
   return texto.replace(/https?:\/\/\S+/g, " ").replace(/(^|\s)@[\w.]+/g, " ").replace(/\s+/g, " ").trim();

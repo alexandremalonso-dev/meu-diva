@@ -126,7 +126,7 @@ export default function AdminTherapistsPage() {
           id: t.id,
           full_name: profile?.full_name || t.full_name || t.email,
           email: t.email,
-          specialties: profile?.specialties,
+          specialties: profile?.professional_type, // Especialidade/Profissão/Ocupação = "Tipo Profissional" (escolha única); o texto livre "Especialidades" são temas de atendimento
           session_price: profile?.session_price,
           total_sessions: completed.length,
           total_revenue: completed.reduce((s:number, a:any) => s + (a.session_price||0), 0),
