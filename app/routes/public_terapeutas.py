@@ -126,6 +126,10 @@ def _eh_paciente(usuario) -> bool:
 def _sanear_publico(d: dict, ver_contato: bool) -> dict:
     d = dict(d)
     d["signature_url"] = None
+    # 🔒 identificação e dados financeiros do terapeuta nunca saem pela API pública (nem para paciente logado)
+    for _campo in ("cpf", "cnpj", "cpf_masked", "bank_agency", "bank_account", "bank_account_digit", "pix_key_type", "pix_key"):
+        if _campo in d:
+            d[_campo] = None
     if not (ver_contato and d.get("show_phone_to_patients") and d.get("phone")):
         d["phone"] = None
         d["show_phone_to_patients"] = False

@@ -625,7 +625,8 @@ def list_therapists(
             .where(User.role == UserRole.therapist)
         ).scalars().all()
         print(f"✅ {len(profiles)} terapeutas encontrados")
-        return profiles
+        from app.core.privacidade_terapeuta import limpar_perfil_para
+        return [limpar_perfil_para(_user, TherapistProfileOut.model_validate(p, from_attributes=True).model_dump()) for p in profiles]
     except Exception as e:
         print(f"❌ Erro ao listar terapeutas: {e}")
         traceback.print_exc()

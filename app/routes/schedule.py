@@ -30,8 +30,9 @@ def list_therapists_for_scheduling(
     therapists = db.execute(
         select(TherapistProfile).join(User).where(User.role == UserRole.therapist)
     ).scalars().all()
-    
-    return therapists
+
+    from app.core.privacidade_terapeuta import limpar_perfil_para
+    return [limpar_perfil_para(current_user, TherapistProfileOut.model_validate(t, from_attributes=True).model_dump()) for t in therapists]
 
 
 @router.get("/therapists/{therapist_id}/availability", response_model=List[AvailabilityOut])
