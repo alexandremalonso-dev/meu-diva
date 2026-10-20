@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useApi } from "@/lib/useApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { getFotoSrc } from '@/lib/utils';
@@ -38,6 +38,55 @@ const PLAN_OPTIONS = [
   { value: "todos", label: "Todos os planos" }, { value: "basico", label: "Básico (gratuito)" }, { value: "essencial", label: "Essencial" },
   { value: "profissional", label: "Profissional" }, { value: "premium", label: "Premium" }
 ];
+// 🔥 Filtro de planos com várias escolhas: uma caixinha à esquerda do nome de cada plano.
+// Nenhuma marcada (ou as quatro) = todos os planos. A caixinha "Todos os planos" marca ou desmarca tudo de uma vez.
+const PLAN_VALUES = PLAN_OPTIONS.filter(o => o.value !== "todos").map(o => o.value);
+
+function PlanMultiSelect({ value, onChange, flutuante }: { value: string[]; onChange: (v: string[]) => void; flutuante: boolean }) {
+  const [open, setOpen] = useState(false);
+  const raiz = useRef<HTMLDivElement>(null);
+  const marcaTodos = useRef<HTMLInputElement>(null);
+  const planos = PLAN_OPTIONS.filter(o => o.value !== "todos");
+  const marcados = planos.filter(p => value.includes(p.value));
+  const todosMarcados = marcados.length === planos.length;
+  const algumMarcado = marcados.length > 0;
+  const resumo = !algumMarcado || todosMarcados ? "Todos os planos" : marcados.length === 1 ? marcados[0].label : `${marcados.length} planos`;
+  useEffect(() => {
+    if (marcaTodos.current) marcaTodos.current.indeterminate = algumMarcado && !todosMarcados;
+  }, [algumMarcado, todosMarcados, open]);
+  useEffect(() => {
+    if (!open) return;
+    const fora = (e: MouseEvent) => { if (raiz.current && !raiz.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", fora);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", fora); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const alternar = (v: string) => onChange(value.includes(v) ? value.filter(x => x !== v) : [...value, v]);
+  return (
+    <div ref={raiz} className="relative">
+      <button type="button" onClick={() => setOpen(o => !o)} aria-haspopup="true" aria-expanded={open} className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#F59E0B] outline-none bg-white text-left flex items-center justify-between">
+        <span className="truncate">{resumo}</span>
+        <span aria-hidden="true" className="text-gray-400 text-xs ml-2">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div role="group" aria-label="Planos" className={(flutuante ? "absolute z-20 left-0 right-0 shadow-lg " : "") + "mt-1 bg-white border border-gray-200 rounded-lg p-2"}>
+          <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm font-medium text-gray-900 border-b border-gray-100 mb-1">
+            <input ref={marcaTodos} type="checkbox" checked={todosMarcados} onChange={() => onChange(todosMarcados ? [] : planos.map(p => p.value))} className="w-4 h-4 accent-[#F59E0B]" />
+            Todos os planos
+          </label>
+          {planos.map(p => (
+            <label key={p.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm text-gray-700">
+              <input type="checkbox" checked={value.includes(p.value)} onChange={() => alternar(p.value)} className="w-4 h-4 accent-[#F59E0B]" />
+              {p.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STATUS_OPTIONS = [
   { value: "todos", label: "Todos" }, { value: "active", label: "Ativas" },
   { value: "paused", label: "Pausadas" }, { value: "past_due", label: "Atrasadas" },
@@ -192,7 +241,7 @@ export default function AdminAssinaturasReportPage() {
   const [summary, setSummary] = useState<SummaryReport>({ total_assinantes: 0, total_ativos: 0, total_atraso: 0, total_cancelados: 0, receita_total_mensal: 0, receita_total_historico: 0, renovacoes_proximas: 0 });
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [chartMetric, setChartMetric] = useState<"assinantes" | "receita">("assinantes");
-  const [planFilter, setPlanFilter] = useState("todos");
+  const [planFilter, setPlanFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("todos");
   const [searchTherapist, setSearchTherapist] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -296,7 +345,7 @@ export default function AdminAssinaturasReportPage() {
   useEffect(() => {
     if (subscriptions.length === 0) return;
     let filtered = [...subscriptions];
-    if (planFilter !== "todos") filtered = filtered.filter(s => s.plan === planFilter);
+    if (planFilter.length > 0 && planFilter.length < PLAN_VALUES.length) filtered = filtered.filter(s => planFilter.includes(s.plan));
     if (statusFilter === "active") filtered = filtered.filter(s => s.status === "active" && !s.is_overdue);
     else if (statusFilter === "paused") filtered = filtered.filter(s => s.status === "paused");
     else if (statusFilter === "past_due") filtered = filtered.filter(s => s.is_overdue || s.status === "past_due");
@@ -333,7 +382,7 @@ export default function AdminAssinaturasReportPage() {
           <p className="text-gray-600 mt-1">Acompanhe o faturamento e gestão financeira de planos e assinaturas dos terapeutas</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => { setPlanFilter("todos"); setStatusFilter("todos"); setSearchTherapist(""); }} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"><X className="w-4 h-4" /> Limpar filtros</button>
+          <button onClick={() => { setPlanFilter([]); setStatusFilter("todos"); setSearchTherapist(""); }} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"><X className="w-4 h-4" /> Limpar filtros</button>
           <button onClick={exportToCSV} className="flex items-center gap-2 px-4 py-2 bg-[#F59E0B] text-white rounded-lg hover:bg-[#d97706] transition-colors"><Download className="w-4 h-4" /> Exportar CSV</button>
         </div>
       </div>
@@ -402,9 +451,7 @@ export default function AdminAssinaturasReportPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Plano</label>
-            <select value={planFilter} onChange={e => setPlanFilter(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#F59E0B] outline-none">
-              {PLAN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <PlanMultiSelect value={planFilter} onChange={setPlanFilter} flutuante={true} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
