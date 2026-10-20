@@ -4,7 +4,14 @@ Uso: chamar load_environment() no início do main.py
 """
 
 import os
+import re
 from dotenv import load_dotenv
+
+
+def _mascarar_url(url) -> str:
+    """Troca a SENHA de uma URL (ex.: esquema://usuario:senha@host/banco) por ***. Nunca imprima uma URL sem passar por aqui.
+    Casa até o ÚLTIMO @ do trecho, para mascarar também senhas que tenham @ ou / no meio."""
+    return re.sub(r"(://[^:/\s]+:)[^\s]*@", r"\1***@", str(url or ""))
 
 def load_environment():
     """
@@ -39,7 +46,8 @@ def load_environment():
     
     # Exibir ambiente atual (sem expor dados sensíveis)
     db_url = os.getenv("DATABASE_URL", "")
-    db_preview = db_url[:50] + "..." if len(db_url) > 50 else db_url
+    db_mascarada = _mascarar_url(db_url)
+    db_preview = db_mascarada[:50] + "..." if len(db_mascarada) > 50 else db_mascarada
     print(f"📌 [ENV] DATABASE_URL: {db_preview}")
     print(f"📌 [ENV] ENV: {os.getenv('ENV', 'local')}")
 
@@ -49,6 +57,6 @@ if __name__ == "__main__":
     load_environment()
     print("\nVariáveis carregadas:")
     print(f"  ENV: {os.getenv('ENV')}")
-    print(f"  DATABASE_URL: {os.getenv('DATABASE_URL', 'N/A')[:50]}...")
+    print(f"  DATABASE_URL: {_mascarar_url(os.getenv('DATABASE_URL', 'N/A'))[:50]}...")
     print(f"  JWT_SECRET: {'✓' if os.getenv('JWT_SECRET') else '✗'}")
     print(f"  STRIPE_SECRET_KEY: {'✓' if os.getenv('STRIPE_SECRET_KEY') else '✗'}")
