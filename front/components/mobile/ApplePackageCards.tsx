@@ -15,10 +15,10 @@ interface PackageInfo {
 }
 
 const PACKAGES: PackageInfo[] = [
-  { chave: "no_diva_01", productId: "6820287370", nome: "No Divã 01", preco: "R$ 75/mês",  sessoes: 1 },
-  { chave: "no_diva_02", productId: "6820287570", nome: "No Divã 02", preco: "R$ 150/mês", sessoes: 2 },
-  { chave: "no_diva_04", productId: "6820288293", nome: "No Divã 04", preco: "R$ 300/mês", sessoes: 4 },
-  { chave: "no_diva_08", productId: "6820289143", nome: "No Divã 08", preco: "R$ 600/mês", sessoes: 8 },
+  { chave: "no_diva_01", productId: "01", nome: "No Divã 01", preco: "R$ 75/mês",  sessoes: 1 },
+  { chave: "no_diva_02", productId: "02", nome: "No Divã 02", preco: "R$ 150/mês", sessoes: 2 },
+  { chave: "no_diva_04", productId: "04", nome: "No Divã 04", preco: "R$ 300/mês", sessoes: 4 },
+  { chave: "no_diva_08", productId: "08", nome: "No Divã 08", preco: "R$ 600/mês", sessoes: 8 },
 ];
 
 export function ApplePackageCards() {

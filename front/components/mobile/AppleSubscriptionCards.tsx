@@ -27,7 +27,7 @@ interface PlanInfo {
 const PLANS: PlanInfo[] = [
   {
     id: "essencial",
-    productId: "6781242091",
+    productId: "003",
     name: "Essencial",
     priceLabel: "R$ 19,90/mês",
     commission: "20% de comissão por sessão",
@@ -36,7 +36,7 @@ const PLANS: PlanInfo[] = [
   },
   {
     id: "profissional",
-    productId: "6781231062",
+    productId: "001",
     name: "Profissional",
     priceLabel: "R$ 92,90/mês",
     commission: "10% de comissão por sessão",
@@ -46,7 +46,7 @@ const PLANS: PlanInfo[] = [
   },
   {
     id: "premium",
-    productId: "6781237701",
+    productId: "002",
     name: "Premium",
     priceLabel: "R$ 175,90/mês",
     commission: "3% de comissão por sessão",
