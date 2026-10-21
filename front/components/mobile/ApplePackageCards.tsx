@@ -79,31 +79,26 @@ export function ApplePackageCards() {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {PACKAGES.map(pkg => {
           const isLoading = loading === pkg.productId;
           return (
-            <div key={pkg.chave} style={{ background: "white", borderRadius: 14, padding: 14, border: `1px solid ${COLORS.primary}30`, display: "flex", flexDirection: "column" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: COLORS.primary + "15", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+            <div key={pkg.chave} style={{ background: "white", borderRadius: 12, padding: "12px 14px", border: `1px solid ${COLORS.primary}20`, display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: COLORS.primary + "15", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Package size={18} color={COLORS.primary} />
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.dark, marginBottom: 2 }}>{pkg.nome}</div>
-              <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 8 }}>
-                <strong style={{ color: COLORS.dark }}>{pkg.sessoes}</strong> {pkg.sessoes === 1 ? "sessão" : "sessões"}/mês
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.primary, marginBottom: 12 }}>{pkg.preco}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12, flex: 1 }}>
-                {["Videochamada", "Renovação mensal", "Cancele quando quiser"].map((f, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#374151" }}>
-                    <Check size={11} color={COLORS.primary} style={{ flexShrink: 0 }} /> {f}
-                  </div>
-                ))}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.dark }}>{pkg.nome}</div>
+                <div style={{ fontSize: 11, color: "#6B7280" }}>
+                  {pkg.sessoes} {pkg.sessoes === 1 ? "sessão" : "sessões"}/mês · Renovação mensal
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary, marginTop: 2 }}>{pkg.preco}</div>
               </div>
               <button
                 onClick={() => handlePurchase(pkg)}
                 disabled={!!loading}
-                style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: loading ? "#D1D5DB" : COLORS.primary, color: "white", fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                {isLoading ? <Loader2 size={14} className="animate-spin" /> : "Contratar"}
+                style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 8, border: "none", background: loading ? "#D1D5DB" : COLORS.primary, color: "white", fontSize: 12, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                {isLoading ? <Loader2 size={13} className="animate-spin" /> : "Contratar"}
               </button>
             </div>
           );
