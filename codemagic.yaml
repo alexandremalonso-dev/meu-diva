@@ -1,4 +1,4 @@
-﻿workflows:
+workflows:
   ios-release:
     name: iOS Release
     max_build_duration: 120
@@ -32,8 +32,8 @@
       - name: Increment build number
         script: |
           cd $CM_BUILD_DIR/front/ios/App
-          agvtool new-version -all 46
-          agvtool new-marketing-version 1.4.6
+          agvtool new-version -all 47
+          agvtool new-marketing-version 1.4.7
 
       - name: Install dependencies
         script: |
@@ -45,7 +45,7 @@
           cd $CM_BUILD_DIR/front
           npm run build
 
-      # Cap sync DEPOIS do build â€” garante que o capacitor.config.ts compilado
+      # Cap sync DEPOIS do build — garante que o capacitor.config.ts compilado
       # seja usado, copiando a URL correta (/mobile/splash) para o Xcode
       - name: Sync Capacitor iOS
         script: |
@@ -58,7 +58,7 @@
           cat $CM_BUILD_DIR/front/capacitor.config.ts
           echo ""
           echo "=== capacitor.config.json (se existir) ==="
-          cat $CM_BUILD_DIR/front/capacitor.config.json 2>/dev/null || echo "NÃ£o encontrado"
+          cat $CM_BUILD_DIR/front/capacitor.config.json 2>/dev/null || echo "Não encontrado"
 
       - name: Resolve Swift packages
         script: |
