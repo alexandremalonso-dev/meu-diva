@@ -15,7 +15,9 @@ function isNativeApp(): boolean {
 async function openOAuthUrl(url: string) {
   if (isNativeApp()) {
     const { Browser } = await import("@capacitor/browser");
-    await Browser.open({ url, presentationStyle: "popover" });
+    const cap = (window as any).Capacitor;
+    const isIPad = cap?.getPlatform?.() === "ios" && (window.navigator.userAgent.includes("iPad") || (window.navigator.maxTouchPoints > 1 && !window.navigator.userAgent.includes("iPhone")));
+    await Browser.open({ url, presentationStyle: isIPad ? "fullscreen" : "popover" });
   } else {
     window.location.href = url;
   }
@@ -139,6 +141,8 @@ function LoginForm() {
   const handleAppleLogin = async () => {
     setAppleLoading(true);
     setError("");
+    // Timeout de segurança — reseta loading após 30s se deep link não retornar
+    const timeout = setTimeout(() => setAppleLoading(false), 30000);
     try {
       const baseUrl = getApiBaseUrl();
       await openOAuthUrl(`${baseUrl}/api/auth/apple/login?mobile=true`);
@@ -147,6 +151,8 @@ function LoginForm() {
         setError("Erro ao fazer login com Apple. Tente outro método.");
       }
       setAppleLoading(false);
+    } finally {
+      clearTimeout(timeout);
     }
   };
 
