@@ -34,7 +34,7 @@ export function ApplePackageCards() {
       const transaction = await NativePurchases.purchaseProduct({
         productIdentifier: pkg.productId,
         quantity: 1,
-        productType: PURCHASE_TYPE.INAPP,
+        productType: PURCHASE_TYPE.SUBS,
       });
       if (transaction?.productIdentifier) {
         await api("/api/payments/apple/validate-package", {
