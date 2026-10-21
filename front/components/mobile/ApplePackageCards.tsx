@@ -31,14 +31,13 @@ export function ApplePackageCards() {
     setError(null);
     try {
       const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
-      // Carregar produto antes de comprar
-      await NativePurchases.getProducts({
+      const { products } = await NativePurchases.getProducts({
         productIdentifiers: [pkg.productId],
         productType: PURCHASE_TYPE.SUBS,
       });
+      if (!products?.length) throw new Error(`Produto não encontrado: ${pkg.productId}`);
       const transaction = await NativePurchases.purchaseProduct({
-        productIdentifier: pkg.productId,
-        quantity: 1,
+        productIdentifier: products[0].productIdentifier,
         productType: PURCHASE_TYPE.SUBS,
       });
       if (transaction?.productIdentifier) {
@@ -53,8 +52,10 @@ export function ApplePackageCards() {
         setSuccess(`${pkg.nome} contratado! Suas sessões já estão disponíveis.`);
       }
     } catch (e: any) {
-      if (!e.message?.toLowerCase().includes("cancel")) {
-        setError(e.message || "Erro ao processar compra.");
+      const msg = e.message || JSON.stringify(e) || "Erro desconhecido";
+      console.error("❌ IAP Error completo:", JSON.stringify(e));
+      if (!msg.toLowerCase().includes("cancel")) {
+        setError(msg);
       }
     } finally {
       setLoading(null);
