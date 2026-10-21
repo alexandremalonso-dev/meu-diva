@@ -37,7 +37,7 @@ export function ApplePackageCards() {
       });
       if (!products?.length) throw new Error(`Produto não encontrado: ${pkg.productId}`);
       const transaction = await NativePurchases.purchaseProduct({
-        productIdentifier: products[0].productIdentifier,
+        productIdentifier: products[0].identifier,
         productType: PURCHASE_TYPE.SUBS,
       });
       if (transaction?.productIdentifier) {
