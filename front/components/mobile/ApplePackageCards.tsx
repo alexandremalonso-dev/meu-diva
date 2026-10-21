@@ -31,6 +31,11 @@ export function ApplePackageCards() {
     setError(null);
     try {
       const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
+      // Carregar produto antes de comprar
+      await NativePurchases.getProducts({
+        productIdentifiers: [pkg.productId],
+        productType: PURCHASE_TYPE.SUBS,
+      });
       const transaction = await NativePurchases.purchaseProduct({
         productIdentifier: pkg.productId,
         quantity: 1,

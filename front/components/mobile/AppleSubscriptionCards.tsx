@@ -112,6 +112,12 @@ export function AppleSubscriptionCards() {
         throw new Error("Compras não suportadas neste dispositivo");
       }
 
+      // Carregar produto antes de comprar
+      await NativePurchases.getProducts({
+        productIdentifiers: [plan.productId],
+        productType: PURCHASE_TYPE.SUBS,
+      });
+
       const transaction = await NativePurchases.purchaseProduct({
         productIdentifier: plan.productId,
         productType: PURCHASE_TYPE.SUBS,
