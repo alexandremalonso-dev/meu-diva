@@ -200,6 +200,8 @@ function PlanosContent() {
   };
 
   const handleSubscribe = async (planId: string) => {
+    // asaas-planos: quem esta logado vai direto para o checkout (qualquer plano pago); o cadastro abaixo continua para quem ainda nao tem conta
+    { const tkAsaas = localStorage.getItem("access_token"); if (tkAsaas) { router.push(`/subscription-checkout?plan=${planId}`); return; } }
     if (planId === "essencial") { const tk = localStorage.getItem("access_token"); router.push(tk ? "/subscription-checkout?plan=essencial" : "/auth/signup?role=therapist&plan=essencial"); return; }
     setLoading(planId);
     setError("");

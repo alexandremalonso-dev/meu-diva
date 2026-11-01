@@ -1,13 +1,15 @@
 'use client'
+// asaas-cartao-page v1: o cartão é digitado aqui, no nosso site, e a cobrança é feita pelo Asaas (POST /api/asaas/assinar).
 
-import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2, CreditCard, CheckCircle2, Crown, Star, Shield } from 'lucide-react'
+import { Loader2, CheckCircle2, Crown, Star, Shield } from 'lucide-react'
 import { api } from '@/lib/api'
 import { PublicHeader } from '@/components/layout/PublicHeader'
 import { PublicFooter } from '@/components/layout/PublicFooter'
 
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || 'APP_USR-6dd38a4a-5036-4838-8104-92314dc8414a'
+// Teste grátis do Essencial: o mesmo número de dias definido no servidor (asaas_checkout_service.TRIAL_DIAS)
+const TRIAL_DIAS: Record<string, number> = { essencial: 7 }
 
 const PLANS = {
   essencial: {
@@ -36,25 +38,6 @@ const PLANS = {
   },
 }
 
-let mpInstance: any = null
-async function loadMpSdk(publicKey: string): Promise<any> {
-  if (mpInstance) return mpInstance
-  return new Promise((resolve, reject) => {
-    if ((window as any).MercadoPago) {
-      mpInstance = new (window as any).MercadoPago(publicKey, { locale: 'pt-BR' })
-      return resolve(mpInstance)
-    }
-    const script = document.createElement('script')
-    script.src = 'https://sdk.mercadopago.com/js/v2'
-    script.onload = () => {
-      mpInstance = new (window as any).MercadoPago(publicKey, { locale: 'pt-BR' })
-      resolve(mpInstance)
-    }
-    script.onerror = () => reject(new Error('Falha ao carregar SDK do Mercado Pago'))
-    document.head.appendChild(script)
-  })
-}
-
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -69,16 +52,37 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase', display: 'block', marginBottom: '6px',
 }
 
-function SuccessScreen({ planName }: { planName: string }) {
+function SuccessScreen({ planName, planKey }: { planName: string; planKey: string }) {
   const router = useRouter()
+  const [ativo, setAtivo] = useState(false)
+
+  // A ativação vem pelo aviso do Asaas (alguns segundos): confere até o plano ficar ativo.
+  useEffect(() => {
+    let tries = 0
+    let stop = false
+    const tick = async () => {
+      tries++
+      try {
+        const r: any = await api('/api/payments/therapist/subscription', { silent: true } as any)
+        if (stop) return
+        if (r?.subscription?.plan === planKey && r?.subscription?.status === 'active') { setAtivo(true); return }
+      } catch {}
+      if (!stop && tries < 40) setTimeout(tick, 2500)
+    }
+    tick()
+    return () => { stop = true }
+  }, [planKey])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px 20px', textAlign: 'center' }}>
       <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #E03673, #2F80D3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <CheckCircle2 size={48} color="#fff" />
       </div>
-      <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#1a1a2e', margin: 0 }}>Assinatura ativada!</h1>
+      <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#1a1a2e', margin: 0 }}>{ativo ? 'Assinatura ativada!' : 'Assinatura recebida!'}</h1>
       <p style={{ fontSize: '15px', color: '#6b7280', maxWidth: '360px', margin: 0, lineHeight: 1.6 }}>
-        Seu plano <strong>{planName}</strong> foi ativado com sucesso. Falta só um passo: enviar seus documentos para validar o perfil e ganhar o selo de terapeuta verificado.
+        {ativo
+          ? <>Seu plano <strong>{planName}</strong> foi ativado com sucesso. Falta só um passo: enviar seus documentos para validar o perfil e ganhar o selo de terapeuta verificado.</>
+          : <>Estamos ativando o seu plano <strong>{planName}</strong>. Isso leva só alguns instantes; você também recebe uma notificação quando estiver pronto.</>}
       </p>
       <button
         onClick={() => router.push('/therapist/documents/required')}
@@ -96,13 +100,6 @@ function SuccessScreen({ planName }: { planName: string }) {
   )
 }
 
-// 🔥 A documentação do Mercado Pago orienta evitar novas tentativas imediatas
-// com os mesmos dados após uma recusa (o antifraude pode tratar como duplicada
-// e continuar recusando). O tempo abaixo é escolha nossa, não da documentação.
-const BLOCK_MINUTES = 3
-const BLOCK_KEY = 'mp_sub_block_until'
-
-// 🔥 Valida o dígito verificador do CPF (o Mercado Pago pede documento real do pagador)
 function cpfValido(raw: string): boolean {
   const d = raw.replace(/\D/g, '')
   if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false
@@ -116,61 +113,55 @@ function cpfValido(raw: string): boolean {
 }
 
 function SubscriptionCheckoutContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const planId = (searchParams.get('plan') || 'profissional') as 'essencial' | 'profissional' | 'premium'
   const plan = PLANS[planId] || PLANS.profissional
+  const planKey = (PLANS[planId] ? planId : 'profissional') as string
+  const trial = TRIAL_DIAS[planKey] || 0
+  const primeiraCobranca = new Date(Date.now() + trial * 86400000).toLocaleDateString('pt-BR')
 
   const [name, setName] = useState('')
   const [cpf, setCpf] = useState('')
   const [cardNumber, setCardNumber] = useState('')
   const [expiry, setExpiry] = useState('')
   const [cvv, setCvv] = useState('')
+  const [cep, setCep] = useState('')
+  const [addrNumber, setAddrNumber] = useState('')
+  const [phone, setPhone] = useState('')
+
+  const numeroRef = useRef<HTMLInputElement>(null)
+  const [enderecoCep, setEnderecoCep] = useState<string | null>(null)
+  const [avisoCep, setAvisoCep] = useState<string | null>(null)
+  const [buscandoCep, setBuscandoCep] = useState(false)
+
+  // Ao completar o CEP, busca rua/bairro/cidade (rota /api/asaas/cep) e leva o cursor para o número. Se falhar, o formulário segue normalmente.
+  useEffect(() => {
+    const d = cep.replace(/\D/g, '')
+    if (d.length !== 8) { setEnderecoCep(null); setAvisoCep(null); return }
+    let ativo = true
+    setBuscandoCep(true)
+    ;(async () => {
+      try {
+        const r: any = await api(`/api/asaas/cep/${d}`, { silent: true } as any)
+        if (!ativo) return
+        const rua = [r?.logradouro, r?.bairro].filter(Boolean).join(', ')
+        const cidade = [r?.cidade, r?.uf].filter(Boolean).join('/')
+        setEnderecoCep([rua, cidade].filter(Boolean).join(' — '))
+        setAvisoCep(null)
+        numeroRef.current?.focus()
+      } catch (e: any) {
+        if (!ativo) return
+        setEnderecoCep(null)
+        setAvisoCep(String(e?.message || '').includes('não encontrado') ? 'CEP não encontrado. Confira os números.' : 'Não foi possível buscar o endereço agora. Digite o número do endereço mesmo assim.')
+      } finally {
+        if (ativo) setBuscandoCep(false)
+      }
+    })()
+    return () => { ativo = false }
+  }, [cep])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [userEmail, setUserEmail] = useState('')
-  const [blockedUntil, setBlockedUntil] = useState<number>(0)
-  const [nowTs, setNowTs] = useState<number>(Date.now())
-  const blocked = blockedUntil > nowTs
-
-  useEffect(() => {
-    try {
-      const saved = Number(localStorage.getItem(BLOCK_KEY) || 0)
-      if (saved > Date.now()) {
-        setBlockedUntil(saved)
-        const min = Math.ceil((saved - Date.now()) / 60000)
-        setError(`Por segurança, aguarde ${min} min antes de tentar novamente.`)
-      }
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    if (blockedUntil <= Date.now()) return
-    const t = setInterval(() => {
-      const n = Date.now()
-      setNowTs(n)
-      if (n >= blockedUntil) {
-        clearInterval(t)
-        setError(null)
-      }
-    }, 1000)
-    return () => clearInterval(t)
-  }, [blockedUntil])
-
-  useEffect(() => {
-    api('/api/users/me').then((me: any) => setUserEmail(me.email || '')).catch(() => {})
-  }, [])
-
-  // 🔥 Script de segurança do Mercado Pago (gera MP_DEVICE_SESSION_ID)
-  useEffect(() => {
-    if (document.getElementById('mp-security-script')) return
-    const s = document.createElement('script')
-    s.id = 'mp-security-script'
-    s.src = 'https://www.mercadopago.com/v2/security.js'
-    s.setAttribute('view', 'checkout')
-    document.head.appendChild(s)
-  }, [])
 
   const maskCard = (v: string) => v.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19)
   const maskExpiry = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d }
@@ -181,84 +172,52 @@ function SubscriptionCheckoutContent() {
     if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
     return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
   }
+  const maskCep = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 8); return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d }
+  const maskPhone = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11)
+    if (d.length <= 2) return d
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+  }
 
   const handleSubmit = useCallback(async () => {
     if (!name.trim()) { setError('Informe o nome no cartão.'); return }
     if (name.trim().split(/\s+/).length < 2) { setError('Informe nome e sobrenome, como estão no cartão.'); return }
-    if (cardNumber.replace(/\s/g, '').length < 16) { setError('Número do cartão inválido.'); return }
+    if (cardNumber.replace(/\s/g, '').length < 13) { setError('Número do cartão inválido.'); return }
     if (expiry.length < 5) { setError('Validade inválida.'); return }
     if (cvv.length < 3) { setError('CVV inválido.'); return }
     if (!cpfValido(cpf)) { setError('CPF inválido. Confira os números.'); return }
-    if (blockedUntil > Date.now()) {
-      const min = Math.ceil((blockedUntil - Date.now()) / 60000)
-      setError(`Por segurança, aguarde ${min} min antes de tentar novamente.`)
-      return
-    }
+    if (cep.replace(/\D/g, '').length !== 8) { setError('CEP inválido.'); return }
+    if (!addrNumber.trim()) { setError('Informe o número do endereço.'); return }
+    if (phone.replace(/\D/g, '').length < 10) { setError('Celular inválido. Informe com DDD.'); return }
 
     setLoading(true)
     setError(null)
-
-    let chamouAssinatura = false
-    const bloquearNovaTentativa = () => {
-      const until = Date.now() + BLOCK_MINUTES * 60000
-      setBlockedUntil(until)
-      try { localStorage.setItem(BLOCK_KEY, String(until)) } catch {}
-    }
-
     try {
-      const mp = await loadMpSdk(MP_PUBLIC_KEY)
-      const [expMonth, expYear] = expiry.split('/')
-      const rawCard = cardNumber.replace(/\s/g, '')
-
-      const tokenResult = await mp.createCardToken({
-        cardNumber: rawCard,
-        cardholderName: name,
-        identificationType: 'CPF',
-        identificationNumber: cpf.replace(/\D/g, ''),
-        cardExpirationMonth: expMonth,
-        cardExpirationYear: `20${expYear}`,
-        securityCode: cvv,
-      })
-
-      if (!tokenResult || tokenResult.error) {
-        throw new Error(tokenResult?.error?.message || 'Erro ao tokenizar cartão.')
-      }
-
-      chamouAssinatura = true
-      const result = await api('/api/payments/create-subscription', {
+      await api('/api/asaas/assinar', {
         method: 'POST',
         body: JSON.stringify({
-          plan: planId,
-          card_token_id: tokenResult.id,
-          payer_email: userEmail,
-          payer_cpf: cpf.replace(/\D/g, ''),
-          device_id: (window as any).MP_DEVICE_SESSION_ID || '',
+          tipo: 'terapeuta',
+          plano: planKey,
+          cartao: { nome: name.trim(), numero: cardNumber.replace(/\s/g, ''), validade: expiry, ccv: cvv },
+          titular: { cpf: cpf.replace(/\D/g, ''), cep: cep.replace(/\D/g, ''), numero: addrNumber.trim(), celular: phone.replace(/\D/g, '') },
         }),
       })
-
-      if (result.status === 'authorized' || result.status === 'active') {
-        setSuccess(true)
-      } else {
-        setError(`${result.detail || 'Assinatura não aprovada. Verifique os dados do cartão.'} Por segurança, aguarde ${BLOCK_MINUTES} min antes de tentar novamente.`)
-        bloquearNovaTentativa()
-      }
+      setCardNumber('')
+      setCvv('')
+      setSuccess(true)
     } catch (e: any) {
-      const base = e.message || 'Erro ao processar assinatura.'
-      if (chamouAssinatura) {
-        setError(`${base} Por segurança, aguarde ${BLOCK_MINUTES} min antes de tentar novamente.`)
-        bloquearNovaTentativa()
-      } else {
-        setError(base)
-      }
+      setError(e?.message || 'Não foi possível concluir a assinatura agora. Tente novamente em instantes.')
     } finally {
       setLoading(false)
     }
-  }, [name, cpf, cardNumber, expiry, cvv, planId, userEmail, blockedUntil])
+  }, [name, cpf, cardNumber, expiry, cvv, cep, addrNumber, phone, planKey])
 
   if (success) return (
     <main style={{ minHeight: '100vh', background: '#f9f7f8', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
       <PublicHeader />
-      <SuccessScreen planName={plan.name} />
+      <SuccessScreen planName={plan.name} planKey={planKey} />
       <PublicFooter />
     </main>
   )
@@ -314,9 +273,17 @@ function SubscriptionCheckoutContent() {
         {/* Formulário */}
         <section style={{ background: '#fff', borderRadius: '20px', border: '1.5px solid #f0e8ec', padding: '32px 28px', boxShadow: '0 4px 24px rgba(224,54,115,0.06)' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1a1a2e', margin: '0 0 4px' }}>Assinar plano {plan.name}</h1>
-          <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 24px' }}>Pagamento seguro via Mercado Pago • Recorrência mensal</p>
+          <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 24px' }}>Pagamento processado pelo Asaas • Recorrência mensal</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {trial > 0 && (
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 16px' }}>
+                <p style={{ fontSize: '14px', color: '#166534', margin: 0, fontWeight: 600 }}>{trial} dias grátis</p>
+                <p style={{ fontSize: '13px', color: '#166534', margin: '4px 0 0', lineHeight: 1.5 }}>
+                  O cartão é validado agora, mas a primeira cobrança de {formatCurrency(plan.price)} só acontece em {primeiraCobranca}. Cancele antes disso e não paga nada.
+                </p>
+              </div>
+            )}
             <div>
               <label style={labelStyle}>Nome no cartão</label>
               <input style={inputStyle} type="text" placeholder="Como aparece no cartão" value={name} onChange={e => setName(e.target.value)} autoComplete="cc-name" />
@@ -339,6 +306,26 @@ function SubscriptionCheckoutContent() {
                 <input style={inputStyle} type="text" placeholder="000" value={cvv} onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" autoComplete="cc-csc" />
               </div>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>CEP do titular</label>
+                <input style={inputStyle} type="text" placeholder="00000-000" value={cep} onChange={e => setCep(maskCep(e.target.value))} inputMode="numeric" autoComplete="postal-code" />
+              </div>
+              <div>
+                <label style={labelStyle}>Nº do endereço</label>
+                <input style={inputStyle} type="text" ref={numeroRef} placeholder="123" value={addrNumber} onChange={e => setAddrNumber(e.target.value.slice(0, 10))} />
+              </div>
+            </div>
+            {(buscandoCep || enderecoCep || avisoCep) && (
+              <p style={{ fontSize: '12px', margin: '-4px 0 0', color: avisoCep ? '#b45309' : '#166534', lineHeight: 1.5 }}>
+                {buscandoCep ? 'Buscando endereço…' : (enderecoCep ? `✓ ${enderecoCep}` : avisoCep)}
+              </p>
+            )}
+            <div>
+              <label style={labelStyle}>Celular do titular</label>
+              <input style={inputStyle} type="text" placeholder="(00) 00000-0000" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} inputMode="tel" autoComplete="tel" />
+              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>CEP, número e celular são exigidos pelo Asaas para liberar a cobrança no cartão.</p>
+            </div>
 
             {error && (
               <p style={{ fontSize: '13px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 12px', margin: 0 }}>
@@ -348,7 +335,7 @@ function SubscriptionCheckoutContent() {
 
             <button
               onClick={handleSubmit}
-              disabled={loading || blocked}
+              disabled={loading}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                 width: '100%', padding: '16px',
@@ -358,11 +345,11 @@ function SubscriptionCheckoutContent() {
                 fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
               }}
             >
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : `Assinar por ${formatCurrency(plan.price)}/mês`}
+              {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : (trial > 0 ? `Começar ${trial} dias grátis` : `Assinar por ${formatCurrency(plan.price)}/mês`)}
             </button>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {['Mercado Pago', 'SSL 256-bit', 'PCI DSS'].map(b => (
+              {['Asaas', 'Conexão segura', 'Não guardamos seu cartão'].map(b => (
                 <span key={b} style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px', background: '#f3f4f6', color: '#6b7280' }}>{b}</span>
               ))}
             </div>
