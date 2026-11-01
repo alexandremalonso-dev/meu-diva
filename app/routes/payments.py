@@ -383,7 +383,7 @@ async def create_subscription(
     # 🔥 Device ID gerado pelo script de segurança do Mercado Pago no navegador.
     import re as _re
     device_id = str(body.get("device_id", "") or "").strip()
-    if device_id and not _re.fullmatch(r"[A-Za-z0-9_.\-]{1,200}", device_id):
+    if device_id and not _re.fullmatch(r"[A-Za-z0-9_.\-]{1,512}", device_id):
         device_id = ""
     payer_cpf = body.get("payer_cpf", "").replace(".", "").replace("-", "")
 

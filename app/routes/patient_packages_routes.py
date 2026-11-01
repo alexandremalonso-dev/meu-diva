@@ -190,7 +190,7 @@ def assinar(
     token_id = (body.card_token_id or "").strip()
     cpf = re.sub(r"\D", "", body.payer_cpf or "")
     device_id = (body.device_id or "").strip()
-    if device_id and not re.fullmatch(r"[A-Za-z0-9_.\-]{1,200}", device_id):
+    if device_id and not re.fullmatch(r"[A-Za-z0-9_.\-]{1,512}", device_id):
         device_id = ""
 
     if not token_id:
