@@ -68,10 +68,9 @@ def get_patient_id_from_user(db, user_id):
 
 
 def get_patient_wallet(db, patient_id):
-    wallet = db.execute(select(Wallet).where(Wallet.patient_id == patient_id)).scalar_one_or_none()
-    if not wallet:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada")
-    return wallet
+    # asaas-carteira: paciente de cadastro recente pode nao ter carteira ainda; cria a carteira vazia em vez de responder 404
+    from app.services.carteira import obter_ou_criar_carteira
+    return obter_ou_criar_carteira(db, patient_id)
 
 
 def _verify_mp_signature(request_body, x_signature, x_request_id):

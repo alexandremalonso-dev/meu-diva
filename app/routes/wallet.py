@@ -33,14 +33,9 @@ router = APIRouter(prefix="/wallet", tags=["wallet"])
 # ============================================
 
 def get_patient_wallet_or_404(db: Session, patient_id: int) -> Wallet:
-    wallet = db.execute(
-        select(Wallet).where(Wallet.patient_id == patient_id)
-    ).scalar_one_or_none()
-
-    if not wallet:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada")
-
-    return wallet
+    # asaas-carteira: paciente de cadastro recente pode nao ter carteira ainda; cria a carteira vazia em vez de responder 404
+    from app.services.carteira import obter_ou_criar_carteira
+    return obter_ou_criar_carteira(db, patient_id)
 
 
 def get_patient_id_from_user(db: Session, user_id: int) -> int:
