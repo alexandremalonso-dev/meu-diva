@@ -8,9 +8,6 @@ import { api } from '@/lib/api'
 import { PublicHeader } from '@/components/layout/PublicHeader'
 import { PublicFooter } from '@/components/layout/PublicFooter'
 
-// Chave pública do Mercado Pago
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || 'APP_USR-6dd38a4a-5036-4838-8104-92314dc8414a'
-
 interface TherapistSummary {
   name: string
   crp: string
@@ -21,7 +18,6 @@ interface TherapistSummary {
 }
 
 interface CheckoutSession {
-  mp_public_key: string
   already_paid?: boolean
   payment_id: number | null
   appointment_id: number
@@ -64,46 +60,43 @@ function getPhotoSrc(url: string | null): string {
   return `${process.env.NEXT_PUBLIC_BACKEND_URL}${url}`
 }
 
-// SDK do MP
-let mpInstance: any = null
-async function loadMpSdk(publicKey: string): Promise<any> {
-  const key = publicKey || MP_PUBLIC_KEY
-  if (!key) throw new Error('NEXT_PUBLIC_MP_PUBLIC_KEY não configurada')
-  if (mpInstance) return mpInstance
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') return reject(new Error('SSR'))
-    if ((window as any).MercadoPago) {
-      mpInstance = new (window as any).MercadoPago(key, { locale: 'pt-BR' })
-      return resolve(mpInstance)
-    }
-    const script = document.createElement('script')
-    script.src = 'https://sdk.mercadopago.com/js/v2'
-    script.onload = () => {
-      mpInstance = new (window as any).MercadoPago(key, { locale: 'pt-BR' })
-      resolve(mpInstance)
-    }
-    script.onerror = () => reject(new Error('Falha ao carregar SDK do Mercado Pago'))
-    document.head.appendChild(script)
-  })
-}
-
 // ---------------------------------------------------------------------------
-// Formulário de Cartão
+// Formulário de Cartão (cobrança pelo Asaas) // asaas-sessao-page v1
 // ---------------------------------------------------------------------------
-function CardForm({ mpPublicKey, paymentId, amount, payerEmail, onSuccess, onError }: {
-  mpPublicKey: string; paymentId: number; amount: number
-  payerEmail: string; onSuccess: () => void; onError: (msg: string) => void
+function CardForm({ paymentId, amount, onSuccess, onError }: {
+  paymentId: number; amount: number; payerEmail?: string
+  onSuccess: () => void; onError: (msg: string) => void
 }) {
   const [name, setName] = useState('')
   const [cpf, setCpf] = useState('')
   const [cardNumber, setCardNumber] = useState('')
   const [expiry, setExpiry] = useState('')
   const [cvv, setCvv] = useState('')
+  const [cep, setCep] = useState('')
+  const [rua, setRua] = useState('')
+  const [addrNumber, setAddrNumber] = useState('')
+  const [complemento, setComplemento] = useState('')
+  const [bairro, setBairro] = useState('')
+  const [cidade, setCidade] = useState('')
+  const [uf, setUf] = useState('')
+  const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const [avisoCep, setAvisoCep] = useState<string | null>(null)
+  const [buscandoCep, setBuscandoCep] = useState(false)
+  const numeroRef = useRef<HTMLInputElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const maskCard = (v: string) => v.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19)
   const maskExpiry = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d }
+  const maskCep = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 8); return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d }
+  const maskPhone = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11)
+    if (d.length <= 2) return d
+    if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+  }
   const maskCpf = (v: string) => {
     const d = v.replace(/\D/g, '').slice(0, 11)
     if (d.length <= 3) return d
@@ -112,46 +105,95 @@ function CardForm({ mpPublicKey, paymentId, amount, payerEmail, onSuccess, onErr
     return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
   }
 
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  // Mesma lógica dos perfis: ao completar o CEP busca o endereço (/api/patients/cep) e preenche rua, bairro, cidade e UF, que continuam editáveis.
+  useEffect(() => {
+    const d = cep.replace(/\D/g, '')
+    if (d.length !== 8) { setAvisoCep(null); return }
+    let ativo = true
+    setBuscandoCep(true)
+    ;(async () => {
+      try {
+        const r: any = await api(`/api/patients/cep/${d}`, { silent: true } as any)
+        if (!ativo) return
+        if (r && !r.erro) {
+          setRua(r.logradouro || '')
+          setBairro(r.bairro || '')
+          setCidade(r.localidade || '')
+          setUf(String(r.uf || '').toUpperCase())
+          setAvisoCep(null)
+          numeroRef.current?.focus()
+        } else {
+          setAvisoCep('CEP não encontrado. Preencha o endereço manualmente.')
+        }
+      } catch (e: any) {
+        if (!ativo) return
+        setAvisoCep(String(e?.message || '').includes('não encontrado') ? 'CEP não encontrado. Preencha o endereço manualmente.' : 'Não foi possível buscar o endereço agora. Preencha manualmente.')
+      } finally {
+        if (ativo) setBuscandoCep(false)
+      }
+    })()
+    return () => { ativo = false }
+  }, [cep])
+
+  // Quando o banco ainda está analisando, espera o aviso do Asaas confirmar a sessão (até ~1m50s).
+  const aguardarConfirmacao = () => {
+    setInfo('Pagamento recebido. Confirmando com o banco…')
+    let tentativas = 0
+    pollRef.current = setInterval(async () => {
+      tentativas += 1
+      try {
+        const s = await api(`/api/payments/status/${paymentId}`)
+        if (s.status === 'paid') { if (pollRef.current) clearInterval(pollRef.current); onSuccess(); return }
+      } catch (_) {}
+      if (tentativas >= 36) {
+        if (pollRef.current) clearInterval(pollRef.current)
+        setInfo(null)
+        setError('Pagamento em análise. Você receberá a confirmação por e-mail.')
+      }
+    }, 3000)
+  }
+
   const handleSubmit = useCallback(async () => {
     if (!name.trim()) { setError('Informe o nome no cartão.'); return }
+    if (cpf.replace(/\D/g, '').length !== 11) { setError('Informe o CPF do titular.'); return }
     if (cardNumber.replace(/\s/g, '').length < 16) { setError('Número do cartão inválido.'); return }
     if (expiry.length < 5) { setError('Validade inválida.'); return }
     if (cvv.length < 3) { setError('CVV inválido.'); return }
+    if (cep.replace(/\D/g, '').length !== 8) { setError('CEP inválido.'); return }
+    if (rua.trim().length < 3) { setError('Informe a rua do endereço.'); return }
+    if (!addrNumber.trim()) { setError('Informe o número do endereço (ou S/N).'); return }
+    if (cidade.trim().length < 2) { setError('Informe a cidade.'); return }
+    if (!/^[A-Za-z]{2}$/.test(uf.trim())) { setError('Informe o estado (UF).'); return }
+    if (phone.replace(/\D/g, '').length < 10) { setError('Informe o celular do titular, com DDD.'); return }
 
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setInfo(null)
     try {
-      const mp = await loadMpSdk(mpPublicKey || MP_PUBLIC_KEY)
-      const [expMonth, expYear] = expiry.split('/')
-      const rawCard = cardNumber.replace(/\s/g, '')
-      const tokenResult = await mp.createCardToken({
-        cardNumber: rawCard, cardholderName: name,
-        cardExpirationMonth: expMonth, cardExpirationYear: `20${expYear}`, securityCode: cvv,
-      })
-      if (!tokenResult || tokenResult.error) throw new Error(tokenResult?.error?.message || 'Erro ao tokenizar cartão.')
-
-      const bin = rawCard.slice(0, 6)
-      const pmResult = await mp.getPaymentMethods({ bin })
-      const paymentMethodId = pmResult?.results?.[0]?.id || 'credit_card'
-      const issuerId = pmResult?.results?.[0]?.issuer?.id
-
-      const result = await api('/api/payments/process-payment', {
+      const result = await api('/api/asaas/sessao/cartao', {
         method: 'POST',
         body: JSON.stringify({
-          payment_id: paymentId, card_token: tokenResult.id,
-          payment_method_id: paymentMethodId, issuer_id: issuerId,
-          payer_email: payerEmail, payer_cpf: cpf.replace(/\D/g, ''),
+          payment_id: paymentId,
+          cartao: { nome: name.trim(), numero: cardNumber.replace(/\s/g, ''), validade: expiry, ccv: cvv },
+          titular: {
+            cpf: cpf.replace(/\D/g, ''), cep: cep.replace(/\D/g, ''), rua: rua.trim(), numero: addrNumber.trim(),
+            complemento: complemento.trim(), bairro: bairro.trim(), cidade: cidade.trim(), uf: uf.trim().toUpperCase(),
+            celular: phone.replace(/\D/g, ''),
+          },
         }),
       })
+      setCardNumber(''); setCvv('') // não deixa os dados do cartão na tela depois de enviar
 
       if (result.status === 'approved') onSuccess()
-      else if (result.status === 'pending') setError('Pagamento em análise. Você receberá confirmação por e-mail.')
-      else { setError(result.detail || 'Pagamento recusado.'); onError(result.detail || 'Pagamento recusado.') }
+      else if (result.status === 'pending') aguardarConfirmacao()
+      else { const msg = result.detail || 'Pagamento recusado.'; setError(msg); onError(msg) }
     } catch (e: any) {
       setError(e.message || 'Erro ao processar pagamento.')
     } finally {
       setLoading(false)
     }
-  }, [name, cpf, cardNumber, expiry, cvv, mpPublicKey, paymentId, payerEmail, onSuccess, onError])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, cpf, cardNumber, expiry, cvv, cep, rua, addrNumber, complemento, bairro, cidade, uf, phone, paymentId, onSuccess, onError])
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '12px 14px', border: '1.5px solid #e5e7eb',
@@ -182,12 +224,48 @@ function CardForm({ mpPublicKey, paymentId, amount, payerEmail, onSuccess, onErr
           <input style={inputStyle} type="text" placeholder="000" value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" autoComplete="cc-csc" />
         </div>
       </div>
+
+      <p style={{ fontSize: '13px', fontWeight: 600, color: '#374151', margin: '4px 0 -4px' }}>Endereço do titular do cartão</p>
+      <div><label style={labelStyle}>CEP *</label>
+        <input style={inputStyle} type="text" placeholder="00000-000" value={cep} onChange={(e) => setCep(maskCep(e.target.value))} inputMode="numeric" autoComplete="postal-code" />
+        {(buscandoCep || avisoCep) && (
+          <p style={{ fontSize: '12px', margin: '6px 0 0', color: avisoCep ? '#b45309' : '#6b7280' }}>{buscandoCep ? 'Buscando endereço…' : avisoCep}</p>
+        )}
+      </div>
+      <div><label style={labelStyle}>Rua *</label>
+        <input style={inputStyle} type="text" value={rua} onChange={(e) => setRua(e.target.value)} autoComplete="address-line1" />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div><label style={labelStyle}>Número *</label>
+          <input ref={numeroRef} style={inputStyle} type="text" placeholder="123 ou S/N" value={addrNumber} onChange={(e) => setAddrNumber(e.target.value.slice(0, 10))} />
+        </div>
+        <div><label style={labelStyle}>Complemento</label>
+          <input style={inputStyle} type="text" placeholder="Apto, bloco, sala" value={complemento} onChange={(e) => setComplemento(e.target.value.slice(0, 60))} autoComplete="address-line2" />
+        </div>
+      </div>
+      <div><label style={labelStyle}>Bairro</label>
+        <input style={inputStyle} type="text" value={bairro} onChange={(e) => setBairro(e.target.value)} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '12px' }}>
+        <div><label style={labelStyle}>Cidade *</label>
+          <input style={inputStyle} type="text" value={cidade} onChange={(e) => setCidade(e.target.value)} autoComplete="address-level2" />
+        </div>
+        <div><label style={labelStyle}>UF *</label>
+          <input style={inputStyle} type="text" maxLength={2} placeholder="MG" value={uf} onChange={(e) => setUf(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2))} autoComplete="address-level1" />
+        </div>
+      </div>
+      <div><label style={labelStyle}>Celular do titular *</label>
+        <input style={inputStyle} type="text" placeholder="(00) 00000-0000" value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))} inputMode="numeric" autoComplete="tel" />
+        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão.</p>
+      </div>
+
+      {info && <p style={{ fontSize: '13px', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 12px', margin: 0 }}>{info}</p>}
       {error && <p style={{ fontSize: '13px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 12px', margin: 0 }}>{error}</p>}
-      <button onClick={handleSubmit} disabled={loading} style={{
+      <button onClick={handleSubmit} disabled={loading || !!info} style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
         width: '100%', padding: '16px', background: 'linear-gradient(135deg, #E03673 0%, #c42d63 100%)',
         color: '#fff', fontSize: '16px', fontWeight: 700, border: 'none', borderRadius: '12px',
-        cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
+        cursor: (loading || !!info) ? 'not-allowed' : 'pointer', opacity: (loading || !!info) ? 0.6 : 1,
         fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
       }}>
         {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : `Pagar ${formatCurrency(amount)}`}
@@ -195,7 +273,6 @@ function CardForm({ mpPublicKey, paymentId, amount, payerEmail, onSuccess, onErr
     </div>
   )
 }
-
 // ---------------------------------------------------------------------------
 // Formulário de Pix
 // ---------------------------------------------------------------------------
@@ -205,7 +282,7 @@ function PixForm({ paymentId, amount, payerEmail, onSuccess }: {
   const [cpf, setCpf] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pixData, setPixData] = useState<{ qr_code: string; qr_code_base64: string; mp_payment_id: string; expires_at: string } | null>(null)
+  const [pixData, setPixData] = useState<{ qr_code: string; qr_code_base64: string; asaas_payment_id?: string; expires_at?: string | null } | null>(null)
   const [copied, setCopied] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -221,9 +298,9 @@ function PixForm({ paymentId, amount, payerEmail, onSuccess }: {
     if (cpf.replace(/\D/g, '').length < 11) { setError('CPF inválido.'); return }
     setLoading(true); setError(null)
     try {
-      const result = await api('/api/payments/create-pix', {
+      const result = await api('/api/asaas/sessao/pix', {
         method: 'POST',
-        body: JSON.stringify({ payment_id: paymentId, payer_email: payerEmail, payer_cpf: cpf.replace(/\D/g, '') }),
+        body: JSON.stringify({ payment_id: paymentId, payer_cpf: cpf.replace(/\D/g, '') }),
       })
       setPixData(result)
       // Inicia polling a cada 5s para verificar pagamento
@@ -301,7 +378,7 @@ function PixForm({ paymentId, amount, payerEmail, onSuccess }: {
         </div>
 
         <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, textAlign: 'center' }}>
-          O Pix expira em 30 minutos. Após o pagamento, a confirmação é automática.
+          {pixData.expires_at ? `Este código vale até ${new Date(pixData.expires_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. ` : ''}Após o pagamento, a confirmação é automática.
         </p>
       </div>
     )
@@ -311,7 +388,7 @@ function PixForm({ paymentId, amount, payerEmail, onSuccess }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '12px', padding: '16px' }}>
         <p style={{ color: '#1d4ed8', fontSize: '14px', fontWeight: 600, margin: '0 0 4px' }}>Pagamento via Pix</p>
-        <p style={{ color: '#1d4ed8', fontSize: '13px', margin: 0 }}>Instantâneo, sem taxas adicionais. O QR Code expira em 30 minutos.</p>
+        <p style={{ color: '#1d4ed8', fontSize: '13px', margin: 0 }}>Instantâneo, sem taxas adicionais. A confirmação é automática depois do pagamento.</p>
       </div>
 
       <div>
@@ -418,9 +495,8 @@ function CheckoutContent() {
     </main>
   )
 
-  const { mp_public_key: _mp_key, payment_id, therapist, appointment_date, appointment_time } = session
+  const { payment_id, therapist, appointment_date, appointment_time } = session
   const amount: number = Number(session.amount ?? session.therapist?.session_price ?? 0)
-  const mp_public_key = _mp_key || MP_PUBLIC_KEY
 
   if (success) return (
     <main style={{ minHeight: '100vh', background: '#f9f7f8', paddingBottom: '60px', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
@@ -504,7 +580,7 @@ function CheckoutContent() {
 
           {payment_id ? (
             activeTab === 'card' ? (
-              <CardForm mpPublicKey={mp_public_key} paymentId={payment_id} amount={amount} payerEmail={userEmail} onSuccess={() => setSuccess(true)} onError={() => {}} />
+              <CardForm paymentId={payment_id} amount={amount} payerEmail={userEmail} onSuccess={() => setSuccess(true)} onError={() => {}} />
             ) : (
               <PixForm paymentId={payment_id} amount={amount} payerEmail={userEmail} onSuccess={() => setSuccess(true)} />
             )
@@ -515,7 +591,7 @@ function CheckoutContent() {
           )}
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '20px', justifyContent: 'center' }}>
-            {['Mercado Pago', 'SSL 256-bit', 'PCI DSS'].map((b) => (
+            {['Asaas', 'Conexão segura', 'Não guardamos seu cartão'].map((b) => (
               <span key={b} style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px', background: '#f3f4f6', color: '#6b7280', letterSpacing: '0.02em' }}>{b}</span>
             ))}
           </div>

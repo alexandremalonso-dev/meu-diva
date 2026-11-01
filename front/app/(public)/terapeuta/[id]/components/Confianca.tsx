@@ -58,7 +58,7 @@ const trustItems = [
     bg: '#fdf2f8',
     border: '#fbcfe8',
     title: 'Pagamento 100% seguro',
-    description: 'Processado via MercadoPago com criptografia de ponta a ponta',
+    description: 'Processado pelo Asaas com criptografia de ponta a ponta',
     alwaysShow: true,
   },
 ];
