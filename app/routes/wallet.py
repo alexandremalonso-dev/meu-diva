@@ -284,3 +284,5 @@ def get_therapist_wallet_balance(
         currency="BRL",
         formatted=formatted
     )
+# asaas-carteira-evento: cria a carteira junto com todo perfil de paciente novo
+from app.services import carteira_eventos  # noqa: F401
