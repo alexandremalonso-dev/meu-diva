@@ -42,7 +42,8 @@ def base_url(ambiente=None) -> str:
 
 def _limpar(texto: str) -> str:
     t = re.sub(r"\$?aact_[A-Za-z0-9_=+/.-]+", "<chave>", str(texto or ""))
-    return re.sub(r"[A-Za-z0-9_+/=$.-]{40,}", "<oculto>", t)[:300]
+    t = re.sub(r"[A-Za-z0-9_+/=$.-]{40,}", "<oculto>", t)
+    return re.sub(r"\d{9,}", "<oculto>", t)[:300]
 
 
 def chamar(metodo: str, caminho: str, corpo=None, espera: int = 60, ambiente=None):

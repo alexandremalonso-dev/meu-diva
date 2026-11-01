@@ -91,7 +91,7 @@ def _ck_por_cliente(db, amb, cliente, valor, email=None):
         uids = [r[0] for r in db.execute(text("SELECT id FROM users WHERE lower(email) = :e"), {"e": email.lower()}).all()]
     if not uids:
         return None
-    cands = db.execute(text(f"SELECT {CK} FROM asaas_checkouts WHERE user_id = ANY(:u) AND ambiente = :a AND status IN ('ACTIVE', 'PAID', 'CRIANDO') AND asaas_subscription_id IS NULL "
+    cands = db.execute(text(f"SELECT {CK} FROM asaas_checkouts WHERE user_id = ANY(:u) AND ambiente = :a AND status IN ('ACTIVE', 'PAID', 'CRIANDO', 'INCERTO') AND asaas_subscription_id IS NULL "
                             "AND ABS(valor - :v) < 0.01 AND criado_em > now() - make_interval(hours => :h) ORDER BY id DESC"), {"u": uids, "a": amb, "v": valor, "h": JANELA_HORAS}).all()
     if cands and len({(c.user_id, c.tipo, c.plano) for c in cands}) == 1:
         return cands[0]
@@ -132,7 +132,7 @@ def _vincular(db, amb, sub_id, sub_obj=None, cliente=None, pay_obj=None):
     db.execute(text("INSERT INTO asaas_assinaturas (asaas_subscription_id, asaas_customer_id, user_id, tipo, plano, status, valor, proximo_vencimento, checkout_id, ambiente) "
                     "VALUES (:s, :c, :u, :t, :p, 'ACTIVE', :v, :n, :k, :a) ON CONFLICT (asaas_subscription_id) DO NOTHING"),
                {"s": sub_id, "c": cliente, "u": ck.user_id, "t": ck.tipo, "p": ck.plano, "v": ck.valor, "n": _dia(obj.get("nextDueDate")), "k": ck.id, "a": amb})
-    db.execute(text("UPDATE asaas_checkouts SET asaas_subscription_id = :s, asaas_customer_id = COALESCE(:c, asaas_customer_id), status = CASE WHEN status IN ('ACTIVE', 'CRIANDO') THEN 'PAID' ELSE status END, atualizado_em = now() WHERE id = :k"),
+    db.execute(text("UPDATE asaas_checkouts SET asaas_subscription_id = :s, asaas_customer_id = COALESCE(:c, asaas_customer_id), status = CASE WHEN status IN ('ACTIVE', 'CRIANDO', 'INCERTO') THEN 'PAID' ELSE status END, atualizado_em = now() WHERE id = :k"),
                {"s": sub_id, "c": cliente, "k": ck.id})
     if cliente:
         db.execute(text("INSERT INTO asaas_clientes (user_id, asaas_customer_id, ambiente) VALUES (:u, :c, :a) ON CONFLICT (user_id, ambiente) DO UPDATE SET asaas_customer_id = :c"), {"u": ck.user_id, "c": cliente, "a": amb})
