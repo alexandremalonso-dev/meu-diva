@@ -1,13 +1,13 @@
 'use client'
+// asaas-checkout-page v1: o cartão é digitado na página do Asaas (hospedada); aqui só abrimos o pedido.
 
-import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2, CheckCircle2, Shield, Package } from 'lucide-react'
+import { Loader2, CheckCircle2, Shield, Package, Lock } from 'lucide-react'
 import { api } from '@/lib/api'
 import { PublicHeader } from '@/components/layout/PublicHeader'
 import { PublicFooter } from '@/components/layout/PublicFooter'
 
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || 'APP_USR-6dd38a4a-5036-4838-8104-92314dc8414a'
 const COLOR = '#E03673'
 
 interface Plan {
@@ -17,102 +17,8 @@ interface Plan {
   sessoes_mensais: number
 }
 
-let mpInstance: any = null
-async function loadMpSdk(publicKey: string): Promise<any> {
-  if (mpInstance) return mpInstance
-  return new Promise((resolve, reject) => {
-    if ((window as any).MercadoPago) {
-      mpInstance = new (window as any).MercadoPago(publicKey, { locale: 'pt-BR' })
-      return resolve(mpInstance)
-    }
-    const script = document.createElement('script')
-    script.src = 'https://sdk.mercadopago.com/js/v2'
-    script.onload = () => {
-      mpInstance = new (window as any).MercadoPago(publicKey, { locale: 'pt-BR' })
-      resolve(mpInstance)
-    }
-    script.onerror = () => reject(new Error('Falha ao carregar SDK do Mercado Pago'))
-    document.head.appendChild(script)
-  })
-}
-
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '12px 14px', border: '1.5px solid #e5e7eb',
-  borderRadius: '10px', fontSize: '15px', color: '#1a1a2e', background: '#fff',
-  outline: 'none', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', boxSizing: 'border-box',
-}
-const labelStyle: React.CSSProperties = {
-  fontSize: '13px', fontWeight: 500, color: '#6b7280', letterSpacing: '0.02em',
-  textTransform: 'uppercase', display: 'block', marginBottom: '6px',
-}
-
-// Mesmo bloqueio e mesma chave do checkout de terapeuta: o antifraude do Mercado Pago é
-// da mesma conta, então uma recusa em um checkout vale para o outro.
-const BLOCK_MINUTES = 3
-const BLOCK_KEY = 'mp_sub_block_until'
-
-function cpfValido(raw: string): boolean {
-  const d = raw.replace(/\D/g, '')
-  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false
-  const dv = (len: number) => {
-    let sum = 0
-    for (let i = 0; i < len; i++) sum += Number(d[i]) * (len + 1 - i)
-    const r = (sum * 10) % 11
-    return r === 10 ? 0 : r
-  }
-  return dv(9) === Number(d[9]) && dv(10) === Number(d[10])
-}
-
-function SuccessScreen({ plan }: { plan: Plan }) {
-  const router = useRouter()
-  const [remaining, setRemaining] = useState<number | null>(null)
-
-  // O crédito entra quando o Mercado Pago avisa a cobrança aprovada (alguns segundos).
-  useEffect(() => {
-    let tries = 0
-    let stop = false
-    const tick = async () => {
-      tries++
-      try {
-        const me: any = await api('/api/patient/pacotes/me', { silent: true } as any)
-        if (stop) return
-        if ((me?.sessions_remaining || 0) > 0) { setRemaining(me.sessions_remaining); return }
-      } catch {}
-      if (!stop && tries < 8) setTimeout(tick, 2500)
-    }
-    tick()
-    return () => { stop = true }
-  }, [])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px 20px', textAlign: 'center' }}>
-      <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #E03673, #2F80D3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <CheckCircle2 size={48} color="#fff" />
-      </div>
-      <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#1a1a2e', margin: 0 }}>Pacote contratado!</h1>
-      <p style={{ fontSize: '15px', color: '#6b7280', maxWidth: '380px', margin: 0, lineHeight: 1.6 }}>
-        {remaining !== null
-          ? <>Seu pacote <strong>{plan.nome}</strong> está ativo e você já tem <strong>{remaining} {remaining === 1 ? 'sessão' : 'sessões'}</strong> disponíveis.</>
-          : <>Recebemos sua assinatura do <strong>{plan.nome}</strong>. Suas sessões aparecem em alguns instantes, assim que o pagamento é confirmado.</>}
-      </p>
-      <button
-        onClick={() => router.push('/busca')}
-        style={{ marginTop: '8px', padding: '13px 32px', background: 'linear-gradient(135deg, #E03673, #c42d63)', color: '#fff', fontSize: '15px', fontWeight: 600, border: 'none', borderRadius: '10px', cursor: 'pointer' }}
-      >
-        Agendar uma sessão
-      </button>
-      <button
-        onClick={() => router.push('/patient/pacotes')}
-        style={{ marginTop: '4px', padding: '8px 16px', background: 'transparent', color: '#6b7280', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-      >
-        Ver meu pacote
-      </button>
-    </div>
-  )
 }
 
 function PacoteCheckoutContent() {
@@ -123,19 +29,8 @@ function PacoteCheckoutContent() {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
   const [loadingPlan, setLoadingPlan] = useState(true)
-
-  const [name, setName] = useState('')
-  const [cpf, setCpf] = useState('')
-  const [cardNumber, setCardNumber] = useState('')
-  const [expiry, setExpiry] = useState('')
-  const [cvv, setCvv] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-  const [blockedUntil, setBlockedUntil] = useState<number>(0)
-  const [nowTs, setNowTs] = useState<number>(Date.now())
-  const blocked = blockedUntil > nowTs
 
   useEffect(() => {
     let active = true
@@ -156,122 +51,22 @@ function PacoteCheckoutContent() {
     return () => { active = false }
   }, [planKey])
 
-  useEffect(() => {
-    try {
-      const saved = Number(localStorage.getItem(BLOCK_KEY) || 0)
-      if (saved > Date.now()) {
-        setBlockedUntil(saved)
-        const min = Math.ceil((saved - Date.now()) / 60000)
-        setError(`Por segurança, aguarde ${min} min antes de tentar novamente.`)
-      }
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    if (blockedUntil <= Date.now()) return
-    const t = setInterval(() => {
-      const n = Date.now()
-      setNowTs(n)
-      if (n >= blockedUntil) { clearInterval(t); setError(null) }
-    }, 1000)
-    return () => clearInterval(t)
-  }, [blockedUntil])
-
-  // Script de segurança do Mercado Pago (gera MP_DEVICE_SESSION_ID)
-  useEffect(() => {
-    if (document.getElementById('mp-security-script')) return
-    const s = document.createElement('script')
-    s.id = 'mp-security-script'
-    s.src = 'https://www.mercadopago.com/v2/security.js'
-    s.setAttribute('view', 'checkout')
-    document.head.appendChild(s)
-  }, [])
-
-  const maskCard = (v: string) => v.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19)
-  const maskExpiry = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d }
-  const maskCpf = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11)
-    if (d.length <= 3) return d
-    if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
-    if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
-    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
-  }
-
-  const handleSubmit = useCallback(async () => {
-    if (!plan) return
-    if (!name.trim()) { setError('Informe o nome no cartão.'); return }
-    if (name.trim().split(/\s+/).length < 2) { setError('Informe nome e sobrenome, como estão no cartão.'); return }
-    if (cardNumber.replace(/\s/g, '').length < 16) { setError('Número do cartão inválido.'); return }
-    if (expiry.length < 5) { setError('Validade inválida.'); return }
-    if (cvv.length < 3) { setError('CVV inválido.'); return }
-    if (!cpfValido(cpf)) { setError('CPF inválido. Confira os números.'); return }
-    if (blockedUntil > Date.now()) {
-      const min = Math.ceil((blockedUntil - Date.now()) / 60000)
-      setError(`Por segurança, aguarde ${min} min antes de tentar novamente.`)
-      return
-    }
-
-    setLoading(true)
+  const abrirPagamento = async () => {
+    if (!plan || opening) return
+    setOpening(true)
     setError(null)
-    setInfo(null)
-
-    let chamouAssinatura = false
-    const bloquearNovaTentativa = () => {
-      const until = Date.now() + BLOCK_MINUTES * 60000
-      setBlockedUntil(until)
-      try { localStorage.setItem(BLOCK_KEY, String(until)) } catch {}
-    }
-
     try {
-      const mp = await loadMpSdk(MP_PUBLIC_KEY)
-      const [expMonth, expYear] = expiry.split('/')
-      const rawCard = cardNumber.replace(/\s/g, '')
-
-      const tokenResult = await mp.createCardToken({
-        cardNumber: rawCard,
-        cardholderName: name,
-        identificationType: 'CPF',
-        identificationNumber: cpf.replace(/\D/g, ''),
-        cardExpirationMonth: expMonth,
-        cardExpirationYear: `20${expYear}`,
-        securityCode: cvv,
-      })
-
-      if (!tokenResult || tokenResult.error) {
-        throw new Error(tokenResult?.error?.message || 'Erro ao tokenizar cartão.')
-      }
-
-      chamouAssinatura = true
-      const result: any = await api('/api/patient/pacotes/subscribe', {
+      const r: any = await api('/api/asaas/checkout', {
         method: 'POST',
-        body: JSON.stringify({
-          plan: plan.chave,
-          card_token_id: tokenResult.id,
-          payer_cpf: cpf.replace(/\D/g, ''),
-          device_id: (window as any).MP_DEVICE_SESSION_ID || '',
-        }),
+        body: JSON.stringify({ tipo: 'paciente', plano: plan.chave }),
       })
-
-      if (result.status === 'authorized') {
-        setSuccess(true)
-      } else if (result.status === 'pending') {
-        setInfo('Seu pagamento está em análise pelo Mercado Pago. Assim que for aprovado, suas sessões aparecem em Meus pacotes.')
-      } else {
-        setError(`Assinatura não aprovada. Por segurança, aguarde ${BLOCK_MINUTES} min antes de tentar novamente.`)
-        bloquearNovaTentativa()
-      }
+      if (!r?.url) throw new Error('Não foi possível abrir o pagamento agora. Tente novamente em instantes.')
+      window.location.href = r.url
     } catch (e: any) {
-      const base = e.message || 'Erro ao processar assinatura.'
-      if (chamouAssinatura) {
-        setError(`${base} Por segurança, aguarde ${BLOCK_MINUTES} min antes de tentar novamente.`)
-        bloquearNovaTentativa()
-      } else {
-        setError(base)
-      }
-    } finally {
-      setLoading(false)
+      setError(e?.message || 'Não foi possível abrir o pagamento agora. Tente novamente em instantes.')
+      setOpening(false)
     }
-  }, [plan, name, cpf, cardNumber, expiry, cvv, blockedUntil])
+  }
 
   if (loadingPlan) return (
     <main style={{ minHeight: '100vh', background: '#f9f7f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -286,14 +81,6 @@ function PacoteCheckoutContent() {
         <p style={{ color: '#374151', marginBottom: '16px' }}>{planError || 'Pacote indisponível.'}</p>
         <button onClick={() => router.push('/patient/dashboard')} style={{ padding: '10px 24px', background: COLOR, color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Voltar ao painel</button>
       </div>
-      <PublicFooter />
-    </main>
-  )
-
-  if (success) return (
-    <main style={{ minHeight: '100vh', background: '#f9f7f8', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
-      <PublicHeader />
-      <SuccessScreen plan={plan} />
       <PublicFooter />
     </main>
   )
@@ -352,30 +139,16 @@ function PacoteCheckoutContent() {
 
         <section style={{ background: '#fff', borderRadius: '20px', border: '1.5px solid #f0e8ec', padding: '32px 28px', boxShadow: '0 4px 24px rgba(224,54,115,0.06)' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#1a1a2e', margin: '0 0 4px' }}>Contratar {plan.nome}</h1>
-          <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 24px' }}>Pagamento seguro via Mercado Pago • Recorrência mensal</p>
+          <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 24px' }}>Pagamento processado pelo Asaas (certificação PCI-DSS) • Recorrência mensal</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={labelStyle}>Nome no cartão</label>
-              <input style={inputStyle} type="text" placeholder="Como aparece no cartão" value={name} onChange={e => setName(e.target.value)} autoComplete="cc-name" />
-            </div>
-            <div>
-              <label style={labelStyle}>CPF do titular</label>
-              <input style={inputStyle} type="text" placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(maskCpf(e.target.value))} inputMode="numeric" />
-            </div>
-            <div>
-              <label style={labelStyle}>Número do cartão</label>
-              <input style={inputStyle} type="text" placeholder="0000 0000 0000 0000" value={cardNumber} onChange={e => setCardNumber(maskCard(e.target.value))} inputMode="numeric" autoComplete="cc-number" />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={labelStyle}>Validade</label>
-                <input style={inputStyle} type="text" placeholder="MM/AA" value={expiry} onChange={e => setExpiry(maskExpiry(e.target.value))} inputMode="numeric" autoComplete="cc-exp" />
-              </div>
-              <div>
-                <label style={labelStyle}>CVV</label>
-                <input style={inputStyle} type="text" placeholder="000" value={cvv} onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" autoComplete="cc-csc" />
-              </div>
+            <div style={{ background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: '12px', padding: '16px 18px' }}>
+              <p style={{ fontSize: '14px', color: '#374151', margin: '0 0 8px', fontWeight: 600 }}>Como funciona</p>
+              <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#4b5563', lineHeight: 1.7 }}>
+                <li>Você vai para uma página segura do Asaas para informar os dados do cartão de crédito.</li>
+                <li>Depois do pagamento, você volta ao Meu Divã automaticamente.</li>
+                <li>Suas {plan.sessoes_mensais === 1 ? 'sessão aparece' : 'sessões aparecem'} em instantes, assim que o pagamento é confirmado.</li>
+              </ol>
             </div>
 
             {error && (
@@ -383,32 +156,27 @@ function PacoteCheckoutContent() {
                 {error}
               </p>
             )}
-            {info && (
-              <p style={{ fontSize: '13px', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 12px', margin: 0 }}>
-                {info}
-              </p>
-            )}
 
             <button
-              onClick={handleSubmit}
-              disabled={loading || blocked}
+              onClick={abrirPagamento}
+              disabled={opening}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
                 width: '100%', padding: '16px',
                 background: `linear-gradient(135deg, ${COLOR} 0%, ${COLOR}cc 100%)`,
                 color: '#fff', fontSize: '16px', fontWeight: 700, border: 'none', borderRadius: '12px',
-                cursor: loading || blocked ? 'not-allowed' : 'pointer', opacity: loading || blocked ? 0.6 : 1,
+                cursor: opening ? 'not-allowed' : 'pointer', opacity: opening ? 0.6 : 1,
                 fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
               }}
             >
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : `Assinar por ${formatCurrency(plan.preco_mensal)}/mês`}
+              {opening
+                ? <><Loader2 size={18} className="animate-spin" /> Abrindo o pagamento…</>
+                : <><Lock size={16} /> Continuar para o pagamento • {formatCurrency(plan.preco_mensal)}/mês</>}
             </button>
 
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {['Mercado Pago', 'SSL 256-bit', 'PCI DSS'].map(b => (
-                <span key={b} style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px', background: '#f3f4f6', color: '#6b7280' }}>{b}</span>
-              ))}
-            </div>
+            <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', margin: 0 }}>
+              Cartão de crédito • Cobrança mensal recorrente • Cancele quando quiser
+            </p>
           </div>
         </section>
       </div>

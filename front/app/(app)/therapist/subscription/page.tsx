@@ -275,7 +275,7 @@ export default function TherapistSubscriptionPage() {
               <p className="text-xs text-gray-400 flex items-center gap-1">
                 <Info className="w-3 h-3" />
                 Assinante desde {formatDate(sub.created_at)}
-                {sub.payment_provider && ` · via ${sub.payment_provider === "apple_iap" ? "Apple" : "Mercado Pago"}`}
+                {sub.payment_provider && ` · via ${sub.payment_provider === "apple_iap" ? "Apple" : sub.payment_provider === "asaas" ? "Asaas" : "Mercado Pago"}`}
               </p>
             )}
 
