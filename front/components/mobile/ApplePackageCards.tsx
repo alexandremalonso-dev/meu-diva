@@ -15,10 +15,10 @@ interface PackageInfo {
 }
 
 const PACKAGES: PackageInfo[] = [
-  { chave: "no_diva_01", productId: "6820287370", nome: "No Divã 01", preco: "R$ 75/mês",  sessoes: 1 },
-  { chave: "no_diva_02", productId: "6820287570", nome: "No Divã 02", preco: "R$ 150/mês", sessoes: 2 },
-  { chave: "no_diva_04", productId: "6820288293", nome: "No Divã 04", preco: "R$ 300/mês", sessoes: 4 },
-  { chave: "no_diva_08", productId: "6820289143", nome: "No Divã 08", preco: "R$ 600/mês", sessoes: 8 },
+  { chave: "no_diva_01", productId: "01", nome: "No Divã 01", preco: "R$ 75/mês",  sessoes: 1 },
+  { chave: "no_diva_02", productId: "02", nome: "No Divã 02", preco: "R$ 150/mês", sessoes: 2 },
+  { chave: "no_diva_04", productId: "04", nome: "No Divã 04", preco: "R$ 300/mês", sessoes: 4 },
+  { chave: "no_diva_08", productId: "08", nome: "No Divã 08", preco: "R$ 600/mês", sessoes: 8 },
 ];
 
 export function ApplePackageCards() {
@@ -31,10 +31,14 @@ export function ApplePackageCards() {
     setError(null);
     try {
       const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
+      const { products } = await NativePurchases.getProducts({
+        productIdentifiers: [pkg.productId],
+        productType: PURCHASE_TYPE.SUBS,
+      });
+      if (!products?.length) throw new Error(`Produto não encontrado: ${pkg.productId}`);
       const transaction = await NativePurchases.purchaseProduct({
-        productIdentifier: pkg.productId,
-        quantity: 1,
-        productType: PURCHASE_TYPE.INAPP,
+        productIdentifier: products[0].identifier,
+        productType: PURCHASE_TYPE.SUBS,
       });
       if (transaction?.productIdentifier) {
         await api("/api/payments/apple/validate-package", {
@@ -48,8 +52,10 @@ export function ApplePackageCards() {
         setSuccess(`${pkg.nome} contratado! Suas sessões já estão disponíveis.`);
       }
     } catch (e: any) {
-      if (!e.message?.toLowerCase().includes("cancel")) {
-        setError(e.message || "Erro ao processar compra.");
+      const msg = e.message || JSON.stringify(e) || "Erro desconhecido";
+      console.error("❌ IAP Error completo:", JSON.stringify(e));
+      if (!msg.toLowerCase().includes("cancel")) {
+        setError(msg);
       }
     } finally {
       setLoading(null);
@@ -73,31 +79,26 @@ export function ApplePackageCards() {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {PACKAGES.map(pkg => {
           const isLoading = loading === pkg.productId;
           return (
-            <div key={pkg.chave} style={{ background: "white", borderRadius: 14, padding: 14, border: `1px solid ${COLORS.primary}30`, display: "flex", flexDirection: "column" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: COLORS.primary + "15", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+            <div key={pkg.chave} style={{ background: "white", borderRadius: 12, padding: "12px 14px", border: `1px solid ${COLORS.primary}20`, display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: COLORS.primary + "15", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Package size={18} color={COLORS.primary} />
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.dark, marginBottom: 2 }}>{pkg.nome}</div>
-              <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 8 }}>
-                <strong style={{ color: COLORS.dark }}>{pkg.sessoes}</strong> {pkg.sessoes === 1 ? "sessão" : "sessões"}/mês
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.primary, marginBottom: 12 }}>{pkg.preco}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12, flex: 1 }}>
-                {["Videochamada", "Renovação mensal", "Cancele quando quiser"].map((f, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#374151" }}>
-                    <Check size={11} color={COLORS.primary} style={{ flexShrink: 0 }} /> {f}
-                  </div>
-                ))}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.dark }}>{pkg.nome}</div>
+                <div style={{ fontSize: 11, color: "#6B7280" }}>
+                  {pkg.sessoes} {pkg.sessoes === 1 ? "sessão" : "sessões"}/mês · Renovação mensal
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary, marginTop: 2 }}>{pkg.preco}</div>
               </div>
               <button
                 onClick={() => handlePurchase(pkg)}
                 disabled={!!loading}
-                style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: loading ? "#D1D5DB" : COLORS.primary, color: "white", fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                {isLoading ? <Loader2 size={14} className="animate-spin" /> : "Contratar"}
+                style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 8, border: "none", background: loading ? "#D1D5DB" : COLORS.primary, color: "white", fontSize: 12, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                {isLoading ? <Loader2 size={13} className="animate-spin" /> : "Contratar"}
               </button>
             </div>
           );

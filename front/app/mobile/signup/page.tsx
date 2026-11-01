@@ -16,7 +16,9 @@ function isNativeApp(): boolean {
 async function openOAuthUrl(url: string) {
   if (isNativeApp()) {
     const { Browser } = await import("@capacitor/browser");
-    await Browser.open({ url, presentationStyle: "popover" });
+    const cap = (window as any).Capacitor;
+    const isIPad = cap?.getPlatform?.() === "ios" && (window.navigator.userAgent.includes("iPad") || (window.navigator.maxTouchPoints > 1 && !window.navigator.userAgent.includes("iPhone")));
+    await Browser.open({ url, presentationStyle: isIPad ? "fullscreen" : "popover" });
   } else {
     window.location.href = url;
   }
