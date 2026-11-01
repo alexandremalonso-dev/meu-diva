@@ -23,7 +23,9 @@ const maskExpiry = (v: string) => { const d = v.replace(/\D/g,'').slice(0,4); re
 const maskCpf = (v: string) => { const d = v.replace(/\D/g,'').slice(0,11); if(d.length<=3)return d; if(d.length<=6)return `${d.slice(0,3)}.${d.slice(3)}`; if(d.length<=9)return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`; return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` }
 const maskCep = (v: string) => { const d = v.replace(/\D/g,'').slice(0,8); return d.length > 5 ? `${d.slice(0,5)}-${d.slice(5)}` : d }
 const maskPhone = (v: string) => {
-  const d = v.replace(/\D/g,'').slice(0,11)
+  let d = v.replace(/\D/g,'').replace(/^0+/,'')
+  if(d.length>11&&d.startsWith('55'))d=d.slice(2)
+  d=d.slice(0,11)
   if(d.length<=2)return d
   if(d.length<=6)return `(${d.slice(0,2)}) ${d.slice(2)}`
   if(d.length<=10)return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`
@@ -291,7 +293,7 @@ function SubscriptionCheckoutContent() {
             </div>
             <div><label style={labelSt}>Celular do titular</label>
               <input value={phone} onChange={e=>setPhone(maskPhone(e.target.value))} placeholder="(00) 00000-0000" inputMode="tel" autoComplete="tel" {...f('phone')} />
-              <div style={{ fontSize:12, color:'#9CA3AF', marginTop:6 }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão.</div>
+              <div style={{ fontSize:12, color:'#9CA3AF', marginTop:6 }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão. No celular, informe só o DDD e o número, sem +55.</div>
             </div>
 
             {error && <div style={{ fontSize:13, color:'#dc2626', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:8, padding:'10px 12px' }}>{error}</div>}

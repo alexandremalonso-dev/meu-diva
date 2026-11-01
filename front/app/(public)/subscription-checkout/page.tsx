@@ -182,7 +182,9 @@ function SubscriptionCheckoutContent() {
   }
   const maskCep = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 8); return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d }
   const maskPhone = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11)
+    let d = v.replace(/\D/g, '').replace(/^0+/, '') // asaas-celular: tira o zero e o +55 ANTES de cortar em 11 digitos
+    if (d.length > 11 && d.startsWith('55')) d = d.slice(2)
+    d = d.slice(0, 11)
     if (d.length <= 2) return d
     if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
     if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
@@ -356,7 +358,7 @@ function SubscriptionCheckoutContent() {
             <div>
               <label style={labelStyle}>Celular do titular</label>
               <input style={inputStyle} type="text" placeholder="(00) 00000-0000" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} inputMode="tel" autoComplete="tel" />
-              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão.</p>
+              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão. No celular, informe só o DDD e o número, sem +55.</p>
             </div>
 
             {error && (

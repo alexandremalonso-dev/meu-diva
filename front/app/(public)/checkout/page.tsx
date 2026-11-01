@@ -92,7 +92,9 @@ function CardForm({ paymentId, amount, onSuccess, onError }: {
   const maskExpiry = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d }
   const maskCep = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 8); return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d }
   const maskPhone = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11)
+    let d = v.replace(/\D/g, '').replace(/^0+/, '') // asaas-celular: tira o zero e o +55 ANTES de cortar em 11 digitos
+    if (d.length > 11 && d.startsWith('55')) d = d.slice(2)
+    d = d.slice(0, 11)
     if (d.length <= 2) return d
     if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
@@ -256,7 +258,7 @@ function CardForm({ paymentId, amount, onSuccess, onError }: {
       </div>
       <div><label style={labelStyle}>Celular do titular *</label>
         <input style={inputStyle} type="text" placeholder="(00) 00000-0000" value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))} inputMode="numeric" autoComplete="tel" />
-        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão.</p>
+        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão. No celular, informe só o DDD e o número, sem +55.</p>
       </div>
 
       {info && <p style={{ fontSize: '13px', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 12px', margin: 0 }}>{info}</p>}
