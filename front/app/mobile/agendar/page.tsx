@@ -183,7 +183,7 @@ export default function MobileAgendarPage() {
         return;
       }
 
-      // Saldo insuficiente: cria appointment e redireciona para checkout proprio (Mercado Pago)
+      // Saldo insuficiente: cria appointment e redireciona para checkout proprio (Asaas)
       const bookingData = await api('/api/appointments', {
         method: "POST",
         body: JSON.stringify({

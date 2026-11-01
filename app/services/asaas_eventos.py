@@ -285,7 +285,11 @@ def h_pagamento(db, amb, ev):
     if not pid:
         return "sem id"
     if not sid:
-        return "cobrança avulsa (sem assinatura): ignorada"
+        m = re.match(r"^md:sessao:(\d+):(\d+)$", str(pay.get("externalReference") or ""))
+        if not m:
+            return "cobrança avulsa (sem assinatura): ignorada"
+        from app.services.asaas_sessao_service import confirmar_sessao
+        return confirmar_sessao(db, int(m.group(2)), int(m.group(1)), pid, _valor(pay.get("value")), amb, "pix" if str(pay.get("billingType")) == "PIX" else "cartao")
     v = _vincular(db, amb, sid, None, pay.get("customer"), pay)
     if not v:
         _alertar(db, "🚨 PAGAMENTO do Asaas SEM pedido associado (ninguém recebeu o plano)", [f"Cobrança {pid} da assinatura {sid} ({amb})", f"Valor: R$ {pay.get('value')}", f"Cliente: {pay.get('customer')}",
@@ -368,7 +372,8 @@ def h_sub_atualizada(db, amb, ev):
 def h_alerta(db, amb, ev):
     pay = ev.get("payment") or {}
     v = _vinculo(db, str(pay.get("subscription") or "")) if pay.get("subscription") else None
-    _alertar(db, f"⚠️ Asaas: {ev.get('event')}", [f"Cobrança {pay.get('id')} (R$ {pay.get('value')}), assinatura {pay.get('subscription')}, ambiente {amb}",
+    ref = str(pay.get("externalReference") or "")
+    _alertar(db, f"⚠️ Asaas: {ev.get('event')}", [f"Cobrança {pay.get('id')} (R$ {pay.get('value')}), assinatura {pay.get('subscription')}, ambiente {amb}" + (f", SESSÃO AVULSA (referência {ref})" if ref.startswith("md:sessao:") else ""),
                                                    f"Usuário {v.user_id}, plano {v.plano} ({v.tipo})" if v else "Sem vínculo com um pedido nosso.", "Nenhuma alteração automática foi feita; avalie no painel do Asaas."])
     return "admin alertado"
 

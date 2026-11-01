@@ -12,6 +12,7 @@ from app.models.user import User
 from app.services import asaas_cartao_service as cartao
 from app.services import asaas_checkout_service as svc
 from app.services import asaas_client as ac
+from app.services import asaas_sessao_service as sessao
 
 router = APIRouter(prefix="/asaas", tags=["asaas-checkout"])
 
@@ -60,6 +61,26 @@ async def assinar(request: Request, db: Session = Depends(get_db), current_user:
     except Exception:
         raise HTTPException(status_code=400, detail="Requisição inválida.")
     return cartao.assinar_com_cartao(db, current_user, dados, _ip_cliente(request))
+
+
+async def _corpo_json(request: Request):
+    try:
+        return await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Requisição inválida.")
+
+
+@router.post("/sessao/cartao")
+async def sessao_cartao(request: Request, db: Session = Depends(get_db), current_user: User = Security(require_roles([UserRole.patient]))):
+    # Sessao avulsa com cartao (corpo lido sem modelo pydantic, como na assinatura: nunca devolve nem registra o que foi digitado).
+    _bloqueado_no_sandbox(current_user)
+    return sessao.pagar_com_cartao(db, current_user, await _corpo_json(request), _ip_cliente(request))
+
+
+@router.post("/sessao/pix")
+async def sessao_pix(request: Request, db: Session = Depends(get_db), current_user: User = Security(require_roles([UserRole.patient]))):
+    _bloqueado_no_sandbox(current_user)
+    return sessao.gerar_pix(db, current_user, await _corpo_json(request), _ip_cliente(request))
 
 
 @router.get("/checkout/{local_id}/status")

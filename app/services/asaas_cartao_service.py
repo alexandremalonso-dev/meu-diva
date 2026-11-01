@@ -53,7 +53,7 @@ def cpf_valido(raw) -> bool:
     return True
 
 
-def validar(dados) -> dict:
+def validar(dados, exigir_plano=True) -> dict:
     """Valida e normaliza. As mensagens sao fixas: nunca repetem o que foi digitado."""
     def erro(m):
         raise HTTPException(status_code=400, detail=m)
@@ -110,7 +110,7 @@ def validar(dados) -> dict:
     if len(cel) not in (10, 11):
         erro("Celular inválido (informe com DDD).")
     tipo = str(dados.get("tipo") or "").strip().lower()
-    if tipo not in ("terapeuta", "paciente"):
+    if exigir_plano and tipo not in ("terapeuta", "paciente"):
         erro("Tipo inválido.")
     return {"tipo": tipo, "plano": str(dados.get("plano") or "").strip().lower(), "nome": nome, "numero": numero, "mes": f"{mes:02d}", "ano": str(ano), "ccv": ccv,
             "cpf": _digitos(titular.get("cpf")), "cep": cep, "num_end": num_end, "celular": cel, "rua": rua, "bairro": bairro, "cidade": cidade, "uf": uf, "complemento": complemento}

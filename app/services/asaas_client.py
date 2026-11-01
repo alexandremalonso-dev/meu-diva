@@ -89,3 +89,16 @@ def atualizar_assinatura(sub_id: str, dados: dict, ambiente=None) -> dict:
 
 def remover_assinatura(sub_id: str, ambiente=None) -> dict:
     return chamar("DELETE", f"/subscriptions/{sub_id}", ambiente=ambiente)
+
+
+def criar_cobranca(corpo: dict, ambiente=None, espera: int = 60) -> dict:
+    return chamar("POST", "/payments", corpo, espera=espera, ambiente=ambiente)
+
+
+def obter_pix(pay_id: str, ambiente=None) -> dict:
+    return chamar("GET", f"/payments/{pay_id}/pixQrCode", ambiente=ambiente)
+
+
+def buscar_cobrancas_por_referencia(ref: str, ambiente=None) -> list:
+    from urllib.parse import quote
+    return (chamar("GET", f"/payments?externalReference={quote(ref, safe=':')}&limit=10", ambiente=ambiente) or {}).get("data") or []
