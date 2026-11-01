@@ -111,6 +111,7 @@ from app.routes import admin_pricing
 from app.routes import therapist_onboarding
 from app.routes import admin_patient_plans
 from app.routes import patient_packages_routes
+from app.routes import asaas_webhook
 from app.routes import admin_patient_report
 from app.routes import email_verification_routes
 from app.routes import public_stats
@@ -229,6 +230,7 @@ app.include_router(admin_pricing.router, prefix="/api")
 app.include_router(therapist_onboarding.router, prefix="/api")
 app.include_router(admin_patient_plans.router, prefix="/api")
 app.include_router(patient_packages_routes.router, prefix="/api")
+app.include_router(asaas_webhook.router, prefix="/api")
 app.include_router(admin_patient_report.router, prefix="/api")
 app.include_router(email_verification_routes.router, prefix="/api")
 app.include_router(public_stats.router)
