@@ -1,5 +1,5 @@
 'use client'
-// asaas-cartao-page v1: o cartão é digitado aqui, no nosso site, e a cobrança é feita pelo Asaas (POST /api/asaas/assinar).
+// asaas-cartao-page v2: o cartão é digitado aqui, no nosso site, e a cobrança é feita pelo Asaas (POST /api/asaas/assinar).
 
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -106,33 +106,41 @@ function PacoteCheckoutContent() {
   const [expiry, setExpiry] = useState('')
   const [cvv, setCvv] = useState('')
   const [cep, setCep] = useState('')
+  const [rua, setRua] = useState('')
   const [addrNumber, setAddrNumber] = useState('')
+  const [complemento, setComplemento] = useState('')
+  const [bairro, setBairro] = useState('')
+  const [cidade, setCidade] = useState('')
+  const [uf, setUf] = useState('')
   const [phone, setPhone] = useState('')
 
   const numeroRef = useRef<HTMLInputElement>(null)
-  const [enderecoCep, setEnderecoCep] = useState<string | null>(null)
   const [avisoCep, setAvisoCep] = useState<string | null>(null)
   const [buscandoCep, setBuscandoCep] = useState(false)
 
-  // Ao completar o CEP, busca rua/bairro/cidade (rota /api/asaas/cep) e leva o cursor para o número. Se falhar, o formulário segue normalmente.
+  // Mesma lógica dos perfis: ao completar o CEP busca o endereço (/api/patients/cep, a mesma rota dos perfis) e preenche rua, bairro, cidade e UF, que continuam editáveis.
   useEffect(() => {
     const d = cep.replace(/\D/g, '')
-    if (d.length !== 8) { setEnderecoCep(null); setAvisoCep(null); return }
+    if (d.length !== 8) { setAvisoCep(null); return }
     let ativo = true
     setBuscandoCep(true)
     ;(async () => {
       try {
-        const r: any = await api(`/api/asaas/cep/${d}`, { silent: true } as any)
+        const r: any = await api(`/api/patients/cep/${d}`, { silent: true } as any)
         if (!ativo) return
-        const rua = [r?.logradouro, r?.bairro].filter(Boolean).join(', ')
-        const cidade = [r?.cidade, r?.uf].filter(Boolean).join('/')
-        setEnderecoCep([rua, cidade].filter(Boolean).join(' — '))
-        setAvisoCep(null)
-        numeroRef.current?.focus()
+        if (r && !r.erro) {
+          setRua(r.logradouro || '')
+          setBairro(r.bairro || '')
+          setCidade(r.localidade || '')
+          setUf(String(r.uf || '').toUpperCase())
+          setAvisoCep(null)
+          numeroRef.current?.focus()
+        } else {
+          setAvisoCep('CEP não encontrado. Preencha o endereço manualmente.')
+        }
       } catch (e: any) {
         if (!ativo) return
-        setEnderecoCep(null)
-        setAvisoCep(String(e?.message || '').includes('não encontrado') ? 'CEP não encontrado. Confira os números.' : 'Não foi possível buscar o endereço agora. Digite o número do endereço mesmo assim.')
+        setAvisoCep(String(e?.message || '').includes('não encontrado') ? 'CEP não encontrado. Preencha o endereço manualmente.' : 'Não foi possível buscar o endereço agora. Preencha manualmente.')
       } finally {
         if (ativo) setBuscandoCep(false)
       }
@@ -188,7 +196,10 @@ function PacoteCheckoutContent() {
     if (cvv.length < 3) { setError('CVV inválido.'); return }
     if (!cpfValido(cpf)) { setError('CPF inválido. Confira os números.'); return }
     if (cep.replace(/\D/g, '').length !== 8) { setError('CEP inválido.'); return }
-    if (!addrNumber.trim()) { setError('Informe o número do endereço.'); return }
+    if (rua.trim().length < 3) { setError('Informe a rua do endereço.'); return }
+    if (!addrNumber.trim()) { setError('Informe o número do endereço (ou S/N).'); return }
+    if (cidade.trim().length < 2) { setError('Informe a cidade.'); return }
+    if (!/^[A-Za-z]{2}$/.test(uf.trim())) { setError('Informe o estado (UF).'); return }
     if (phone.replace(/\D/g, '').length < 10) { setError('Celular inválido. Informe com DDD.'); return }
 
     setLoading(true)
@@ -200,7 +211,7 @@ function PacoteCheckoutContent() {
           tipo: 'paciente',
           plano: plan.chave,
           cartao: { nome: name.trim(), numero: cardNumber.replace(/\s/g, ''), validade: expiry, ccv: cvv },
-          titular: { cpf: cpf.replace(/\D/g, ''), cep: cep.replace(/\D/g, ''), numero: addrNumber.trim(), celular: phone.replace(/\D/g, '') },
+          titular: { cpf: cpf.replace(/\D/g, ''), cep: cep.replace(/\D/g, ''), rua: rua.trim(), numero: addrNumber.trim(), complemento: complemento.trim(), bairro: bairro.trim(), cidade: cidade.trim(), uf: uf.trim().toUpperCase(), celular: phone.replace(/\D/g, '') },
         }),
       })
       setCardNumber('')
@@ -211,7 +222,7 @@ function PacoteCheckoutContent() {
     } finally {
       setLoading(false)
     }
-  }, [plan, name, cpf, cardNumber, expiry, cvv, cep, addrNumber, phone])
+  }, [plan, name, cpf, cardNumber, expiry, cvv, cep, rua, addrNumber, complemento, bairro, cidade, uf, phone])
 
   if (loadingPlan) return (
     <main style={{ minHeight: '100vh', background: '#f9f7f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -317,25 +328,46 @@ function PacoteCheckoutContent() {
                 <input style={inputStyle} type="text" placeholder="000" value={cvv} onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" autoComplete="cc-csc" />
               </div>
             </div>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: '#374151', margin: '4px 0 -4px' }}>Endereço do titular do cartão</p>
+            <div>
+              <label style={labelStyle}>CEP *</label>
+              <input style={inputStyle} type="text" placeholder="00000-000" value={cep} onChange={e => setCep(maskCep(e.target.value))} inputMode="numeric" autoComplete="postal-code" />
+              {(buscandoCep || avisoCep) && (
+                <p style={{ fontSize: '12px', margin: '6px 0 0', color: avisoCep ? '#b45309' : '#6b7280' }}>{buscandoCep ? 'Buscando endereço…' : avisoCep}</p>
+              )}
+            </div>
+            <div>
+              <label style={labelStyle}>Rua *</label>
+              <input style={inputStyle} type="text" value={rua} onChange={e => setRua(e.target.value)} autoComplete="address-line1" />
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={labelStyle}>CEP do titular</label>
-                <input style={inputStyle} type="text" placeholder="00000-000" value={cep} onChange={e => setCep(maskCep(e.target.value))} inputMode="numeric" autoComplete="postal-code" />
+                <label style={labelStyle}>Número *</label>
+                <input ref={numeroRef} style={inputStyle} type="text" placeholder="123 ou S/N" value={addrNumber} onChange={e => setAddrNumber(e.target.value.slice(0, 10))} />
               </div>
               <div>
-                <label style={labelStyle}>Nº do endereço</label>
-                <input style={inputStyle} type="text" ref={numeroRef} placeholder="123" value={addrNumber} onChange={e => setAddrNumber(e.target.value.slice(0, 10))} />
+                <label style={labelStyle}>Complemento</label>
+                <input style={inputStyle} type="text" placeholder="Apto, bloco, sala" value={complemento} onChange={e => setComplemento(e.target.value.slice(0, 60))} autoComplete="address-line2" />
               </div>
             </div>
-            {(buscandoCep || enderecoCep || avisoCep) && (
-              <p style={{ fontSize: '12px', margin: '-4px 0 0', color: avisoCep ? '#b45309' : '#166534', lineHeight: 1.5 }}>
-                {buscandoCep ? 'Buscando endereço…' : (enderecoCep ? `✓ ${enderecoCep}` : avisoCep)}
-              </p>
-            )}
+            <div>
+              <label style={labelStyle}>Bairro</label>
+              <input style={inputStyle} type="text" value={bairro} onChange={e => setBairro(e.target.value)} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Cidade *</label>
+                <input style={inputStyle} type="text" value={cidade} onChange={e => setCidade(e.target.value)} autoComplete="address-level2" />
+              </div>
+              <div>
+                <label style={labelStyle}>UF *</label>
+                <input style={inputStyle} type="text" maxLength={2} placeholder="MG" value={uf} onChange={e => setUf(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2))} autoComplete="address-level1" />
+              </div>
+            </div>
             <div>
               <label style={labelStyle}>Celular do titular</label>
               <input style={inputStyle} type="text" placeholder="(00) 00000-0000" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} inputMode="tel" autoComplete="tel" />
-              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>CEP, número e celular são exigidos pelo Asaas para liberar a cobrança no cartão.</p>
+              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>O endereço e o celular do titular são exigidos pelo Asaas para liberar a cobrança no cartão.</p>
             </div>
 
             {error && (

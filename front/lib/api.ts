@@ -123,7 +123,9 @@ export async function api(
     const isSilent =
       SILENT_STATUSES.includes(res.status) || options?.silent;
     if (!isSilent) console.error(`❌ API ${res.status}: ${fullUrl}`, data);
-    throw new Error(errorMessage);
+    const apiErr: any = new Error(errorMessage);
+    apiErr.status = res.status;
+    throw apiErr;
   }
 
   return data;
