@@ -807,8 +807,12 @@ async def cancel_mp_subscription(
             "ends_at": _ate.isoformat() if _ate else None,
         }
 
+    # ASAAS-GESTAO: assinatura do Asaas e cancelada la (se o Asaas nao confirmar, devolve erro e nada muda aqui)
+    if getattr(subscription, "payment_provider", None) == "asaas":
+        from app.services.asaas_gestao import cancelar_assinatura_asaas
+        cancelar_assinatura_asaas(db, subscription.stripe_subscription_id)
     # Cancela no MP se tiver SDK
-    if sdk and subscription.stripe_subscription_id:
+    elif sdk and subscription.stripe_subscription_id:
         try:
             _resp = sdk.preapproval().update(subscription.stripe_subscription_id, {"status": "cancelled"})
             _st = _resp.get("status") if isinstance(_resp, dict) else None
@@ -1531,7 +1535,7 @@ async def get_therapist_subscription(
 
     # Histórico de cobranças via MP (últimas 12)
     billing_history = []
-    if subscription and subscription.stripe_subscription_id:
+    if subscription and subscription.stripe_subscription_id and subscription.payment_provider != "asaas":  # ASAAS-GESTAO: historico do MP so para assinaturas do MP
         try:
             mp_access_token = os.getenv("MP_ACCESS_TOKEN", "")
             if mp_access_token:
@@ -1642,8 +1646,12 @@ async def pause_mp_subscription(
     if subscription.payment_provider == "apple_iap":
         raise HTTPException(status_code=400, detail="Assinaturas Apple não podem ser pausadas aqui. Gerencie pelo app da Apple.")
 
+    # ASAAS-GESTAO: pausa no Asaas (INACTIVE); se nao confirmar, devolve erro e nada muda aqui
+    if subscription.payment_provider == "asaas":
+        from app.services.asaas_gestao import pausar_assinatura_asaas
+        pausar_assinatura_asaas(db, subscription.stripe_subscription_id)
     mp_access_token = os.getenv("MP_ACCESS_TOKEN", "")
-    if mp_access_token and subscription.stripe_subscription_id:
+    if mp_access_token and subscription.stripe_subscription_id and subscription.payment_provider != "asaas":
         try:
             sdk = mercadopago.SDK(mp_access_token)
             sdk.preapproval().update(
@@ -1689,8 +1697,12 @@ async def resume_mp_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Nenhuma assinatura pausada encontrada")
 
+    # ASAAS-GESTAO: reativa no Asaas (ACTIVE + novo vencimento); se nao confirmar, devolve erro e nada muda aqui
+    if subscription.payment_provider == "asaas":
+        from app.services.asaas_gestao import retomar_assinatura_asaas
+        retomar_assinatura_asaas(db, subscription.stripe_subscription_id, subscription.current_period_end)
     mp_access_token = os.getenv("MP_ACCESS_TOKEN", "")
-    if mp_access_token and subscription.stripe_subscription_id:
+    if mp_access_token and subscription.stripe_subscription_id and subscription.payment_provider != "asaas":
         try:
             sdk = mercadopago.SDK(mp_access_token)
             sdk.preapproval().update(

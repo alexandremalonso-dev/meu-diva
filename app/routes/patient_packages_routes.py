@@ -282,12 +282,17 @@ def cancelar(
     current_user: User = Security(require_roles([UserRole.patient])),
 ):
     sub = db.execute(text(
-        "SELECT id, mp_subscription_id FROM patient_plan_subscriptions "
+        "SELECT id, mp_subscription_id, provider FROM patient_plan_subscriptions "
         "WHERE patient_user_id = :u AND status IN ('authorized','pending','paused') "
         "ORDER BY created_at DESC LIMIT 1"
     ), {"u": current_user.id}).first()
     if not sub:
         raise HTTPException(status_code=404, detail="Nenhum pacote ativo para cancelar.")
+
+    # ASAAS-GESTAO: pacote assinado pelo Asaas e cancelado la (se nao confirmar, devolve erro e nada muda)
+    if getattr(sub, "provider", "mercadopago") == "asaas":
+        from app.services.asaas_gestao import cancelar_pacote_asaas
+        return cancelar_pacote_asaas(db, current_user, sub)
 
     mp_token = os.getenv("MP_ACCESS_TOKEN", "")
     if not mp_token:
