@@ -10,7 +10,6 @@ from app.core.roles import UserRole
 from app.db.database import get_db
 from app.models.user import User
 from app.services import asaas_cartao_service as cartao
-from app.services import asaas_cep
 from app.services import asaas_checkout_service as svc
 from app.services import asaas_client as ac
 
@@ -61,11 +60,6 @@ async def assinar(request: Request, db: Session = Depends(get_db), current_user:
     except Exception:
         raise HTTPException(status_code=400, detail="Requisição inválida.")
     return cartao.assinar_com_cartao(db, current_user, dados, _ip_cliente(request))
-
-
-@router.get("/cep/{cep}")
-def consultar_cep(cep: str, current_user: User = Security(require_roles([UserRole.patient, UserRole.therapist]))):
-    return asaas_cep.consultar(cep)
 
 
 @router.get("/checkout/{local_id}/status")

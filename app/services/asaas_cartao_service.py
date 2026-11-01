@@ -20,6 +20,7 @@ BR = base.BR_TZ
 MAX_TENTATIVAS_HORA = 5
 MAX_RECUSAS_15MIN = 3
 MINUTOS_EM_ANDAMENTO = 10
+UFS = {"AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"}
 MSG_GENERICA = "Não foi possível concluir a assinatura agora. Tente novamente em instantes."
 MSG_INCERTO = "Não conseguimos confirmar o resultado com o Asaas. NÃO tente de novo agora: se o pagamento tiver passado, seu plano é ativado automaticamente em alguns minutos e você recebe uma notificação."
 
@@ -85,6 +86,24 @@ def validar(dados) -> dict:
     num_end = str(titular.get("numero") or "").strip()
     if not re.fullmatch(r"[0-9A-Za-z\-/ ]{1,10}", num_end):
         erro("Número do endereço inválido.")
+    def livre(chave, minimo, maximo, msg, obrigatorio):
+        bruto = titular.get(chave)
+        if bruto is None or str(bruto).strip() == "":
+            if obrigatorio:
+                erro(msg)
+            return ""
+        s = re.sub(r"\s+", " ", str(bruto)).strip()
+        if not minimo <= len(s) <= maximo or not re.fullmatch(r"[A-Za-zÀ-ÿ0-9 .,'ªº°\-/()#&]+", s):
+            erro(msg)
+        return s
+    legado = "rua" not in titular  # clientes antigos (sem os campos de endereco completo) continuam aceitos: o Asaas so exige CEP e numero
+    rua = livre("rua", 3, 120, "Informe a rua do endereço do titular.", not legado)
+    bairro = livre("bairro", 2, 80, "Bairro inválido.", False)
+    cidade = livre("cidade", 2, 80, "Informe a cidade do titular.", not legado)
+    complemento = livre("complemento", 1, 60, "Complemento inválido.", False)
+    uf = str(titular.get("uf") or "").strip().upper()
+    if not legado and uf not in UFS:
+        erro("Estado (UF) inválido.")
     cel = _digitos(titular.get("celular"))
     if len(cel) in (12, 13) and cel.startswith("55"):
         cel = cel[2:]
@@ -94,7 +113,7 @@ def validar(dados) -> dict:
     if tipo not in ("terapeuta", "paciente"):
         erro("Tipo inválido.")
     return {"tipo": tipo, "plano": str(dados.get("plano") or "").strip().lower(), "nome": nome, "numero": numero, "mes": f"{mes:02d}", "ano": str(ano), "ccv": ccv,
-            "cpf": _digitos(titular.get("cpf")), "cep": cep, "num_end": num_end, "celular": cel}
+            "cpf": _digitos(titular.get("cpf")), "cep": cep, "num_end": num_end, "celular": cel, "rua": rua, "bairro": bairro, "cidade": cidade, "uf": uf, "complemento": complemento}
 
 
 def _mensagem_asaas(detalhe: str) -> str:
@@ -149,13 +168,15 @@ def assinar_com_cartao(db, user, dados, ip: str) -> dict:
         r = db.execute(text("SELECT asaas_customer_id FROM asaas_clientes WHERE user_id = :u AND ambiente = :a"), {"u": user.id, "a": amb}).first()
         cliente_id = r[0] if r else ac.chamar("POST", "/customers", {
             "name": getattr(user, "full_name", None) or v["nome"], "email": user.email, "cpfCnpj": v["cpf"], "postalCode": v["cep"], "addressNumber": v["num_end"],
-            "mobilePhone": v["celular"], "notificationDisabled": True, "externalReference": f"md-user-{user.id}"}, espera=int(os.getenv("ASAAS_ESPERA", "60")))["id"]
+            "mobilePhone": v["celular"], "notificationDisabled": True, "externalReference": f"md-user-{user.id}",
+            **({"address": v["rua"]} if v["rua"] else {}), **({"complement": v["complemento"]} if v["complemento"] else {}), **({"province": v["bairro"]} if v["bairro"] else {})}, espera=int(os.getenv("ASAAS_ESPERA", "60")))["id"]
         etapa = "assinatura"
         resp = ac.chamar("POST", "/subscriptions", {
             "customer": cliente_id, "billingType": "CREDIT_CARD", "value": plano["valor"], "nextDueDate": prox.isoformat(), "cycle": "MONTHLY",
             "description": plano["nome"][:500], "externalReference": ref,
             "creditCard": {"holderName": v["nome"], "number": v["numero"], "expiryMonth": v["mes"], "expiryYear": v["ano"], "ccv": v["ccv"]},
-            "creditCardHolderInfo": {"name": v["nome"], "email": user.email, "cpfCnpj": v["cpf"], "postalCode": v["cep"], "addressNumber": v["num_end"], "phone": v["celular"], "mobilePhone": v["celular"]},
+            "creditCardHolderInfo": {"name": v["nome"], "email": user.email, "cpfCnpj": v["cpf"], "postalCode": v["cep"], "addressNumber": v["num_end"], "phone": v["celular"], "mobilePhone": v["celular"],
+                                     **({"addressComplement": v["complemento"]} if v["complemento"] else {})},
             "remoteIp": ip}, espera=int(os.getenv("ASAAS_ESPERA", "60")))
         sub_id = str(resp.get("id") or "")
         if not sub_id:
