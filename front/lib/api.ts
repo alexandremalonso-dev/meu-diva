@@ -119,8 +119,7 @@ export async function api(
   }
 
   if (!res.ok) {
-    const errorMessage =
-      data?.error || data?.detail || `Erro ${res.status}`;
+    const errorMessage = formatarErroApi(data?.error || data?.detail, res.status);
     const isSilent =
       SILENT_STATUSES.includes(res.status) || options?.silent;
     if (!isSilent) console.error(`❌ API ${res.status}: ${fullUrl}`, data);
@@ -128,6 +127,26 @@ export async function api(
   }
 
   return data;
+}
+
+// Transforma o erro da API em texto legível (o "detail" do FastAPI pode ser texto, lista de erros de validação ou objeto).
+function formatarErroApi(valor: any, status: number): string {
+  if (typeof valor === "string" && valor.trim()) return valor;
+  if (Array.isArray(valor)) {
+    const partes = valor
+      .map((it: any) => {
+        if (typeof it === "string") return it;
+        const campo = Array.isArray(it?.loc) ? it.loc.filter((x: any) => x !== "body").join(".") : "";
+        const msg = it?.msg || it?.message || "";
+        return campo && msg ? `${campo}: ${msg}` : msg || campo;
+      })
+      .filter(Boolean);
+    if (partes.length) return `Dados inválidos (${partes.join("; ")})`;
+  } else if (valor && typeof valor === "object") {
+    const msg = (valor as any).message || (valor as any).msg || (valor as any).detail;
+    if (typeof msg === "string" && msg.trim()) return msg;
+  }
+  return `Erro ${status}`;
 }
 
 // Exporta helper para uso em componentes que precisam da URL base

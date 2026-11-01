@@ -150,7 +150,7 @@ function PacoteCheckoutContent() {
       const token = await (mp as any).createCardToken({ cardNumber:cardNumber.replace(/\s/g,''), cardholderName:name, cardExpirationMonth:em, cardExpirationYear:`20${ey}`, securityCode:cvv })
       if(!token||token.error)throw new Error(token?.error?.message||'Erro ao tokenizar cartão.')
       chamou = true
-      const result = await api('/api/patient/pacotes/subscribe', { method:'POST', body:JSON.stringify({ plan_key:plan.chave, card_token_id:token.id, payer_email:userEmail, payer_cpf:cpf.replace(/\D/g,''), device_id:(window as any).MP_DEVICE_SESSION_ID||'' }) })
+      const result = await api('/api/patient/pacotes/subscribe', { method:'POST', body:JSON.stringify({ plan:plan.chave, card_token_id:token.id, payer_email:userEmail, payer_cpf:cpf.replace(/\D/g,''), device_id:(window as any).MP_DEVICE_SESSION_ID||'' }) })
       if(result.status==='authorized'||result.status==='active') setSuccess(true)
       else { setError(`${result.detail||'Assinatura não aprovada.'} Aguarde ${BLOCK_MINUTES} min antes de tentar novamente.`); bloquear() }
     } catch(e:any) {

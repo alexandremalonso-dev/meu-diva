@@ -45,11 +45,34 @@ def _has_access(user) -> bool:
 # ==========================
 # SCHEMAS
 # ==========================
+try:  # pydantic 2
+    from pydantic import model_validator as _model_validator
+    _PYD_V2 = True
+except ImportError:  # pydantic 1
+    from pydantic import root_validator as _root_validator
+    _PYD_V2 = False
+
+
 class SubscribeBody(BaseModel):
-    plan: str
+    plan: str = ""
+    plan_key: Optional[str] = None  # nome que a tela do celular enviava; vira "plan" no validador abaixo
     card_token_id: str
     payer_cpf: str
     device_id: Optional[str] = ""
+
+    if _PYD_V2:
+        @_model_validator(mode="before")
+        @classmethod
+        def _plan_key_vira_plan(cls, dados):
+            if isinstance(dados, dict) and not dados.get("plan") and dados.get("plan_key"):
+                dados = {**dados, "plan": dados["plan_key"]}
+            return dados
+    else:
+        @_root_validator(pre=True)
+        def _plan_key_vira_plan(cls, valores):
+            if not valores.get("plan") and valores.get("plan_key"):
+                valores = {**valores, "plan": valores["plan_key"]}
+            return valores
 
 
 # ==========================
@@ -231,6 +254,8 @@ def assinar(
     print(f"📦 [PACOTE] MP: status={mp_status} | id={mp_id} | erro={mp_msg}")
 
     if mp_status not in ("authorized", "pending") or not mp_id:
+        if "CC_VAL" in str(mp_msg or ""):
+            raise HTTPException(status_code=400, detail="O Mercado Pago não aprovou este cartão por segurança. Tente outro cartão ou escreva para contato@meudivaonline.com que ajudamos a concluir a contratação.")
         raise HTTPException(status_code=400, detail=f"Assinatura não aprovada: {mp_msg or mp_status or 'erro desconhecido'}")
 
     db.execute(text(
