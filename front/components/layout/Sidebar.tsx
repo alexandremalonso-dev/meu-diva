@@ -93,7 +93,7 @@ const adminNavItems: NavItem[] = [
   { name: "Relatórios", href: "/admin/reports", icon: BarChart3 },
   { name: "Assinaturas", href: "/admin/reports/assinaturas", icon: CreditCard },
   { name: "Assinaturas Pacientes", href: "/admin/reports/pacientes-assinaturas", icon: Users },
-  { name: "Preços", href: "/admin/pricing", icon: DollarSign },
+  { name: "Valor Terapeuta", href: "/admin/valor-terapeuta", icon: DollarSign },
   { name: "Planos Empresas", href: "/admin/valor-empresa", icon: Building2 },
   { name: "Planos Pacientes", href: "/admin/valor-pacientes", icon: Users },
   { name: "Gestão de Empresas", href: "/admin/reports/empresas-assinaturas", icon: Store },

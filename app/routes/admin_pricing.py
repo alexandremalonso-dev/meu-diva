@@ -32,7 +32,7 @@ async def update_plan_price(
     db: Session = Depends(get_db),
     current_user: User = Security(require_roles([UserRole.admin]))
 ):
-    """Atualiza o preço EXIBIDO de um plano (não altera a cobrança no Mercado Pago)"""
+    """Atualiza o valor de um plano: vale na hora para novas assinaturas (Asaas) e para as telas que mostram os planos"""
 
     plan = (request.plan or "").strip().lower()
     if plan not in PRICED_PLANS:
@@ -72,7 +72,7 @@ async def update_plan_price(
 
     return {
         "success": True,
-        "message": f"Preço exibido do plano {plan} atualizado para R$ {price:.2f}. A cobrança no Mercado Pago não foi alterada."
+        "message": f"Plano {plan} atualizado para R$ {price:.2f}. O novo valor já vale para novas assinaturas e aparece nas telas que mostram os planos."
     }
 
 
@@ -101,6 +101,7 @@ async def billing_check(
     current_user: User = Security(require_roles([UserRole.admin]))
 ):
     """Mostra o valor realmente cobrado no Mercado Pago em cada plano (somente leitura)."""
+    return {}  # asaas-valor-terapeuta: a cobranca e feita pelo Asaas com o valor salvo; nao consultamos mais o Mercado Pago (so gerava alarme falso)
     import requests as _requests
     from app.routes.payments import MP_PLAN_IDS
 

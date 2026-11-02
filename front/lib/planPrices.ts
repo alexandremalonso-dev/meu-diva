@@ -1,5 +1,5 @@
 "use client";
-// asaas-precos: LEITOR ÚNICO dos preços dos planos do terapeuta. A fonte é o admin (/admin/pricing → tabela plan_prices), lida por GET /api/plans/.
+// asaas-precos: LEITOR ÚNICO dos preços dos planos do terapeuta. A fonte é o admin (/admin/valor-terapeuta → tabela plan_prices), lida por GET /api/plans/.
 // Nenhuma tela deve escrever preço no código: use usePlanPrices(), <PrecoPlano /> ou <PrecoAPartirDe />. Sem valor de reserva: se o servidor não responder, a tela mostra "—".
 
 import { useEffect, useState } from "react";
