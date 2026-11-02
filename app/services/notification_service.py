@@ -99,11 +99,12 @@ class NotificationService:
     
     def notify_appointment_created(self, appointment, patient_user, therapist_user):
         """Notifica sobre nova sessão criada (terapeuta convida paciente)"""
+        from app.core.datas_br import data_hora_local  # asaas-fuso
         self.create_notification(
             user_id=patient_user.id,
             notification_type="appointment_created",
             title="Novo convite de sessão",
-            message=f"O terapeuta {therapist_user.full_name} te convidou para uma sessão em {appointment.starts_at.strftime('%d/%m/%Y às %H:%M')}",
+            message=f"O terapeuta {therapist_user.full_name} te convidou para uma sessão em {data_hora_local(appointment.starts_at)}",
             data={"appointment_id": appointment.id, "therapist_name": therapist_user.full_name},
             action_link="/patient/invites"
         )
@@ -118,11 +119,12 @@ class NotificationService:
     
     def notify_appointment_confirmed(self, appointment, patient_user, therapist_user, meet_url: Optional[str] = None):
         """Notifica sobre confirmação de sessão"""
+        from app.core.datas_br import data_hora_local  # asaas-fuso
         self.create_notification(
             user_id=patient_user.id,
             notification_type="appointment_confirmed",
             title="Sessão agendada",
-            message=f"Sua sessão com {therapist_user.full_name} foi confirmada para {appointment.starts_at.strftime('%d/%m/%Y às %H:%M')}",
+            message=f"Sua sessão com {therapist_user.full_name} foi confirmada para {data_hora_local(appointment.starts_at)}",
             data={"appointment_id": appointment.id, "therapist_name": therapist_user.full_name, "meet_url": meet_url},
             action_link="/patient/schedule"
         )
@@ -131,7 +133,7 @@ class NotificationService:
             user_id=therapist_user.id,
             notification_type="appointment_confirmed",
             title="Sessão agendada",
-            message=f"{patient_user.full_name} agendou uma nova sessão para {appointment.starts_at.strftime('%d/%m/%Y às %H:%M')}",
+            message=f"{patient_user.full_name} agendou uma nova sessão para {data_hora_local(appointment.starts_at)}",
             data={"appointment_id": appointment.id, "patient_name": patient_user.full_name, "meet_url": meet_url},
             action_link="/therapist/schedule"
         )
@@ -143,11 +145,12 @@ class NotificationService:
     
     def notify_appointment_cancelled(self, appointment, patient_user, therapist_user, cancelled_by: str):
         """Notifica sobre cancelamento de sessão"""
+        from app.core.datas_br import data_local  # asaas-fuso
         self.create_notification(
             user_id=patient_user.id,
             notification_type="appointment_cancelled",
             title="Sessão cancelada",
-            message=f"Sua sessão com {therapist_user.full_name} do dia {appointment.starts_at.strftime('%d/%m/%Y')} foi cancelada",
+            message=f"Sua sessão com {therapist_user.full_name} do dia {data_local(appointment.starts_at)} foi cancelada",
             data={"appointment_id": appointment.id, "cancelled_by": cancelled_by},
             action_link="/patient/schedule"
         )
@@ -156,7 +159,7 @@ class NotificationService:
             user_id=therapist_user.id,
             notification_type="appointment_cancelled",
             title="Sessão cancelada",
-            message=f"Sessão com {patient_user.full_name} do dia {appointment.starts_at.strftime('%d/%m/%Y')} foi cancelada",
+            message=f"Sessão com {patient_user.full_name} do dia {data_local(appointment.starts_at)} foi cancelada",
             data={"appointment_id": appointment.id, "cancelled_by": cancelled_by},
             action_link="/therapist/schedule"
         )
@@ -166,11 +169,12 @@ class NotificationService:
     
     def notify_appointment_rescheduled(self, appointment, patient_user, therapist_user, meet_url: Optional[str] = None):
         """Notifica sobre reagendamento de sessão"""
+        from app.core.datas_br import data_hora_local  # asaas-fuso
         self.create_notification(
             user_id=patient_user.id,
             notification_type="appointment_rescheduled",
             title="Sessão reagendada",
-            message=f"Sua sessão com {therapist_user.full_name} foi reagendada para {appointment.starts_at.strftime('%d/%m/%Y às %H:%M')}",
+            message=f"Sua sessão com {therapist_user.full_name} foi reagendada para {data_hora_local(appointment.starts_at)}",
             data={"appointment_id": appointment.id, "therapist_name": therapist_user.full_name, "meet_url": meet_url},
             action_link="/patient/schedule"
         )
@@ -179,7 +183,7 @@ class NotificationService:
             user_id=therapist_user.id,
             notification_type="appointment_rescheduled",
             title="Sessão reagendada",
-            message=f"Sessão com {patient_user.full_name} foi reagendada para {appointment.starts_at.strftime('%d/%m/%Y às %H:%M')}",
+            message=f"Sessão com {patient_user.full_name} foi reagendada para {data_hora_local(appointment.starts_at)}",
             data={"appointment_id": appointment.id, "patient_name": patient_user.full_name, "meet_url": meet_url},
             action_link="/therapist/schedule"
         )
@@ -259,11 +263,12 @@ class NotificationService:
     
     def notify_pending_medical_record(self, appointment, therapist_user, patient_user):
         """Notifica o terapeuta sobre prontuário pendente (não finalizado após a sessão)"""
+        from app.core.datas_br import data_hora_local  # asaas-fuso
         self.create_notification(
             user_id=therapist_user.id,
             notification_type="medical_record_pending",
             title="Prontuário pendente",
-            message=f"Você ainda não finalizou o prontuário da sessão com {patient_user.full_name} realizada em {appointment.starts_at.strftime('%d/%m/%Y às %H:%M')}",
+            message=f"Você ainda não finalizou o prontuário da sessão com {patient_user.full_name} realizada em {data_hora_local(appointment.starts_at)}",
             data={"appointment_id": appointment.id, "patient_name": patient_user.full_name},
             action_link=f"/therapist/sessions/{appointment.id}"
         )

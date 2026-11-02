@@ -115,9 +115,10 @@ class EmailService:
             meet_url: URL do Google Meet (opcional)
         """
         # Formatação da data
+        from app.core.datas_br import data_extenso, hora_local  # asaas-fuso
         start_time = appointment.starts_at
-        date_str = start_time.strftime("%d de %B de %Y")
-        time_str = start_time.strftime("%H:%M")
+        date_str = data_extenso(start_time)
+        time_str = hora_local(start_time)
         
         therapist_name = appointment.therapist.full_name if appointment.therapist else "Terapeuta"
         patient_name = appointment.patient.full_name if appointment.patient else "Paciente"
@@ -152,7 +153,7 @@ class EmailService:
                     <p>Parabéns! Sua sessão já está agendada para a data e horário abaixo. Confira também algumas dicas para aproveitar melhor esse momento.</p>
                     
                     <div class="info">
-                        <h3>📅 Detalhes da sessão:</h3>
+                        <h3><img src="https://app.meudivaonline.com/email/calendario-rosa.png" alt="" width="20" height="20" style="vertical-align:-4px;margin-right:6px;border:0;">Detalhes da sessão:</h3>
                         <p><strong>Data:</strong> {date_str}</p>
                         <p><strong>Horário:</strong> {time_str}</p>
                         <p><strong>Especialista:</strong> {therapist_name}</p>
@@ -208,7 +209,7 @@ class EmailService:
                     <p>Uma nova sessão foi confirmada:</p>
                     
                     <div class="info">
-                        <h3>📅 Detalhes da sessão:</h3>
+                        <h3><img src="https://app.meudivaonline.com/email/calendario-azul.png" alt="" width="20" height="20" style="vertical-align:-4px;margin-right:6px;border:0;">Detalhes da sessão:</h3>
                         <p><strong>Paciente:</strong> {patient_name}</p>
                         <p><strong>Data:</strong> {date_str}</p>
                         <p><strong>Horário:</strong> {time_str}</p>
@@ -229,15 +230,16 @@ class EmailService:
         
         # Envia e-mails
         patient_sent = self._send_email(patient_email, f"✅ Sessão Confirmada - {date_str} às {time_str}", patient_html)
-        therapist_sent = self._send_email(therapist_email, f"📅 Nova Sessão - {patient_name} em {date_str}", therapist_html)
+        therapist_sent = self._send_email(therapist_email, f"✅ Nova Sessão - {patient_name} em {date_str}", therapist_html)
         
         return patient_sent, therapist_sent
     
     def send_appointment_cancelled(self, appointment, patient_email: str, therapist_email: str) -> tuple:
         """Envia e-mail de cancelamento"""
+        from app.core.datas_br import data_local, hora_local  # asaas-fuso
         start_time = appointment.starts_at
-        date_str = start_time.strftime("%d/%m/%Y")
-        time_str = start_time.strftime("%H:%M")
+        date_str = data_local(start_time)
+        time_str = hora_local(start_time)
         
         patient_html = f"""
         <!DOCTYPE html>
