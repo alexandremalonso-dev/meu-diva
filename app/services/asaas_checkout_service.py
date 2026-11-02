@@ -35,10 +35,11 @@ def resolver_plano(db, user, tipo: str, plano: str) -> dict:
             raise HTTPException(status_code=403, detail="Este plano é para terapeutas.")
         if plano not in PLANOS_TERAPEUTA:
             raise HTTPException(status_code=404, detail="Plano não encontrado.")
-        nome, preco = PLANOS_TERAPEUTA[plano]
+        nome, _ = PLANOS_TERAPEUTA[plano]  # asaas-precos: o nome vem daqui; o PRECO vem SO do admin (plan_prices), sem valor de reserva
         r = db.execute(text("SELECT price_brl FROM plan_prices WHERE plan = :p"), {"p": plano}).first()
-        if r and r[0] is not None:
-            preco = float(r[0])
+        if not r or r[0] is None or float(r[0]) <= 0:
+            raise HTTPException(status_code=503, detail="O preço deste plano está indisponível no momento. Fale com a gente.")
+        preco = float(r[0])
         return {"plano": plano, "nome": f"Plano {nome} — Meu Divã", "valor": preco}
     if tipo == "paciente":
         if _papel(user) != "patient":

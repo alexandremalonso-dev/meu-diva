@@ -245,7 +245,7 @@ def atualizar_plano(
     print(f"📦 [ADMIN] usuário {current_user.id} atualizou o plano de paciente {plano.chave}")
     return {
         "success": True,
-        "message": f"Plano {plano.nome} atualizado. O valor cobrado no Mercado Pago só muda no plano de lá.",
+        "message": f"Plano {plano.nome} atualizado. O novo valor já vale para novas assinaturas (cobradas pelo Asaas) e aparece em todas as telas.",
         "plano": _out(plano, _extras(db).get(plano.id)),
     }
 
@@ -300,6 +300,7 @@ def conferir_mercado_pago(
     current_user: User = Security(require_roles([UserRole.admin])),
 ):
     """Mostra o que o Mercado Pago realmente cobra em cada plano vinculado (somente leitura)."""
+    return {}  # asaas-precos: a cobranca e feita pelo Asaas com o preco salvo; nao comparamos mais com o Mercado Pago (so gerava alarme falso)
     token = os.getenv("MP_ACCESS_TOKEN", "")
     vinculados = db.query(PatientPlan).filter(PatientPlan.mp_plan_id.isnot(None)).all()
     if not vinculados:
