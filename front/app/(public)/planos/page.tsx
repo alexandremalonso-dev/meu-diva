@@ -125,11 +125,7 @@ function PlanosContent() {
           setPlansAPI(data.plans || []);
         } else throw new Error("Erro ao carregar planos");
       } catch {
-        setPlansAPI([
-          { id: "essencial", name: "Essencial", price_cents: 1990, price_brl: 19.9, features: [], is_free: false },
-          { id: "profissional", name: "Profissional", price_cents: 7900, price_brl: 79, features: [], is_free: false },
-          { id: "premium", name: "Premium", price_cents: 14900, price_brl: 149, features: [], is_free: false }
-        ]);
+        setPlansAPI([]); // asaas-precos-final: sem valor de reserva; o preço vem do admin
       } finally {
         setLoadingPlanos(false);
       }
@@ -179,7 +175,7 @@ function PlanosContent() {
       id: plan.id,
       name: plan.name,
       price: plan.price_brl,
-      priceFormatted: plan.is_free ? "Grátis" : `R$ ${plan.price_brl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mês`,
+      priceFormatted: plan.is_free ? "Grátis" : plan.price_brl > 0 ? `R$ ${plan.price_brl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mês` : "Preço indisponível",
       commission: COMMISSION_MAP[plan.id] || "20%",
       description: DESCRIPTION_MAP[plan.id] || "Plano para terapeutas",
       features: plan.features.length > 0 ? plan.features : getDefaultFeatures(plan.id),

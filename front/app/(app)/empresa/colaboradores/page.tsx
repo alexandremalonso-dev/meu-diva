@@ -1,4 +1,6 @@
 "use client";
+import { useState as useStateAP, useEffect as useEffectAP } from "react"; // asaas-precos-final
+import { carregarPlanosEmpresa } from "@/lib/planPrices";
 
 import { useEffect, useState } from "react";
 import { useApi } from "@/lib/useApi";
@@ -45,15 +47,11 @@ interface ResumoStats {
 }
 
 // 🔥 PLANOS DISPONÍVEIS
-const PLANOS_OPCOES = [
-  { value: "prata", label: "Prata", sessoes: 1, preco: 45 },
-  { value: "ouro", label: "Ouro", sessoes: 2, preco: 80 },
-  { value: "diamante", label: "Diamante", sessoes: 4, preco: 140 }
-];
+const PLANOS_OPCOES: { value: string; label: string; sessoes: number; preco: number }[] = []; // asaas-precos-final: lista LIDA do admin (GET /api/plans/empresa) quando a tela abre; sem valor escrito
 
 const getPlanoLabel = (plano: string): string => {
   const p = PLANOS_OPCOES.find(p => p.value === plano);
-  return p ? p.label : plano;
+  return p ? p.label : plano.charAt(0).toUpperCase() + plano.slice(1);
 };
 
 const getPlanoColor = (plano: string): string => {
@@ -74,6 +72,13 @@ export default function EmpresaColaboradoresPage() {
   const router = useRouter();
   const { execute: apiCall } = useApi();
   const { enrichWithPhotos } = useUserPhotos();
+  const [, setPlanosPronto] = useStateAP(0); // asaas-precos-final
+  useEffectAP(() => {
+    carregarPlanosEmpresa().then((lista) => {
+      PLANOS_OPCOES.splice(0, PLANOS_OPCOES.length, ...lista.map((p) => ({ value: p.chave, label: p.nome, sessoes: p.sessoes_inclusas_por_colaborador, preco: p.preco_mensal_por_colaborador })));
+      setPlanosPronto((n) => n + 1);
+    });
+  }, []);
   
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [filtered, setFiltered] = useState<Colaborador[]>([]);

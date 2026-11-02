@@ -22,28 +22,27 @@ type Base = {
   icon: 'shield' | 'star' | 'crown'
   accent: string
   commission: string
-  price: number
   features: string[]
   extra: string[]
 }
 
-// Valores de reserva, usados só se a API de planos não responder.
+// asaas-precos-final: textos de apoio dos planos. O VALOR vem do admin (GET /api/plans/); sem valor de reserva.
 const BASE: Record<PlanId, Base> = {
   essencial: {
     name: 'Essencial', tagline: 'Para começar na plataforma', icon: 'shield', accent: '#6b7280',
-    commission: '20%', price: 19.9,
+    commission: '20%',
     features: ['Até 10 pacientes ativos', 'Agendamento básico', 'Prontuário digital', 'Visibilidade no marketplace', 'Relatórios financeiros'],
     extra: [],
   },
   profissional: {
     name: 'Profissional', tagline: 'Para crescer com consistência', icon: 'star', accent: '#2F80D3',
-    commission: '10%', price: 79,
+    commission: '10%',
     features: ['Até 50 pacientes ativos', 'Relatórios financeiros', 'Estatísticas avançadas', 'Suporte por chat'],
     extra: ['Mais destaque no marketplace'],
   },
   premium: {
     name: 'Premium', tagline: 'Para escalar sua prática clínica', icon: 'crown', accent: '#E03673',
-    commission: '3%', price: 149,
+    commission: '3%',
     features: ['Pacientes ilimitados', 'Relatórios completos', 'Estatísticas avançadas', 'Suporte prioritário'],
     extra: ['Destaque máximo no marketplace'],
   },
@@ -64,6 +63,7 @@ export default function AdesaoPage() {
   const [error, setError] = useState<string | null>(null)
   const [enforce, setEnforce] = useState(false)
   const [plans, setPlans] = useState<Record<string, { price: number; features: string[] }>>({})
+  const [garantiaDias, setGarantiaDias] = useState<number | null>(null)
 
   useEffect(() => {
     let active = true
@@ -95,6 +95,11 @@ export default function AdesaoPage() {
           })
           if (active) setPlans(map)
         }
+      } catch {}
+
+      try {
+        const g: any = await api('/api/asaas/garantia')
+        if (active && g?.garantia_dias) setGarantiaDias(Number(g.garantia_dias))
       } catch {}
 
       if (active) setLoading(false)
@@ -150,7 +155,7 @@ export default function AdesaoPage() {
               {ORDER.map((id) => {
                 const b = BASE[id]
                 const api_ = plans[id]
-                const price = api_ && api_.price > 0 ? api_.price : b.price
+                const price = api_ && api_.price > 0 ? api_.price : null
                 const apiFeatures = (api_?.features || []).map((f) => f.replace(/^✓\s*/, '')).filter(Boolean)
                 const feats = [...(apiFeatures.length ? apiFeatures : b.features), ...b.extra]
 
@@ -167,16 +172,22 @@ export default function AdesaoPage() {
                     </div>
 
                     <p className="text-3xl font-extrabold text-gray-900">
-                      R$ {brl(price)}
-                      <span className="text-sm font-normal text-gray-400">/mês</span>
+                      {price !== null ? (
+                        <>
+                          R$ {brl(price)}
+                          <span className="text-sm font-normal text-gray-400">/mês</span>
+                        </>
+                      ) : (
+                        <span className="text-base font-semibold text-gray-500">Preço indisponível</span>
+                      )}
                     </p>
                     <p className="text-sm text-gray-500 mt-1 mb-4">
                       Comissão por sessão: <strong className="text-gray-800">{b.commission}</strong>
                     </p>
 
-                    {id === 'essencial' && SHOW_TRIAL_NOTE && (
+                    {garantiaDias && (
                       <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-2.5 mb-4 leading-relaxed">
-                        7 dias para experimentar: a primeira mensalidade só é cobrada a partir do 8º dia, e você pode cancelar antes. Cartão necessário para iniciar.
+                        Garantia de {garantiaDias} dias: seu dinheiro de volta sem perguntas até {garantiaDias} dias após a compra.
                       </p>
                     )}
 
@@ -190,8 +201,9 @@ export default function AdesaoPage() {
                     </ul>
 
                     <button
+                      disabled={price === null}
                       onClick={() => router.push(`/subscription-checkout?plan=${id}`)}
-                      className="w-full py-3 rounded-xl text-white font-semibold transition-opacity hover:opacity-90"
+                      className="w-full py-3 rounded-xl text-white font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ backgroundColor: b.accent }}
                     >
                       Escolher {b.name}

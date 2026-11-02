@@ -61,3 +61,34 @@ export function menorPrecoPago(p: PlanPrices | null): number | null {
   const v = Object.values(p).filter((x) => x > 0);
   return v.length ? Math.min(...v) : null;
 }
+
+// asaas-precos-final: planos de EMPRESA e faixa de repasse lidos do admin pelo servidor (so para quem tem acesso). Nenhum valor escrito aqui.
+export type PlanoEmpresa = { chave: string; nome: string; preco_mensal_por_colaborador: number; sessoes_inclusas_por_colaborador: number };
+
+export async function carregarPlanosEmpresa(): Promise<PlanoEmpresa[]> {
+  try {
+    const r: any = await api("/api/plans/empresa", { silent: true } as any);
+    const lista: any[] = Array.isArray(r) ? r : r?.plans || [];
+    return lista
+      .map((p) => ({
+        chave: String(p?.chave || ""),
+        nome: String(p?.nome || p?.chave || ""),
+        preco_mensal_por_colaborador: Number(p?.preco_mensal_por_colaborador) || 0,
+        sessoes_inclusas_por_colaborador: Number(p?.sessoes_inclusas_por_colaborador) || 0,
+      }))
+      .filter((p) => p.chave);
+  } catch (_) {
+    return [];
+  }
+}
+
+export async function carregarRepasse(): Promise<{ min: number; max: number } | null> {
+  try {
+    const r: any = await api("/api/plans/repasse", { silent: true } as any);
+    const min = Number(r?.min);
+    const max = Number(r?.max);
+    return Number.isFinite(min) && Number.isFinite(max) && r?.min !== null && r?.max !== null ? { min, max } : null;
+  } catch (_) {
+    return null;
+  }
+}

@@ -1,4 +1,5 @@
 "use client";
+import { useState as useStateAP, useEffect as useEffectAP } from "react"; // asaas-precos-final
 
 import { useEffect, useState, useCallback } from "react";
 import { useApi } from "@/lib/useApi";
@@ -145,6 +146,21 @@ const getPlanoColor = (plano: string) => {
 export default function AdminEmpresasAssinaturasPage() {
   const { user } = useAuth();
   const { execute: apiCall } = useApi();
+  // asaas-precos-final: cartões por plano lidos do admin (nunca escritos aqui)
+  const [planosCards, setPlanosCards] = useStateAP<{ chave: string; nome: string; precoPadrao: number; cor: string; bg: string }[]>([]);
+  useEffectAP(() => {
+    const cores: Record<string, { cor: string; bg: string }> = {
+      prata: { cor: "text-gray-700", bg: "bg-gray-100" },
+      ouro: { cor: "text-blue-700", bg: "bg-blue-100" },
+      diamante: { cor: "text-purple-700", bg: "bg-purple-100" }
+    };
+    (async () => {
+      try {
+        const lista: any = await apiCall({ url: "/api/admin/empresas/planos?apenas_ativos=true", requireAuth: true });
+        setPlanosCards((Array.isArray(lista) ? lista : []).map((p: any) => ({ chave: p.chave, nome: p.nome, precoPadrao: Number(p.preco_mensal_por_colaborador) || 0, ...(cores[p.chave] || { cor: "text-gray-700", bg: "bg-gray-100" }) })));
+      } catch (_) {}
+    })();
+  }, []);
   const { enrichWithPhotos } = useUserPhotos();
   
   // 🔥 ESTADOS
@@ -522,11 +538,7 @@ export default function AdminEmpresasAssinaturasPage() {
       
       {/* 🔥 CARDS POR PLANO - SEMPRE VISÍVEIS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {[
-          { chave: "prata", nome: "Prata", precoPadrao: 45, cor: "text-gray-700", bg: "bg-gray-100" },
-          { chave: "ouro", nome: "Ouro", precoPadrao: 80, cor: "text-blue-700", bg: "bg-blue-100" },
-          { chave: "diamante", nome: "Diamante", precoPadrao: 140, cor: "text-purple-700", bg: "bg-purple-100" }
-        ].map((plano) => {
+        {planosCards.map((plano) => {
           // Buscar dados reais das empresas com este plano
           const empresasPlano = subscriptions.filter(s => s.plano === plano.chave && s.status === "active");
           const totalReceita = empresasPlano.reduce((sum, e) => sum + (e.receita_mensal || 0), 0);

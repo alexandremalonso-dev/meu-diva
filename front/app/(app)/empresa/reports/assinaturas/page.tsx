@@ -1,4 +1,6 @@
 "use client";
+import { useState as useStateAP, useEffect as useEffectAP } from "react"; // asaas-precos-final
+import { carregarPlanosEmpresa } from "@/lib/planPrices";
 
 import { useEffect, useState, useCallback } from "react";
 import { useApi } from "@/lib/useApi";
@@ -90,11 +92,14 @@ interface ChartDataPoint {
 }
 
 // 🔥 CONFIGURAÇÃO DOS PLANOS
-const PLANOS_CONFIG = [
-  { nome: "Prata", chave: "prata", preco_mensal: 45, sessoes_inclusas: 1, cor: "text-gray-700", bgCor: "bg-gray-100" },
-  { nome: "Ouro", chave: "ouro", preco_mensal: 80, sessoes_inclusas: 2, cor: "text-blue-700", bgCor: "bg-blue-100" },
-  { nome: "Diamante", chave: "diamante", preco_mensal: 140, sessoes_inclusas: 4, cor: "text-purple-700", bgCor: "bg-purple-100" }
-];
+type PlanoConfig = { nome: string; chave: string; preco_mensal: number; sessoes_inclusas: number; cor: string; bgCor: string };
+const PLANOS_CONFIG: PlanoConfig[] = []; // asaas-precos-final: lista LIDA do admin (GET /api/plans/empresa); sem valor escrito
+const PLANO_PADRAO: PlanoConfig = { nome: "—", chave: "", preco_mensal: 0, sessoes_inclusas: 0, cor: "text-gray-700", bgCor: "bg-gray-100" };
+const CORES_PLANO: Record<string, { cor: string; bgCor: string }> = {
+  prata: { cor: "text-gray-700", bgCor: "bg-gray-100" },
+  ouro: { cor: "text-blue-700", bgCor: "bg-blue-100" },
+  diamante: { cor: "text-purple-700", bgCor: "bg-purple-100" }
+};
 
 const STATUS_OPTIONS = [
   { value: "todos", label: "Todos" },
@@ -107,7 +112,7 @@ const formatCurrency = (value: number) => {
 };
 
 const getPlanoConfig = (planoChave: string) => {
-  return PLANOS_CONFIG.find(p => p.chave === planoChave) || PLANOS_CONFIG[0];
+  return PLANOS_CONFIG.find(p => p.chave === planoChave) || PLANOS_CONFIG[0] || PLANO_PADRAO;
 };
 
 const getStatusColor = (isActive: boolean) => {
@@ -121,6 +126,13 @@ const getStatusLabel = (isActive: boolean): string => {
 export default function EmpresaAssinaturasReportPage() {
   const { user } = useAuth();
   const { execute: apiCall } = useApi();
+  const [, setPlanosPronto] = useStateAP(0); // asaas-precos-final
+  useEffectAP(() => {
+    carregarPlanosEmpresa().then((lista) => {
+      PLANOS_CONFIG.splice(0, PLANOS_CONFIG.length, ...lista.map((p) => ({ nome: p.nome, chave: p.chave, preco_mensal: p.preco_mensal_por_colaborador, sessoes_inclusas: p.sessoes_inclusas_por_colaborador, ...(CORES_PLANO[p.chave] || { cor: "text-gray-700", bgCor: "bg-gray-100" }) })));
+      setPlanosPronto((n) => n + 1);
+    });
+  }, []);
   const { enrichWithPhotos } = useUserPhotos();
   
   // 🔥 ESTADOS

@@ -1,4 +1,5 @@
 "use client";
+import { RepasseFaixa } from "@/components/pricing/RepasseFaixa"; // asaas-precos-final
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -748,7 +749,7 @@ export default function TherapistProfilePage() {
                     <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-xs text-blue-700 flex items-center gap-1">
                         <Info className="w-3 h-3" />
-                        O valor por sessão é fixo e definido pelo plano (hoje, de R$ 40,00 a R$ 50,00 por sessão) e vai para a sua carteira a cada sessão realizada.
+                        O valor por sessão é fixo e definido pelo plano <RepasseFaixa /> e vai para a sua carteira a cada sessão realizada.
                       </p>
                     </div>
                   )}

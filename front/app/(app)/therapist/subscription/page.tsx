@@ -1,5 +1,6 @@
 "use client";
 import { GarantiaReembolso } from "@/components/therapist/GarantiaReembolso";
+import { PrecoPlano } from "@/components/pricing/PrecoPlano"; // asaas-precos-final
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -26,21 +27,21 @@ const PLAN_CONFIG: Record<string, {
     features: ["Perfil na plataforma", "Agenda e gestão de sessões", "Videochamada integrada", "Pagamento automático"]
   },
   essencial: {
-    name: "Essencial", price: "R$ 19,90/mês", commission: 20,
+    name: "Essencial", price: "", commission: 20,
     color: "from-gray-500 to-gray-600", bgColor: "bg-gray-50",
     borderColor: "border-gray-300",
     icon: <Shield className="w-6 h-6" />,
     features: ["Perfil na plataforma", "Agenda e gestão de sessões", "Videochamada integrada", "Pagamento automático", "Suporte padrão"]
   },
   profissional: {
-    name: "Profissional", price: "R$ 79/mês", commission: 10,
+    name: "Profissional", price: "", commission: 10,
     color: "from-[#2F80D3] to-blue-500", bgColor: "bg-blue-50",
     borderColor: "border-blue-400",
     icon: <Star className="w-6 h-6" />,
     features: ["Tudo do Essencial", "Comissão reduzida (10%)", "Melhor posicionamento na busca", "Relatórios básicos", "Prioridade no matching"]
   },
   premium: {
-    name: "Premium", price: "R$ 149/mês", commission: 3,
+    name: "Premium", price: "", commission: 3,
     color: "from-[#E03673] to-pink-500", bgColor: "bg-pink-50",
     borderColor: "border-[#E03673]",
     icon: <Crown className="w-6 h-6" />,
@@ -233,7 +234,7 @@ export default function TherapistSubscriptionPage() {
                 <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${statusCfg.bg} ${statusCfg.color}`}>
                   {statusCfg.label}
                 </span>
-                <p className="text-white/80 text-sm mt-2">{plan.price}</p>
+                <p className="text-white/80 text-sm mt-2">{(sub?.plan || "basico") === "basico" ? plan.price : <PrecoPlano plano={sub?.plan || "basico"} sufixo="/mês" />}</p>
               </div>
             </div>
           </div>
@@ -343,19 +344,19 @@ export default function TherapistSubscriptionPage() {
                     onClick={() => router.push("/subscription-checkout?plan=essencial")}
                     className="flex-1 py-2.5 px-4 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
                   >
-                    <Shield className="w-4 h-4" /> Essencial — R$19,90/mês
+                    <Shield className="w-4 h-4" /> Essencial — <PrecoPlano plano="essencial" sufixo="/mês" />
                   </button>
                   <button
                     onClick={() => router.push("/subscription-checkout?plan=profissional")}
                     className="flex-1 py-2.5 px-4 rounded-lg bg-[#2F80D3] text-white text-sm font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
                   >
-                    <Star className="w-4 h-4" /> Profissional — R$79/mês
+                    <Star className="w-4 h-4" /> Profissional — <PrecoPlano plano="profissional" sufixo="/mês" />
                   </button>
                   <button
                     onClick={() => router.push("/subscription-checkout?plan=premium")}
                     className="flex-1 py-2.5 px-4 rounded-lg bg-[#E03673] text-white text-sm font-medium hover:bg-pink-600 transition-colors flex items-center justify-center gap-2"
                   >
-                    <Crown className="w-4 h-4" /> Premium — R$149/mês
+                    <Crown className="w-4 h-4" /> Premium — <PrecoPlano plano="premium" sufixo="/mês" />
                   </button>
                 </div>
               </div>
@@ -499,7 +500,7 @@ export default function TherapistSubscriptionPage() {
                     </div>
                     <div>
                       <p className="font-bold text-gray-900 text-sm">{cfg.name}</p>
-                      <p className="text-xs text-gray-500">{cfg.price}</p>
+                      <p className="text-xs text-gray-500"><PrecoPlano plano={planId} sufixo="/mês" /></p>
                     </div>
                     {isCurrent && <span className="ml-auto text-xs bg-[#E03673] text-white px-2 py-0.5 rounded-full">Atual</span>}
                   </div>

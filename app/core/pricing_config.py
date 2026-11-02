@@ -6,12 +6,8 @@ Os preços são armazenados no banco de dados na tabela plan_prices
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 
-# Fallback prices (caso banco esteja vazio)
-FALLBACK_PRICES = {
-    "essencial": {"price_cents": 1990, "price_brl": 19.90},
-    "profissional": {"price_cents": 7900, "price_brl": 79.00},
-    "premium": {"price_cents": 14900, "price_brl": 149.00}
-}
+# Sem valores de reserva (o preço vem do banco)
+FALLBACK_PRICES = {}  # asaas-precos-final: sem valor de reserva; o preço vem SÓ do admin (tabela plan_prices)
 
 PLAN_NAMES = {
     "basico": "Básico",

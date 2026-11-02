@@ -113,3 +113,45 @@ async def get_checkout_url(
     from app.routes.payments import create_subscription_checkout
     # Retornar URL para o frontend redirecionar
     return {"checkout_url": f"/api/payments/create-subscription-checkout?plan={plan_id}"}
+
+
+@router.get("/empresa")
+async def get_empresa_plans(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.empresa, UserRole.admin]))
+):
+    """asaas-precos-final: planos de EMPRESA ativos (nome, valor por colaborador, sessoes). So empresa e admin: sao valores comerciais, nao publicos."""
+    from app.models.empresa_plano import EmpresaPlano
+
+    planos = db.query(EmpresaPlano).filter(EmpresaPlano.ativo == True).order_by(EmpresaPlano.preco_mensal_por_colaborador).all()
+    return {
+        "plans": [
+            {
+                "chave": p.chave,
+                "nome": p.nome,
+                "preco_mensal_por_colaborador": float(p.preco_mensal_por_colaborador or 0),
+                "sessoes_inclusas_por_colaborador": int(p.sessoes_inclusas_por_colaborador or 0),
+                "descricao": p.descricao,
+            }
+            for p in planos
+        ]
+    }
+
+
+@router.get("/repasse")
+async def get_repasse_faixa(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.therapist, UserRole.admin]))
+):
+    """asaas-precos-final: menor e maior valor por sessao que o terapeuta recebe nos planos ativos (paciente e empresa)."""
+    from sqlalchemy import text
+
+    r = db.execute(text(
+        "SELECT min(v), max(v) FROM ("
+        "SELECT valor_repassado_terapeuta AS v FROM patient_plans WHERE ativo = TRUE "
+        "UNION ALL SELECT valor_repassado_terapeuta FROM empresa_planos WHERE ativo = TRUE"
+        ") t WHERE v IS NOT NULL"
+    )).first()
+    if not r or r[0] is None:
+        return {"min": None, "max": None}
+    return {"min": float(r[0]), "max": float(r[1])}
