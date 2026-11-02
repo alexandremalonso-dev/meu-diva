@@ -3,13 +3,12 @@
 
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2, CheckCircle2, Crown, Star, Shield } from 'lucide-react'
+import { Loader2, CheckCircle2, Crown, Star, Shield, ShieldCheck } from 'lucide-react'
 import { api } from '@/lib/api'
 import { PublicHeader } from '@/components/layout/PublicHeader'
 import { PublicFooter } from '@/components/layout/PublicFooter'
 
-// Teste grátis do Essencial: o mesmo número de dias definido no servidor (asaas_checkout_service.TRIAL_DIAS)
-const TRIAL_DIAS: Record<string, number> = { essencial: 7 }
+// asaas-garantia: SEM período grátis. Os 3 planos cobram na hora; a garantia (dias) vem do servidor (GET /api/asaas/garantia) e os PREÇOS vêm do admin (GET /api/plans/). Os valores de PLANS abaixo são só reserva.
 
 const PLANS = {
   essencial: {
@@ -117,8 +116,28 @@ function SubscriptionCheckoutContent() {
   const planId = (searchParams.get('plan') || 'profissional') as 'essencial' | 'profissional' | 'premium'
   const plan = PLANS[planId] || PLANS.profissional
   const planKey = (PLANS[planId] ? planId : 'profissional') as string
-  const trial = TRIAL_DIAS[planKey] || 0
-  const primeiraCobranca = new Date(Date.now() + trial * 86400000).toLocaleDateString('pt-BR')
+  const [precos, setPrecos] = useState<Record<string, number>>({})
+  const [garantiaDias, setGarantiaDias] = useState(7)
+  const preco = precos[planKey] ?? plan.price
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const r: any = await api('/api/plans/', { silent: true } as any)
+        const lista: any[] = Array.isArray(r) ? r : (r?.plans || r?.data || [])
+        const m: Record<string, number> = {}
+        for (const p of lista) {
+          const k = String(p?.id ?? p?.plan ?? p?.key ?? '').toLowerCase()
+          const v = Number(p?.price_brl ?? p?.price)
+          if (k && Number.isFinite(v) && v > 0) m[k] = v
+        }
+        setPrecos(m)
+      } catch (_) {}
+      try {
+        const g: any = await api('/api/asaas/garantia', { silent: true } as any)
+        if (g?.garantia_dias) setGarantiaDias(Number(g.garantia_dias))
+      } catch (_) {}
+    })()
+  }, [])
 
   const [name, setName] = useState('')
   const [cpf, setCpf] = useState('')
@@ -257,7 +276,7 @@ function SubscriptionCheckoutContent() {
             <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '16px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', color: '#6b7280' }}>Cobrança mensal</span>
-                <span style={{ fontSize: '22px', fontWeight: 700, color: plan.color }}>{formatCurrency(plan.price)}</span>
+                <span style={{ fontSize: '22px', fontWeight: 700, color: plan.color }}>{formatCurrency(preco)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
                 <span style={{ fontSize: '14px', color: '#6b7280' }}>Comissão por sessão</span>
@@ -289,14 +308,14 @@ function SubscriptionCheckoutContent() {
           <p style={{ fontSize: '14px', color: '#9ca3af', margin: '0 0 24px' }}>Pagamento processado pelo Asaas • Recorrência mensal</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {trial > 0 && (
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 16px' }}>
-                <p style={{ fontSize: '14px', color: '#166534', margin: 0, fontWeight: 600 }}>{trial} dias grátis</p>
-                <p style={{ fontSize: '13px', color: '#166534', margin: '4px 0 0', lineHeight: 1.5 }}>
-                  O cartão é validado agora, mas a primeira cobrança de {formatCurrency(plan.price)} só acontece em {primeiraCobranca}. Cancele antes disso e não paga nada.
-                </p>
-              </div>
-            )}
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 16px' }}>
+              <p style={{ fontSize: '14px', color: '#166534', margin: 0, fontWeight: 600 }}>
+                <ShieldCheck size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} />Garantia de {garantiaDias} dias
+              </p>
+              <p style={{ fontSize: '13px', color: '#166534', margin: '4px 0 0', lineHeight: 1.5 }}>
+                Seu dinheiro de volta sem perguntas até {garantiaDias} dias após a compra. Você pede em "Meu plano", com um clique.
+              </p>
+            </div>
             <div>
               <label style={labelStyle}>Nome no cartão</label>
               <input style={inputStyle} type="text" placeholder="Como aparece no cartão" value={name} onChange={e => setName(e.target.value)} autoComplete="cc-name" />
@@ -379,7 +398,7 @@ function SubscriptionCheckoutContent() {
                 fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
               }}
             >
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : (trial > 0 ? `Começar ${trial} dias grátis` : `Assinar por ${formatCurrency(plan.price)}/mês`)}
+              {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : `Assinar por ${formatCurrency(preco)}/mês`}
             </button>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>

@@ -1,4 +1,5 @@
 "use client";
+import { GarantiaReembolso } from "@/components/therapist/GarantiaReembolso";
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -421,6 +422,9 @@ export default function TherapistSubscriptionPage() {
             )}
           </div>
         )}
+
+        {/* asaas-garantia: garantia de 7 dias e botão de reembolso (só aparece enquanto é possível) */}
+        <GarantiaReembolso />
 
         {/* Histórico de cobranças */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
