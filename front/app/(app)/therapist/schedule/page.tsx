@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebar } from "@/contexts/SidebarContext";
-import { Calendar, Loader2, AlertCircle, CheckCircle, FileText, ChevronRight, RefreshCw, XCircle, Video, Copy } from "lucide-react";
+import { Calendar, Loader2, AlertCircle, CheckCircle, FileText, ChevronRight, RefreshCw, XCircle, Video, Copy, CalendarRange } from "lucide-react";
 import { CalendarTherapist } from "@/components/calendar/CalendarTherapist";
 
 type Appointment = {
@@ -424,7 +424,7 @@ export default function TherapistSchedulePage() {
                   selectedMonths.length > 0 ? 'bg-[#E03673]/10 border-[#E03673]/30 text-[#E03673]' : 'bg-white'
                 }`}
               >
-                <span>📅</span>
+                <Calendar className="w-4 h-4" />
                 {selectedMonths.length > 0 ? `${selectedMonths.length} mês(es)` : "Mês"}
               </button>
               
@@ -463,7 +463,7 @@ export default function TherapistSchedulePage() {
                   filterStartDate || filterEndDate ? 'bg-[#E03673]/10 border-[#E03673]/30 text-[#E03673]' : 'bg-white'
                 }`}
               >
-                <span>📆</span>
+                <CalendarRange className="w-4 h-4" />
                 Período
               </button>
               

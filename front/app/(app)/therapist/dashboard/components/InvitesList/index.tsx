@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { Mail, RefreshCw, XCircle, ChevronDown, ChevronUp, Loader2, User } from "lucide-react";
+import { Mail, RefreshCw, XCircle, ChevronDown, ChevronUp, Loader2, User, Calendar } from "lucide-react";
 import { getFotoSrc } from '@/lib/utils';
 
 // 🔥 CONSTANTE BACKEND_URL PARA FOTOS
@@ -154,7 +154,7 @@ export function InvitesList({ onInviteCancel }: InvitesListProps) {
                     </div>
                   </div>
                   <p className="text-sm text-gray-600 mt-2 ml-11">
-                    📅 {formattedDate} às {formattedTime} ({invite.duration_minutes} min)
+                    <Calendar className="inline w-3.5 h-3.5 mr-1 -mt-0.5" /> {formattedDate} às {formattedTime} ({invite.duration_minutes} min)
                   </p>
                   
                   {isExpanded && (

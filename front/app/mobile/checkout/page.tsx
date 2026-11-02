@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, CreditCard, QrCode, Copy, CheckCircle2, Loader2, Clock, Shield, User } from "lucide-react";
+import { ArrowLeft, CreditCard, QrCode, Copy, CheckCircle2, Loader2, Clock, Shield, User, Calendar } from "lucide-react";
 import { api } from "@/lib/api";
 
 const COLORS = { primary: "#E03673", secondary: "#2F80D3", dark: "#3A3B21" };
@@ -288,7 +288,7 @@ function CheckoutContent() {
             </div>
           </div>
           <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>
-            📅 {appointment_date && fmtDate(appointment_date)} às {appointment_time}
+            <Calendar size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />{appointment_date && fmtDate(appointment_date)} às {appointment_time}
           </div>
           {wallet_balance > 0 && <div style={{ background: "#D1FAE5", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#065F46", marginTop: 8 }}>💰 Saldo usado: {fmtCurrency(wallet_balance)} — Restante: {fmtCurrency(amount)}</div>}
         </div>
