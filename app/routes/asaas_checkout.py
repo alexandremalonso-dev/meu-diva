@@ -13,6 +13,7 @@ from app.services import asaas_cartao_service as cartao
 from app.services import asaas_checkout_service as svc
 from app.services import asaas_client as ac
 from app.services import asaas_sessao_service as sessao
+from app.services import asaas_reembolso_service as garantia  # asaas-garantia
 
 router = APIRouter(prefix="/asaas", tags=["asaas-checkout"])
 
@@ -81,6 +82,18 @@ async def sessao_cartao(request: Request, db: Session = Depends(get_db), current
 async def sessao_pix(request: Request, db: Session = Depends(get_db), current_user: User = Security(require_roles([UserRole.patient]))):
     _bloqueado_no_sandbox(current_user)
     return sessao.gerar_pix(db, current_user, await _corpo_json(request), _ip_cliente(request))
+
+
+@router.get("/garantia")
+def garantia_info(db: Session = Depends(get_db), current_user: User = Security(require_roles([UserRole.therapist]))):
+    # asaas-garantia: situacao da garantia de 7 dias do plano (elegivel, dias restantes, valor). Nunca devolve ids internos.
+    return garantia.avaliar(db, current_user)
+
+
+@router.post("/garantia/reembolsar")
+def garantia_reembolsar(db: Session = Depends(get_db), current_user: User = Security(require_roles([UserRole.therapist]))):
+    _bloqueado_no_sandbox(current_user)
+    return garantia.reembolsar(db, current_user)
 
 
 @router.get("/checkout/{local_id}/status")

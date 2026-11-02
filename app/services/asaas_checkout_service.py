@@ -12,7 +12,7 @@ from sqlalchemy import text
 from app.services import asaas_client as ac
 
 BR_TZ = timezone(timedelta(hours=-3))
-TRIAL_DIAS = {"essencial": 7}
+TRIAL_DIAS = {}  # asaas-garantia: sem periodo gratis; os tres planos cobram na hora e a garantia de 7 dias (reembolso) cobre o inicio
 PLANOS_TERAPEUTA = {"essencial": ("Essencial", 19.90), "profissional": ("Profissional", 79.00), "premium": ("Premium", 149.00)}
 MINUTOS_VALIDADE = 60
 MAX_POR_HORA = 6

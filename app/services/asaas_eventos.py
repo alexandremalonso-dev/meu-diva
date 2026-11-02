@@ -378,9 +378,24 @@ def h_alerta(db, amb, ev):
     return "admin alertado"
 
 
+
+def h_estorno(db, amb, ev):  # asaas-garantia
+    """Estorno de um reembolso de GARANTIA pedido por nos: conclui o registro sem alertar. Qualquer outro estorno continua alertando o admin."""
+    pay = ev.get("payment") or {}
+    pid = str(pay.get("id") or "")
+    r = db.execute(text("SELECT id, status FROM asaas_reembolsos WHERE payment_id = :p AND ambiente = :a AND status IN ('INICIANDO', 'PEDIDO', 'PROCESSANDO', 'INCERTO', 'CONCLUIDO') ORDER BY id DESC LIMIT 1"), {"p": pid, "a": amb}).first()
+    if not r:
+        return h_alerta(db, amb, ev)
+    if ev.get("event") == "PAYMENT_REFUNDED":
+        db.execute(text("UPDATE asaas_reembolsos SET status = 'CONCLUIDO', concluido_em = COALESCE(concluido_em, now()), atualizado_em = now() WHERE id = :i"), {"i": r.id})
+        return "reembolso de garantia concluído (pedido por nós: sem alerta)"
+    if r.status in ("INICIANDO", "PEDIDO", "INCERTO"):
+        db.execute(text("UPDATE asaas_reembolsos SET status = 'PROCESSANDO', atualizado_em = now() WHERE id = :i"), {"i": r.id})
+    return "reembolso de garantia em processamento"
+
 HANDLERS = {"CHECKOUT_PAID": h_checkout, "CHECKOUT_CANCELED": h_checkout, "CHECKOUT_EXPIRED": h_checkout, "SUBSCRIPTION_CREATED": h_sub_criada, "SUBSCRIPTION_UPDATED": h_sub_atualizada,
             "SUBSCRIPTION_INACTIVATED": h_sub_inativada, "SUBSCRIPTION_DELETED": h_sub_removida, "PAYMENT_CONFIRMED": h_pagamento, "PAYMENT_RECEIVED": h_pagamento, "PAYMENT_OVERDUE": h_vencida,
-            "PAYMENT_REFUNDED": h_alerta, "PAYMENT_CHARGEBACK_REQUESTED": h_alerta, "PAYMENT_CHARGEBACK_DISPUTE": h_alerta, "PAYMENT_REPROVED_BY_RISK_ANALYSIS": h_alerta, "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED": h_alerta}
+            "PAYMENT_REFUNDED": h_estorno, "PAYMENT_REFUND_IN_PROGRESS": h_estorno, "PAYMENT_PARTIALLY_REFUNDED": h_alerta, "PAYMENT_CHARGEBACK_REQUESTED": h_alerta, "PAYMENT_CHARGEBACK_DISPUTE": h_alerta, "PAYMENT_REPROVED_BY_RISK_ANALYSIS": h_alerta, "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED": h_alerta}
 
 
 def processar(db, evento: str, ambiente: str, payload: dict) -> str:

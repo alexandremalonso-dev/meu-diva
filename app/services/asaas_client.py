@@ -102,3 +102,11 @@ def obter_pix(pay_id: str, ambiente=None) -> dict:
 def buscar_cobrancas_por_referencia(ref: str, ambiente=None) -> list:
     from urllib.parse import quote
     return (chamar("GET", f"/payments?externalReference={quote(ref, safe=':')}&limit=10", ambiente=ambiente) or {}).get("data") or []
+
+
+def obter_cobranca(pay_id: str, ambiente=None) -> dict:  # asaas-garantia
+    return chamar("GET", f"/payments/{pay_id}", ambiente=ambiente)
+
+
+def estornar_cobranca(pay_id: str, descricao: str, ambiente=None, espera: int = 60) -> dict:  # asaas-garantia
+    return chamar("POST", f"/payments/{pay_id}/refund", {"description": str(descricao)[:200]}, espera=espera, ambiente=ambiente)
