@@ -8,14 +8,16 @@ import {
   Receipt, RefreshCw, PauseCircle, PlayCircle, XCircle
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { PrecoPlano } from "@/components/pricing/PrecoPlano";
+import { GarantiaReembolso } from "@/components/therapist/GarantiaReembolso";
 
 const COLORS = { primary: "#E03673", secondary: "#2F80D3", dark: "#3A3B21" };
 
-const PLAN_CONFIG: Record<string, { name: string; price: string; commission: number; color: string; icon: any; features: string[] }> = {
+const PLAN_CONFIG: Record<string, { name: string; price?: string; commission: number; color: string; icon: any; features: string[] }> = {
   basico:       { name: "Básico",       price: "Grátis",       commission: 20, color: "#6B7280", icon: Shield,   features: ["Perfil na plataforma","Agenda e sessões","Videochamada integrada","Pagamento automático"] },
-  essencial:    { name: "Essencial",    price: "R$19,90/mês",  commission: 20, color: "#6B7280", icon: Shield,   features: ["Tudo do Básico","Visibilidade no marketplace","Relatórios financeiros","7 dias de teste"] },
-  profissional: { name: "Profissional", price: "R$79/mês",     commission: 10, color: "#2F80D3", icon: Star,    features: ["Tudo do Essencial","Comissão reduzida (10%)","Melhor posicionamento","Relatórios básicos"] },
-  premium:      { name: "Premium",      price: "R$149/mês",    commission: 3,  color: "#E03673", icon: Crown,   features: ["Tudo do Profissional","Comissão mínima (3%)","Destaque máximo","Analytics avançado"] },
+  essencial:    { name: "Essencial",    commission: 20, color: "#6B7280", icon: Shield,   features: ["Tudo do Básico","Visibilidade no marketplace","Relatórios financeiros"] },
+  profissional: { name: "Profissional", commission: 10, color: "#2F80D3", icon: Star,    features: ["Tudo do Essencial","Comissão reduzida (10%)","Melhor posicionamento","Relatórios básicos"] },
+  premium:      { name: "Premium",      commission: 3,  color: "#E03673", icon: Crown,   features: ["Tudo do Profissional","Comissão mínima (3%)","Destaque máximo","Analytics avançado"] },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -95,6 +97,9 @@ export default function MeuPlanoPage() {
   const PlanIcon = planCfg.icon;
   const isPaid = sub?.plan && sub.plan !== "basico";
   const isActive = sub?.status === "active";
+  const provedor = sub?.payment_provider;
+  const doApple = apple || provedor === "apple_iap";
+  const legadoMP = provedor !== "asaas" && provedor !== "apple_iap";
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f0f5", paddingBottom: 100 }}>
@@ -125,7 +130,7 @@ export default function MeuPlanoPage() {
               </div>
               <div style={{ textAlign: "right" }}>
                 <span style={{ fontSize: 11, background: statusCfg.bg, color: statusCfg.color, padding: "3px 10px", borderRadius: 20, fontWeight: 600 }}>{statusCfg.label}</span>
-                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 4 }}>{planCfg.price}</div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 4 }}>{!isPaid ? planCfg.price : doApple ? null : <>{legadoMP ? "Valor atual do plano: " : ""}<PrecoPlano plano={sub.plan} sufixo="/mês" /></>}</div>
               </div>
             </div>
           </div>
@@ -181,6 +186,9 @@ export default function MeuPlanoPage() {
             )}
           </div>
         </div>
+
+        {/* Garantia (reembolso): fora do iOS e das assinaturas Apple */}
+        {!apple && sub?.payment_provider !== "apple_iap" && <GarantiaReembolso />}
 
         {/* Resumo de ganhos */}
         {earnings && (
@@ -305,7 +313,7 @@ export default function MeuPlanoPage() {
                             {cfg.name}
                             {isCurrent && <span style={{ fontSize: 10, background: COLORS.primary, color: "white", padding: "2px 8px", borderRadius: 20 }}>Atual</span>}
                           </div>
-                          <div style={{ fontSize: 12, color: "#6B7280" }}>{cfg.price} · {cfg.commission}% comissão</div>
+                          <div style={{ fontSize: 12, color: "#6B7280" }}>{apple ? null : <><PrecoPlano plano={planId} sufixo="/mês" /> · </>}{cfg.commission}% comissão</div>
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: isCurrent ? 0 : 10 }}>

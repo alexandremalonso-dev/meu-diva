@@ -10,9 +10,9 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://api.meudivao
 const COLORS = { primary: "#E03673", secondary: "#2F80D3", dark: "#3A3B21" };
 
 const BASE = {
-  essencial:    { name: "Essencial",     tagline: "Para começar na plataforma",        icon: "shield", accent: "#6b7280", commission: "20%", price: 19.9,  features: ["Até 10 pacientes ativos","Agendamento básico","Prontuário digital","Visibilidade no marketplace","Relatórios financeiros"], trial: true },
-  profissional: { name: "Profissional",  tagline: "Para crescer com consistência",     icon: "star",   accent: "#2F80D3", commission: "10%", price: 79,    features: ["Até 50 pacientes ativos","Relatórios financeiros","Estatísticas avançadas","Suporte por chat","Mais destaque no marketplace"], trial: false },
-  premium:      { name: "Premium",       tagline: "Para escalar sua prática clínica",  icon: "crown",  accent: "#E03673", commission: "3%",  price: 149,   features: ["Pacientes ilimitados","Relatórios completos","Estatísticas avançadas","Suporte prioritário","Destaque máximo no marketplace"], trial: false },
+  essencial:    { name: "Essencial",     tagline: "Para começar na plataforma",        icon: "shield", accent: "#6b7280", commission: "20%", features: ["Até 10 pacientes ativos","Agendamento básico","Prontuário digital","Visibilidade no marketplace","Relatórios financeiros"] },
+  profissional: { name: "Profissional",  tagline: "Para crescer com consistência",     icon: "star",   accent: "#2F80D3", commission: "10%", features: ["Até 50 pacientes ativos","Relatórios financeiros","Estatísticas avançadas","Suporte por chat","Mais destaque no marketplace"] },
+  premium:      { name: "Premium",       tagline: "Para escalar sua prática clínica",  icon: "crown",  accent: "#E03673", commission: "3%",  features: ["Pacientes ilimitados","Relatórios completos","Estatísticas avançadas","Suporte prioritário","Destaque máximo no marketplace"] },
 };
 
 const ORDER = ["essencial", "profissional", "premium"] as const;
@@ -31,6 +31,19 @@ export default function MobileAdesaoPage() {
   const [error, setError] = useState<string | null>(null);
   const [enforce, setEnforce] = useState(false);
   const [apiPrices, setApiPrices] = useState<Record<string, number>>({});
+  const [garantiaDias, setGarantiaDias] = useState<number | null>(null);
+  useEffect(() => {
+    const cap = (window as any).Capacitor;
+    if (cap?.isNativePlatform?.() && cap?.getPlatform?.() === "ios") return; // iOS: compra pela App Store, sem garantia Asaas
+    let active = true;
+    (async () => {
+      try {
+        const g: any = await api("/api/asaas/garantia", { silent: true } as any);
+        if (active && g?.garantia_dias) setGarantiaDias(Number(g.garantia_dias));
+      } catch {}
+    })();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -102,7 +115,7 @@ export default function MobileAdesaoPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
         {ORDER.map(id => {
           const b = BASE[id];
-          const price = apiPrices[id] || b.price;
+          const price = apiPrices[id];
           return (
             <div key={id} style={{ background: "rgba(255,255,255,0.07)", border: id === "profissional" ? `2px solid ${COLORS.secondary}` : "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: 20, position: "relative" }}>
               {id === "profissional" && (
@@ -119,7 +132,7 @@ export default function MobileAdesaoPage() {
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>{b.tagline}</div>
                 </div>
                 <div style={{ marginLeft: "auto", textAlign: "right" }}>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.dark }}>R$ {brl(price)}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.dark }}>{price ? `R$ ${brl(price)}` : "R$ —"}</div>
                   <div style={{ fontSize: 11, color: "#9CA3AF" }}>/mês</div>
                 </div>
               </div>
@@ -128,9 +141,9 @@ export default function MobileAdesaoPage() {
                 Comissão por sessão: <strong style={{ color: b.accent }}>{b.commission}</strong>
               </div>
 
-              {b.trial && (
+              {!!garantiaDias && (
                 <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#065F46", marginBottom: 12 }}>
-                  7 dias para experimentar — a primeira mensalidade só é cobrada no 8º dia.
+                  Garantia de {garantiaDias} dias — seu dinheiro de volta sem perguntas até {garantiaDias} dias após a compra.
                 </div>
               )}
 

@@ -3,18 +3,16 @@
 
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2, CheckCircle2, Crown, Star, Shield, ArrowLeft } from 'lucide-react'
+import { Loader2, CheckCircle2, Crown, Star, Shield, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { api } from '@/lib/api'
+import { usePlanPrices, formatBRL } from '@/lib/planPrices'
 
 const COLORS = { primary: "#E03673", secondary: "#2F80D3", dark: "#3A3B21" }
 
-// Mesmo número de dias do servidor (asaas_checkout_service.TRIAL_DIAS)
-const TRIAL_DIAS: Record<string, number> = { essencial: 7 }
-
 const PLANS: Record<string, any> = {
-  essencial:    { name: 'Essencial',    price: 19.9,  commission: '20%', color: '#6b7280', icon: Shield,  features: ['Perfil na plataforma','Agenda e gestão de sessões','Videochamada integrada','Pagamento automático','Relatório financeiro'] },
-  profissional: { name: 'Profissional', price: 79,    commission: '10%', color: '#2F80D3', icon: Star,    features: ['Comissão reduzida (10%)','Melhor posicionamento na busca','Acesso a mais pacientes','Relatórios básicos'] },
-  premium:      { name: 'Premium',      price: 149,   commission: '3%',  color: '#E03673', icon: Crown,   features: ['Comissão mínima (3%)','Destaque máximo na plataforma','Leads prioritários','Analytics avançado'] },
+  essencial:    { name: 'Essencial',    commission: '20%', color: '#6b7280', icon: Shield,  features: ['Perfil na plataforma','Agenda e gestão de sessões','Videochamada integrada','Pagamento automático','Relatório financeiro'] },
+  profissional: { name: 'Profissional', commission: '10%', color: '#2F80D3', icon: Star,    features: ['Comissão reduzida (10%)','Melhor posicionamento na busca','Acesso a mais pacientes','Relatórios básicos'] },
+  premium:      { name: 'Premium',      commission: '3%',  color: '#E03673', icon: Crown,   features: ['Comissão mínima (3%)','Destaque máximo na plataforma','Leads prioritários','Analytics avançado'] },
 }
 
 const fmtCurrency = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -91,8 +89,21 @@ function SubscriptionCheckoutContent() {
   const plan = PLANS[planId] || PLANS.profissional
   const planKey = (PLANS[planId] ? planId : 'profissional') as string
   const PlanIcon = plan.icon
-  const trial = TRIAL_DIAS[planKey] || 0
-  const primeiraCobranca = new Date(Date.now() + trial * 86400000).toLocaleDateString('pt-BR')
+  const [garantiaDias, setGarantiaDias] = useState<number | null>(null)
+  const precos = usePlanPrices()
+  const preco = precos?.[planKey]
+  useEffect(() => {
+    const cap = (window as any).Capacitor
+    if (cap?.isNativePlatform?.() && cap?.getPlatform?.() === 'ios') return // iOS: compra pela App Store, sem garantia Asaas
+    let ativo = true
+    ;(async () => {
+      try {
+        const g: any = await api('/api/asaas/garantia', { silent: true } as any)
+        if (ativo && g?.garantia_dias) setGarantiaDias(Number(g.garantia_dias))
+      } catch {}
+    })()
+    return () => { ativo = false }
+  }, [])
 
   // iOS nativo: redireciona para dash onde AppleSubscriptionCards cuida do IAP (Apple 3.1.1: sem preço/compra por fora)
   useEffect(() => {
@@ -156,7 +167,7 @@ function SubscriptionCheckoutContent() {
   }, [cep])
 
   const handleSubmit = useCallback(async () => {
-    if (loading || naoRepetir) return
+    if (loading || naoRepetir || !preco) return
     if (!name.trim()) { setError('Informe o nome no cartão.'); return }
     if (name.trim().split(/\s+/).length < 2) { setError('Informe nome e sobrenome, como estão no cartão.'); return }
     if (cardNumber.replace(/\s/g, '').length < 13) { setError('Número do cartão inválido.'); return }
@@ -196,7 +207,7 @@ function SubscriptionCheckoutContent() {
     } finally {
       setLoading(false)
     }
-  }, [loading, naoRepetir, name, cpf, cardNumber, expiry, cvv, cep, rua, addrNumber, complemento, bairro, cidade, uf, phone, planKey])
+  }, [loading, naoRepetir, name, cpf, cardNumber, expiry, cvv, cep, rua, addrNumber, complemento, bairro, cidade, uf, phone, planKey, preco])
 
   if (success) return <SuccessScreen planName={plan.name} planKey={planKey} />
 
@@ -224,7 +235,7 @@ function SubscriptionCheckoutContent() {
               <div style={{ fontSize:18, fontWeight:700, color:COLORS.dark }}>{plan.name}</div>
             </div>
             <div style={{ textAlign:'right' }}>
-              <div style={{ fontSize:22, fontWeight:800, color:plan.color }}>{fmtCurrency(plan.price)}</div>
+              <div style={{ fontSize:22, fontWeight:800, color:plan.color }}>{preco ? formatBRL(preco) : (precos === null ? 'R$ …' : 'R$ —')}</div>
               <div style={{ fontSize:11, color:'#9CA3AF' }}>/mês</div>
             </div>
           </div>
@@ -246,11 +257,13 @@ function SubscriptionCheckoutContent() {
           <div style={{ fontSize:13, color:'#9CA3AF', marginBottom:16 }}>Recorrência mensal automática</div>
 
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            {trial > 0 && (
+            {!!garantiaDias && (
               <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:12, padding:'12px 14px' }}>
-                <div style={{ fontSize:14, color:'#166534', fontWeight:600 }}>{trial} dias grátis</div>
+                <div style={{ fontSize:14, color:'#166534', fontWeight:600 }}>
+                  <ShieldCheck size={16} style={{ verticalAlign:'-3px', marginRight:6 }} />Garantia de {garantiaDias} dias
+                </div>
                 <div style={{ fontSize:12, color:'#166534', marginTop:4, lineHeight:1.5 }}>
-                  O cartão é validado agora, mas a primeira cobrança de {fmtCurrency(plan.price)} só acontece em {primeiraCobranca}. Cancele antes disso e não paga nada.
+                  Seu dinheiro de volta sem perguntas até {garantiaDias} dias após a compra. Você pede em Meu plano, com um clique.
                 </div>
               </div>
             )}
@@ -298,9 +311,9 @@ function SubscriptionCheckoutContent() {
 
             {error && <div style={{ fontSize:13, color:'#dc2626', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:8, padding:'10px 12px' }}>{error}</div>}
 
-            <button onClick={handleSubmit} disabled={loading||naoRepetir}
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, width:'100%', padding:16, background:`linear-gradient(135deg,${plan.color},${plan.color}cc)`, color:'#fff', fontSize:16, fontWeight:700, border:'none', borderRadius:12, cursor:loading||naoRepetir?'not-allowed':'pointer', opacity:loading||naoRepetir?0.6:1 }}>
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : (trial > 0 ? `Começar ${trial} dias grátis` : `Assinar por ${fmtCurrency(plan.price)}/mês`)}
+            <button onClick={handleSubmit} disabled={loading||naoRepetir||!preco}
+              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, width:'100%', padding:16, background:`linear-gradient(135deg,${plan.color},${plan.color}cc)`, color:'#fff', fontSize:16, fontWeight:700, border:'none', borderRadius:12, cursor:loading||naoRepetir||!preco?'not-allowed':'pointer', opacity:loading||naoRepetir||!preco?0.6:1 }}>
+              {loading ? <><Loader2 size={18} className="animate-spin" /> Processando…</> : (preco ? `Assinar por ${formatBRL(preco)}/mês` : (precos === null ? 'Carregando preço…' : 'Preço indisponível no momento'))}
             </button>
 
             <div style={{ display:'flex', alignItems:'flex-start', gap:8, background:'#eff6ff', border:'1.5px solid #bfdbfe', borderRadius:12, padding:'10px 14px' }}>
