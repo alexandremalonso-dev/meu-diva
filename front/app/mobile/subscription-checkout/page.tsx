@@ -168,7 +168,7 @@ function SubscriptionCheckoutContent() {
     if (!addrNumber.trim()) { setError('Informe o número do endereço (ou S/N).'); return }
     if (cidade.trim().length < 2) { setError('Informe a cidade.'); return }
     if (!/^[A-Za-z]{2}$/.test(uf.trim())) { setError('Informe o estado (UF).'); return }
-    if (phone.replace(/\D/g, '').length < 10) { setError('Celular inválido. Informe com DDD.'); return }
+    { const ph = phone.replace(/\D/g, ''); if (ph.length !== 11 || ph[2] !== '9') { setError('Celular inválido. Informe o DDD e o número com 9 dígitos, sem +55.'); return } }
 
     setLoading(true)
     setError(null)

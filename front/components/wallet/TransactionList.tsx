@@ -1,5 +1,7 @@
 "use client";
 
+import { Wallet, Calendar, Undo2, XCircle, CreditCard, type LucideIcon } from "lucide-react";
+
 interface Transaction {
   id: number;
   transaction_type: string;
@@ -41,20 +43,25 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-const getTransactionIcon = (type: string): string => {
+const getTransactionIcon = (type: string): LucideIcon => {
   switch (type) {
     case 'credit_purchase':
-      return '💰';
+      return Wallet;
     case 'session_debit':
-      return '📅';
+      return Calendar;
     case 'refund':
     case 'cancellation_refund':
-      return '↩️';
+      return Undo2;
     case 'no_show_debit':
-      return '❌';
+      return XCircle;
     default:
-      return '💳';
+      return CreditCard;
   }
+};
+
+const TransactionIcon = ({ type }: { type: string }) => {
+  const Icon = getTransactionIcon(type);
+  return <Icon className="w-6 h-6 text-gray-500" />;
 };
 
 const getTransactionTitle = (type: string): string => {
@@ -164,7 +171,7 @@ export function TransactionList({
               key={transaction.id}
               className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <div className="text-2xl">{getTransactionIcon(transaction.transaction_type)}</div>
+              <div><TransactionIcon type={transaction.transaction_type} /></div>
               
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1">

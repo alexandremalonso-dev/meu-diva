@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, CreditCard, QrCode, Copy, CheckCircle2, Loader2, Clock, Shield, User, Calendar } from "lucide-react";
+import { ArrowLeft, CreditCard, QrCode, Copy, CheckCircle2, Loader2, Clock, Shield, User, Calendar, Wallet } from "lucide-react";
 import { api } from "@/lib/api";
 
 const COLORS = { primary: "#E03673", secondary: "#2F80D3", dark: "#3A3B21" };
@@ -42,6 +42,8 @@ function CardForm({ paymentId, onSuccess }: any) {
   const [loading, setLoading] = useState(false); const [naoRepetir, setNaoRepetir] = useState(false);
   const [error, setError] = useState<string | null>(null); const [focused, setFocused] = useState("");
   const numeroRef = useRef<HTMLInputElement>(null);
+  const pollRef = useRef<any>(null);
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
   const [avisoCep, setAvisoCep] = useState<string | null>(null); const [buscandoCep, setBuscandoCep] = useState(false);
 
   // Mesma lógica dos perfis: ao completar o CEP busca o endereço e preenche rua, bairro, cidade e UF (editáveis)
@@ -80,7 +82,7 @@ function CardForm({ paymentId, onSuccess }: any) {
     if (!addrNumber.trim()) { setError("Informe o número do endereço (ou S/N)."); return; }
     if (cidade.trim().length < 2) { setError("Informe a cidade."); return; }
     if (!/^[A-Za-z]{2}$/.test(uf.trim())) { setError("Informe o estado (UF)."); return; }
-    if (phone.replace(/\D/g, "").length < 10) { setError("Celular inválido. Informe com DDD."); return; }
+    { const ph = phone.replace(/\D/g, ""); if (ph.length !== 11 || ph[2] !== "9") { setError("Celular inválido. Informe o DDD e o número com 9 dígitos, sem +55."); return; } }
     setLoading(true); setError(null);
     try {
       const result: any = await api("/api/asaas/sessao/cartao", { method: "POST", body: JSON.stringify({
@@ -91,7 +93,20 @@ function CardForm({ paymentId, onSuccess }: any) {
       setCardNumber(""); setCvv("");
       // A recusa volta com HTTP 200 e status "rejected"
       if (result?.status === "approved") onSuccess();
-      else if (result?.status === "pending") setError("Pagamento em análise. Você receberá a confirmação em instantes.");
+      else if (result?.status === "pending") {
+        // Confirmando com o banco: consulta o status a cada 3 s por ~2 min e trava o botão para não cobrar duas vezes
+        setNaoRepetir(true);
+        setError("Confirmando com o banco… aguarde alguns instantes. Não tente de novo: sua sessão é confirmada sozinha se o pagamento passar.");
+        let n = 0;
+        pollRef.current = setInterval(async () => {
+          n++;
+          if (n > 40) { clearInterval(pollRef.current); return; }
+          try {
+            const s: any = await api(`/api/payments/status/${paymentId}`, { silent: true } as any);
+            if (s?.status === "paid" || !!s?.paid_at) { clearInterval(pollRef.current); onSuccess(); }
+          } catch {}
+        }, 3000);
+      }
       else setError(result?.detail || "Pagamento não aprovado. Tente outro cartão.");
     } catch (e: any) {
       // 504 (timeout do Asaas): NÃO repetir, a sessão confirma sozinha se o pagamento tiver passado
@@ -290,7 +305,7 @@ function CheckoutContent() {
           <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", fontSize: 13, color: "#6B7280" }}>
             <Calendar size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />{appointment_date && fmtDate(appointment_date)} às {appointment_time}
           </div>
-          {wallet_balance > 0 && <div style={{ background: "#D1FAE5", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#065F46", marginTop: 8 }}>💰 Saldo usado: {fmtCurrency(wallet_balance)} — Restante: {fmtCurrency(amount)}</div>}
+          {wallet_balance > 0 && <div style={{ background: "#D1FAE5", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#065F46", marginTop: 8 }}><Wallet size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />Saldo usado: {fmtCurrency(wallet_balance)} — Restante: {fmtCurrency(amount)}</div>}
         </div>
 
         {payment_id ? (

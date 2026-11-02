@@ -1,5 +1,7 @@
 "use client";
 
+import { Calendar, CheckCircle2, XCircle, BarChart3 } from "lucide-react";
+
 interface StatsCardsProps {
   stats: {
     upcoming: number;
@@ -17,7 +19,7 @@ export function StatsCards({ stats, activeFilter, onFilterClick }: StatsCardsPro
       id: 'upcoming',
       title: 'Próximas sessões',
       value: stats.upcoming,
-      icon: '📅',
+      icon: Calendar,
       gradient: 'from-gray-50 to-gray-100',
       border: 'border-gray-200',
       text: 'text-gray-900',
@@ -27,7 +29,7 @@ export function StatsCards({ stats, activeFilter, onFilterClick }: StatsCardsPro
       id: 'completed',
       title: 'Realizadas',
       value: stats.completed,
-      icon: '✅',
+      icon: CheckCircle2,
       gradient: 'from-gray-50 to-gray-100',
       border: 'border-gray-200',
       text: 'text-gray-900',
@@ -37,7 +39,7 @@ export function StatsCards({ stats, activeFilter, onFilterClick }: StatsCardsPro
       id: 'cancelled',
       title: 'Canceladas',
       value: stats.cancelled,
-      icon: '❌',
+      icon: XCircle,
       gradient: 'from-gray-50 to-gray-100',
       border: 'border-gray-200',
       text: 'text-gray-900',
@@ -47,7 +49,7 @@ export function StatsCards({ stats, activeFilter, onFilterClick }: StatsCardsPro
       id: 'all',
       title: 'Total de sessões',
       value: stats.total,
-      icon: '📊',
+      icon: BarChart3,
       gradient: 'from-gray-50 to-gray-100',
       border: 'border-gray-200',
       text: 'text-gray-900',
@@ -78,7 +80,7 @@ export function StatsCards({ stats, activeFilter, onFilterClick }: StatsCardsPro
           {/* Conteúdo */}
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-2xl">{card.icon}</span>
+              <card.icon className="w-6 h-6 text-gray-600" />
               <span className={`text-3xl font-bold ${card.text}`}>{card.value}</span>
             </div>
             <p className={`text-sm font-medium ${card.subtext}`}>{card.title}</p>
