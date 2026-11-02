@@ -1,4 +1,5 @@
 "use client";
+import { PrecoPlano, PrecoAPartirDe } from "@/components/pricing/PrecoPlano"; // asaas-precos
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -254,7 +255,7 @@ function SignupForm() {
     formData.role === "therapist"
       ? {
           badge: "Para terapeutas",
-          titulo: "Sua prática clínica online, a partir de R$ 19,90 por mês.",
+          titulo: <>Sua prática clínica online, a partir de <PrecoAPartirDe /> por mês.</>,
           texto: "Agenda, prontuário digital, videochamada e relatórios financeiros em um só lugar. Escolha seu plano e comece a atender. Seu perfil fica visível no marketplace para quem busca terapia online.",
         }
       : formData.role === "empresa"
@@ -467,7 +468,7 @@ function SignupForm() {
 
           {formData.role === "therapist" && (
             <div className="mt-4 p-3 rounded-xl bg-[#E03673]/5 border border-[#E03673]/20 text-sm text-gray-700 leading-relaxed">
-              Depois de criar a conta, você escolhe seu plano (a partir de <strong>R$ 19,90/mês</strong>) e envia seus documentos para validar o perfil.
+              Depois de criar a conta, você escolhe seu plano (a partir de <strong><PrecoAPartirDe sufixo="/mês" /></strong>) e envia seus documentos para validar o perfil.
             </div>
           )}
 
@@ -488,7 +489,7 @@ function SignupForm() {
               ) : (
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl bg-[#E03673]/5 border border-[#E03673]/20 text-sm text-gray-700 leading-relaxed">
-                    Comece no <strong>Essencial</strong> a partir de <strong>R$ 19,90/mês</strong> e evolua quando quiser. No Profissional e no Premium, a comissão cai para 10% e 3% e seu perfil ganha mais destaque no marketplace.
+                    Comece no <strong>Essencial</strong> a partir de <strong><PrecoAPartirDe sufixo="/mês" /></strong> e evolua quando quiser. No Profissional e no Premium, a comissão cai para 10% e 3% e seu perfil ganha mais destaque no marketplace.
                   </div>
 
                   {/* Plano Essencial (hardcoded - padrão) */}
@@ -519,7 +520,7 @@ function SignupForm() {
                         </ul>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-gray-600">R$ 19,90/mês</p>
+                        <p className="text-lg font-bold text-gray-600"><PrecoPlano plano="essencial" sufixo="/mês" /></p>
                         <p className="text-xs text-gray-400 mt-2">Comissão: 20%</p>
                         <span className="inline-block mt-1 text-xs text-[#E03673] font-medium">Escolher plano</span>
                       </div>

@@ -59,6 +59,7 @@ export default function AdminValorEmpresaPage() {
     loadPlanos();
   }, []);
 
+  // asaas-precos: sem preços de exemplo escritos no código. Se a lista não carregar, mostra o erro (nunca valores falsos que o admin possa salvar sem querer).
   const loadPlanos = async () => {
     setLoading(true);
     try {
@@ -66,70 +67,11 @@ export default function AdminValorEmpresaPage() {
         url: "/api/admin/empresas/planos",
         requireAuth: true
       });
-      if (data && Array.isArray(data) && data.length > 0) {
-        setPlanos(data);
-      } else {
-        setPlanos([
-          { 
-            nome: "Prata", 
-            chave: "prata", 
-            preco_mensal_por_colaborador: 45, 
-            sessoes_inclusas_por_colaborador: 1,
-            valor_repassado_terapeuta: 50,
-            ativo: true,
-            descricao: "Ideal para empresas que estão começando"
-          },
-          { 
-            nome: "Ouro", 
-            chave: "ouro", 
-            preco_mensal_por_colaborador: 80, 
-            sessoes_inclusas_por_colaborador: 2,
-            valor_repassado_terapeuta: 50,
-            ativo: true,
-            descricao: "Para empresas que buscam maior engajamento"
-          },
-          { 
-            nome: "Diamante", 
-            chave: "diamante", 
-            preco_mensal_por_colaborador: 140, 
-            sessoes_inclusas_por_colaborador: 4,
-            valor_repassado_terapeuta: 50,
-            ativo: true,
-            descricao: "Para empresas que priorizam bem-estar integral"
-          }
-        ]);
-      }
+      setPlanos(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Erro ao carregar planos:", err);
-      setPlanos([
-        { 
-          nome: "Prata", 
-          chave: "prata", 
-          preco_mensal_por_colaborador: 45, 
-          sessoes_inclusas_por_colaborador: 1,
-          valor_repassado_terapeuta: 50,
-          ativo: true,
-          descricao: "Ideal para empresas que estão começando"
-        },
-        { 
-          nome: "Ouro", 
-          chave: "ouro", 
-          preco_mensal_por_colaborador: 80, 
-          sessoes_inclusas_por_colaborador: 2,
-          valor_repassado_terapeuta: 50,
-          ativo: true,
-          descricao: "Para empresas que buscam maior engajamento"
-        },
-        { 
-          nome: "Diamante", 
-          chave: "diamante", 
-          preco_mensal_por_colaborador: 140, 
-          sessoes_inclusas_por_colaborador: 4,
-          valor_repassado_terapeuta: 50,
-          ativo: true,
-          descricao: "Para empresas que priorizam bem-estar integral"
-        }
-      ]);
+      setPlanos([]);
+      setError("Não foi possível carregar os planos agora. Recarregue a página antes de editar.");
     } finally {
       setLoading(false);
     }

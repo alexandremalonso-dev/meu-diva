@@ -1,4 +1,5 @@
 "use client";
+import { PrecoAPartirDe } from "@/components/pricing/PrecoPlano"; // asaas-precos
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -91,7 +92,7 @@ function LoginForm() {
           </span>
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-5 bg-gradient-to-r from-white via-white to-[#E03673] bg-clip-text text-transparent">
-            Sua prática clínica online, a partir de R$ 19,90 por mês.
+            Sua prática clínica online, a partir de <PrecoAPartirDe /> por mês.
           </h1>
 
           <p className="text-white/70 text-base sm:text-lg leading-relaxed mb-8">

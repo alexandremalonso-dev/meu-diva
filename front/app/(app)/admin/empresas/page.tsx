@@ -1,4 +1,5 @@
 "use client";
+import { PlanoEmpresaOptions } from "@/components/pricing/PlanoEmpresaOptions"; // asaas-precos
 
 import { useEffect, useState, useCallback } from "react";
 import { useApi } from "@/lib/useApi";
@@ -793,9 +794,7 @@ export default function AdminEmpresasPage() {
                   style={{ focusRingColor: CORES.rosa }}
                 >
                   <option value="">Selecione...</option>
-                  <option value="prata">Prata (R$ 45/colaborador)</option>
-                  <option value="ouro">Ouro (R$ 80/colaborador)</option>
-                  <option value="diamante">Diamante (R$ 140/colaborador)</option>
+                  <PlanoEmpresaOptions />
                 </select>
               </div>
               

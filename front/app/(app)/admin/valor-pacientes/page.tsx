@@ -151,7 +151,7 @@ export default function AdminValorPacientesPage() {
       await loadPlanos();
       await loadBilling();
       setEditing(null);
-      setSuccess(`Plano ${p.nome} atualizado. O valor cobrado no Mercado Pago só muda no plano de lá.`);
+      setSuccess(`Plano ${p.nome} atualizado. O novo valor já vale para novas assinaturas e aparece em todas as telas.`);
     } catch (err: any) {
       setError(err.message || "Erro ao atualizar o plano");
     } finally {
@@ -220,57 +220,13 @@ export default function AdminValorPacientesPage() {
     }
   };
 
-  const renderBilling = (p: PatientPlan, mp?: BillingInfo) => {
-    if (!p.mp_plan_id) {
-      return <p className="text-xs text-amber-600">Sem plano do Mercado Pago vinculado. Ainda não pode ser vendido.</p>;
-    }
-    if (billing === null) {
-      return (
-        <p className="text-xs text-gray-400">
-          {billingFailed ? "Consulta ao Mercado Pago indisponível agora. " : "Consultando o Mercado Pago..."}
-          {billingFailed && (
-            <button onClick={() => loadBilling(true)} className="underline text-gray-600">Tentar de novo</button>
-          )}
-        </p>
-      );
-    }
-    if (!mp || mp.mp_price == null) {
-      const limite = (mp?.erro || "").includes("429");
-      const naoEncontrado = mp?.erro === "não encontrado";
-      return (
-        <p className={`text-xs ${naoEncontrado ? "text-red-600" : "text-amber-600"}`}>
-          {naoEncontrado
-            ? "Plano não encontrado no Mercado Pago. Confira o ID vinculado."
-            : limite
-            ? "O Mercado Pago limitou as consultas agora. Tente de novo em alguns minutos. "
-            : `Não foi possível consultar o Mercado Pago agora${mp?.erro ? ` (${mp.erro})` : ""}. `}
-          {!naoEncontrado && (
-            <button onClick={() => loadBilling(true)} className="underline text-gray-600">Tentar de novo</button>
-          )}
-        </p>
-      );
-    }
-    const dia = mp.billing_day ? `dia ${mp.billing_day} de cada mês` : "no dia da adesão";
-    const ft = mp.free_trial
-      ? `${mp.free_trial.frequency} ${mp.free_trial.frequency_type === "days" ? "dias" : mp.free_trial.frequency_type} grátis`
-      : "sem teste grátis";
-    const diverge = Math.abs(mp.mp_price - p.preco_mensal) > 0.005;
-    return (
-      <div className="text-xs text-gray-500 space-y-0.5">
-        <p>
-          Mercado Pago: <strong className={diverge ? "text-red-600" : "text-gray-700"}>{formatCurrency(mp.mp_price)}</strong>
-          {" · "}cobra {dia}{" · "}{ft}
-        </p>
-        {mp.desatualizado && <p className="text-amber-600">Dado da última consulta bem-sucedida (o Mercado Pago limitou a consulta agora).</p>}
-        {diverge && <p className="text-red-600">O valor cobrado no Mercado Pago é diferente do preço deste plano.</p>}
-        {mp.mp_status && mp.mp_status !== "active" && <p className="text-red-600">Plano inativo no Mercado Pago ({mp.mp_status}).</p>}
-        {mp.proportional && (
-          <p className="text-amber-600">Primeira cobrança proporcional: o valor pago no primeiro ciclo pode ser menor que o preço do plano.</p>
-        )}
-        <p>Redirecionamento após a assinatura: {mp.back_url || "não definido"}</p>
-      </div>
-    );
-  };
+  // asaas-precos: a cobrança é feita pelo Asaas com o preço salvo aqui; não comparamos mais com o Mercado Pago (isso gerava alarme falso).
+  const renderBilling = (p: PatientPlan, _mp?: BillingInfo) => (
+    <div className="text-xs text-gray-500 space-y-0.5">
+      <p>Cobrança pelo Asaas: <strong className="text-gray-700">{formatCurrency(p.preco_mensal)}</strong> nas novas assinaturas, aparecendo em todas as telas.</p>
+      {p.mp_plan_id && <p className="text-gray-400">Assinaturas antigas do Mercado Pago continuam com o valor do plano de lá.</p>}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -309,7 +265,7 @@ export default function AdminValorPacientesPage() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-semibold text-gray-900">Planos de Assinatura do Paciente</h2>
-            <p className="text-xs text-gray-500">Cada plano é uma assinatura no Mercado Pago que gera créditos de sessão.</p>
+            <p className="text-xs text-gray-500">Cada plano é uma assinatura mensal (cobrada pelo Asaas) que gera créditos de sessão. O preço editado aqui vale na hora para novas assinaturas.</p>
           </div>
           <button
             onClick={() => { setShowAdd(true); setError(""); setSuccess(""); }}
@@ -377,7 +333,7 @@ export default function AdminValorPacientesPage() {
                     </div>
                     
                     <div className="sm:col-span-3">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">ID do plano no Mercado Pago</label>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">ID do plano no Mercado Pago (legado: só para assinaturas antigas)</label>
                       <input value={form.mpId} onChange={(e) => setForm({ ...form, mpId: e.target.value })} placeholder="32 caracteres" className="w-full p-2 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#E03673] outline-none" />
                     </div>
                     <div className="sm:col-span-3">
@@ -433,8 +389,8 @@ export default function AdminValorPacientesPage() {
         <Info className="w-4 h-4 mt-0.5 shrink-0" />
         <div className="space-y-1">
           <p>Os créditos de sessão expiram ao fim de cada ciclo pago, como nos planos de empresa.</p>
-          <p>O preço aqui define a receita estimada. O valor realmente cobrado vem do plano do Mercado Pago, e a linha de cada plano mostra se os dois coincidem.</p>
-          <p>Site de redirecionamento sugerido para os planos no Mercado Pago: <span className="font-mono break-all">{REDIRECT_SUGGESTION}</span></p>
+          <p>O preço definido aqui é o valor cobrado pelo Asaas nas novas assinaturas e o que aparece para os pacientes. Quem já assina continua com o valor da época da assinatura.</p>
+          <p>Legado (assinaturas antigas do Mercado Pago), site de redirecionamento sugerido: <span className="font-mono break-all">{REDIRECT_SUGGESTION}</span></p>
         </div>
       </div>
 
@@ -484,7 +440,7 @@ export default function AdminValorPacientesPage() {
                 <p className="text-xs text-gray-500">Receita estimada: <strong className={receitaNovo < 0 ? "text-red-600" : "text-green-700"}>{formatCurrency(receitaNovo)}</strong> por assinante/mês, antes das taxas.</p>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">ID do plano no Mercado Pago (opcional agora)</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">ID do plano no Mercado Pago (legado, opcional)</label>
                 <input value={novo.mp_plan_id} onChange={(e) => setNovo({ ...novo, mp_plan_id: e.target.value })} className="w-full p-2 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#E03673] outline-none" />
               </div>
               <div>
