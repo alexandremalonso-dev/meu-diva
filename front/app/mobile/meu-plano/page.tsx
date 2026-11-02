@@ -142,6 +142,14 @@ export default function MeuPlanoPage() {
               </div>
             </div>
 
+            {/* Assinante desde + provedor (igual à web) */}
+            {isPaid && sub?.created_at && (
+              <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 12 }}>
+                Assinante desde {fmt(sub.created_at)}
+                {sub.payment_provider && ` · via ${sub.payment_provider === "apple_iap" ? "Apple" : sub.payment_provider === "asaas" ? "Asaas" : "Mercado Pago"}`}
+              </div>
+            )}
+
             {/* Ações — só para planos pagos não Apple */}
             {isPaid && !apple && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

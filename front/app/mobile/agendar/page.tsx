@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, Clock, User, Loader2, Search, Star, X, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
+import MobileHeader from "@/components/mobile/MobileHeader";
 function getFotoSrc(url?: string): string | null {
   if (!url) return null;
   if (url.startsWith("http") || url.startsWith("blob:")) return url;
@@ -182,7 +183,7 @@ export default function MobileAgendarPage() {
         return;
       }
 
-      // Saldo insuficiente: cria appointment e redireciona para checkout proprio (Mercado Pago)
+      // Saldo insuficiente: cria appointment e redireciona para checkout proprio (Asaas)
       const bookingData = await api('/api/appointments', {
         method: "POST",
         body: JSON.stringify({
@@ -217,6 +218,8 @@ export default function MobileAgendarPage() {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: COLORS.gray, paddingBottom: 32 }}>
+
+      <MobileHeader />
 
       <div style={{ backgroundColor: COLORS.secondary, padding: "16px 16px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
