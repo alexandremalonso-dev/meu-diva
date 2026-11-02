@@ -224,7 +224,6 @@ export default function AdminValorPacientesPage() {
   const renderBilling = (p: PatientPlan, _mp?: BillingInfo) => (
     <div className="text-xs text-gray-500 space-y-0.5">
       <p>Cobrança pelo Asaas: <strong className="text-gray-700">{formatCurrency(p.preco_mensal)}</strong> nas novas assinaturas, aparecendo em todas as telas.</p>
-      {p.mp_plan_id && <p className="text-gray-400">Assinaturas antigas do Mercado Pago continuam com o valor do plano de lá.</p>}
     </div>
   );
 
