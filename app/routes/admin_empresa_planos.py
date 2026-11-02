@@ -60,6 +60,9 @@ def add_plano(
         ativo=plano_data.ativo,
         descricao=plano_data.descricao
     )
+    repasse = getattr(plano_data, "valor_repassado_terapeuta", None)  # asaas-precos-empresa
+    if repasse is not None:
+        novo_plano.valor_repassado_terapeuta = repasse
     db.add(novo_plano)
     db.commit()
     db.refresh(novo_plano)
@@ -91,6 +94,14 @@ def update_plano(
         plano.ativo = plano_data["ativo"]
     if "descricao" in plano_data:
         plano.descricao = plano_data["descricao"]
+    if "valor_repassado_terapeuta" in plano_data:  # asaas-precos-empresa: a tela envia este campo e ele nao era gravado
+        try:
+            repasse = float(plano_data["valor_repassado_terapeuta"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Valor do terapeuta inválido")
+        if repasse < 0 or repasse != repasse or repasse == float("inf"):
+            raise HTTPException(status_code=400, detail="Valor do terapeuta inválido")
+        plano.valor_repassado_terapeuta = repasse
     
     db.commit()
     db.refresh(plano)

@@ -332,10 +332,6 @@ export default function AdminValorPacientesPage() {
                     </div>
                     
                     <div className="sm:col-span-3">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">ID do plano no Mercado Pago (legado: só para assinaturas antigas)</label>
-                      <input value={form.mpId} onChange={(e) => setForm({ ...form, mpId: e.target.value })} placeholder="32 caracteres" className="w-full p-2 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#E03673] outline-none" />
-                    </div>
-                    <div className="sm:col-span-3">
                       <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
                       <input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#E03673] outline-none" />
                     </div>
@@ -389,7 +385,6 @@ export default function AdminValorPacientesPage() {
         <div className="space-y-1">
           <p>Os créditos de sessão expiram ao fim de cada ciclo pago, como nos planos de empresa.</p>
           <p>O preço definido aqui é o valor cobrado pelo Asaas nas novas assinaturas e o que aparece para os pacientes. Quem já assina continua com o valor da época da assinatura.</p>
-          <p>Legado (assinaturas antigas do Mercado Pago), site de redirecionamento sugerido: <span className="font-mono break-all">{REDIRECT_SUGGESTION}</span></p>
         </div>
       </div>
 
@@ -438,10 +433,6 @@ export default function AdminValorPacientesPage() {
               {!isNaN(receitaNovo) && (
                 <p className="text-xs text-gray-500">Receita estimada: <strong className={receitaNovo < 0 ? "text-red-600" : "text-green-700"}>{formatCurrency(receitaNovo)}</strong> por assinante/mês, antes das taxas.</p>
               )}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">ID do plano no Mercado Pago (legado, opcional)</label>
-                <input value={novo.mp_plan_id} onChange={(e) => setNovo({ ...novo, mp_plan_id: e.target.value })} className="w-full p-2 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#E03673] outline-none" />
-              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
                 <input value={novo.descricao} onChange={(e) => setNovo({ ...novo, descricao: e.target.value })} className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#E03673] outline-none" />

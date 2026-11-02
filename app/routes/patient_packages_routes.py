@@ -93,7 +93,7 @@ def listar_planos(
         return {"visible": False, "plans": []}
     rows = db.execute(text(
         "SELECT chave, nome, preco_mensal, sessoes_mensais, descricao, validade_meses, acumula_proximo_mes FROM patient_plans "
-        "WHERE ativo = TRUE AND mp_plan_id IS NOT NULL ORDER BY sessoes_mensais, preco_mensal"
+        "WHERE ativo = TRUE ORDER BY sessoes_mensais, preco_mensal"  # asaas-precos-paciente: a venda pelo Asaas nao usa o plano do Mercado Pago; todo plano ATIVO aparece
     )).all()
     return {
         "visible": True,
