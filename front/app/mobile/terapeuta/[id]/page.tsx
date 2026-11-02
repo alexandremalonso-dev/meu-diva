@@ -15,7 +15,14 @@ import MobileHeader from "@/components/mobile/MobileHeader";
 import { getFotoSrc } from "@/lib/utils";
 import { api } from "@/lib/api";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function getBackendUrl(): string {
+  if (typeof window !== "undefined") {
+    const cap = (window as any).Capacitor;
+    if (cap?.isNativePlatform?.()) return "https://api.meudivaonline.com";
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
+}
+const BACKEND_URL = typeof window !== "undefined" ? getBackendUrl() : "https://api.meudivaonline.com";
 
 const COLORS = {
   primary: "#E03673",
@@ -137,7 +144,7 @@ export default function MobileTerapeutaPage() {
   const getDiaMes = (dateStr: string) => { const [d, m] = dateStr.split("/"); return `${d}/${m}`; };
   const isHoje = (dateStr: string) => dateStr === hoje.toLocaleDateString("pt-BR");
   const getHorarios = (slots: any[]) =>
-    (slots || []).filter(s => { const h = new Date(s.starts_at).getHours(); return h >= 7 && h <= 22; })
+    (slots || [])
       .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 
   const handleAgendar = async (slot: any) => {
@@ -166,12 +173,12 @@ export default function MobileTerapeutaPage() {
         return;
       }
 
-      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout proprio (Mercado Pago)
+      // SALDO INSUFICIENTE: cria appointment e redireciona para checkout proprio (Asaas)
       const bookingData = await api('/api/appointments', {
         method: "POST",
         body: JSON.stringify({ therapist_user_id: terapeuta.user_id, starts_at: slot.starts_at, ends_at: slot.ends_at, duration_minutes: 50 })
       });
-      router.push(`/checkout?appointment_id=${bookingData.id}`);
+      router.push(`/mobile/checkout?appointment_id=${bookingData.id}`);
     } catch (err: any) {
       alert(err.message || "Erro ao agendar");
     } finally {
@@ -231,7 +238,7 @@ export default function MobileTerapeutaPage() {
             </div>
             {terapeuta.accepts_corporate_sessions && (
               <span style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, backgroundColor: "rgba(255,255,255,0.2)", color: "white", padding: "3px 8px", borderRadius: 10 }}>
-                <Building2 size={10} /> Aceita plano empresa
+                <Building2 size={10} /> Aceita corporativo e pacotes
               </span>
             )}
           </div>
@@ -465,7 +472,7 @@ export default function MobileTerapeutaPage() {
           <SectionTitle icon={ShieldCheck} title="Confiança e Segurança" />
           {[
             { icon: Video, color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", title: "Atendimento online", desc: "Sessões por videochamada segura e criptografada" },
-            { icon: Lock, color: COLORS.primary, bg: "#fdf2f8", border: "#fbcfe8", title: "Pagamento 100% seguro", desc: "Processado via Mercado Pago com criptografia de ponta a ponta" },
+            { icon: Lock, color: COLORS.primary, bg: "#fdf2f8", border: "#fbcfe8", title: "Pagamento 100% seguro", desc: "Processado pelo Asaas com criptografia de ponta a ponta" },
             ...(terapeuta.verified ? [{ icon: ShieldCheck, color: COLORS.dark, bg: "#f0fdf4", border: "#bbf7d0", title: "Profissional verificado", desc: "Documentos e formação verificados pela equipe Meu Divã" }] : []),
           ].map(({ icon: Icon, color, bg, border, title, desc }) => (
             <div key={title} style={{ backgroundColor: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8, display: "flex", gap: 10 }}>
