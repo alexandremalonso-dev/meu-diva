@@ -218,10 +218,10 @@ export default function AdminDashboardPage() {
     }
   }, [apiCall]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent?: boolean) => {
     if (!user?.id) return;
     try {
-      setLoading(true);
+      if (silent !== true) setLoading(true); // asaas-pulso-admin: atualizacao silenciosa (sem o circulo)
       const [appointmentsData, usersData, subscriptionsData, revenueReal] = await Promise.all([
         apiCall({ url: "/api/appointments/admin/all", requireAuth: true }),
         apiCall({ url: "/api/users", requireAuth: true }),
@@ -325,6 +325,12 @@ export default function AdminDashboardPage() {
   }, [user?.id, apiCall, loadTotalAvailability]);
 
   useEffect(() => { loadData(); }, [loadData]);
+  // asaas-pulso-admin: o painel se atualiza sozinho quando algo muda na plataforma (aviso do painel lateral, que consulta o servidor a cada 30 s). Recarrega em silencio: sem o circulo.
+  useEffect(() => {
+    const atualizar = () => { loadData(true); };
+    window.addEventListener("appointmentUpdated", atualizar);
+    return () => window.removeEventListener("appointmentUpdated", atualizar);
+  }, [loadData]);
 
   const handleUpcomingClick = () => {
     setModalFilter("upcoming");

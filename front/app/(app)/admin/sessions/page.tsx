@@ -49,6 +49,12 @@ export default function AdminSessionsPage() {
   const itemsPerPage = 15;
 
   useEffect(() => { loadData(); }, []);
+  // asaas-pulso-admin: a lista se atualiza sozinha quando algo muda na plataforma (aviso do painel lateral, que consulta o servidor a cada 30 s). Recarrega em silencio: sem o circulo.
+  useEffect(() => {
+    const atualizar = () => { loadData(true); };
+    window.addEventListener("appointmentUpdated", atualizar);
+    return () => window.removeEventListener("appointmentUpdated", atualizar);
+  }, []);
   useEffect(() => { filterSessions(); }, [sessions, searchPatient, selectedTherapistId, statusFilter, yearFilter, monthFilter, startDate, endDate]);
 
   // 🔥 Função para obter URL correta da foto
@@ -58,9 +64,9 @@ export default function AdminSessionsPage() {
     return getFotoSrc(fotoUrl) ?? "";
   };
 
-  async function loadData() {
+  async function loadData(silent?: boolean) {
     try {
-      setLoading(true);
+      if (silent !== true) setLoading(true); // asaas-pulso-admin: atualizacao silenciosa (sem o circulo)
       
       // 1. Buscar todas as sessões e usuários
       const [apts, users] = await Promise.all([

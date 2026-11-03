@@ -95,6 +95,49 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
       contentScrollRef.current.scrollTop = 0;
     }
   }, [activeTab]);
+  // asaas-pulso-admin: ATUALIZACAO AUTOMATICA do admin. A cada 30 s (so com a aba visivel) e ao voltar para a aba, pergunta ao servidor a "assinatura" da PLATAFORMA inteira; so quando ela MUDA
+  // (ou a cada 5 minutos, por seguranca) avisa as telas (appointmentUpdated: o painel e a lista de sessoes do admin escutam e recarregam em silencio).
+  useEffect(() => {
+    let parado = false;
+    let emVoo = false;
+    let ultima: string | null = null;
+    let ultimaConsulta = 0;
+    let ciclos = 0;
+    const checar = async (forcar: boolean, soReferencia: boolean, avisarSempre: boolean) => {
+      if (parado || emVoo || document.visibilityState !== "visible") return;
+      if (!forcar && Date.now() - ultimaConsulta < 10000) return;
+      emVoo = true;
+      ultimaConsulta = Date.now();
+      try {
+        const p = await apiCall({ url: "/api/appointments/admin/pulse", requireAuth: true, silent: true });
+        if (!parado && p && typeof p.signature === "string") {
+          const mudou = ultima !== null && p.signature !== ultima;
+          const jaTinhaReferencia = ultima !== null;
+          ultima = p.signature;
+          if ((mudou || (avisarSempre && jaTinhaReferencia)) && !soReferencia) window.dispatchEvent(new CustomEvent("appointmentUpdated", { detail: { origem: "pulso" } }));
+        }
+      } catch {
+      } finally {
+        emVoo = false;
+      }
+    };
+    const aoVoltar = () => { checar(false, false, false); };
+    const aoAvisoDaTela = (e: Event) => { if ((e as CustomEvent).detail?.origem !== "pulso") checar(true, true, false); };
+    const timer = setInterval(() => { ciclos += 1; checar(false, false, ciclos % 10 === 0); }, 30000);
+    document.addEventListener("visibilitychange", aoVoltar);
+    window.addEventListener("focus", aoVoltar);
+    window.addEventListener("online", aoVoltar);
+    window.addEventListener("appointmentUpdated", aoAvisoDaTela);
+    checar(true, true, false);
+    return () => {
+      parado = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", aoVoltar);
+      window.removeEventListener("focus", aoVoltar);
+      window.removeEventListener("online", aoVoltar);
+      window.removeEventListener("appointmentUpdated", aoAvisoDaTela);
+    };
+  }, []);
 
   useEffect(() => {
     if (openOnChat) {
