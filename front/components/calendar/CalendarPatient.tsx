@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { Calendar, X, RefreshCw, CheckCircle, XCircle, Loader2, Clock, DollarSign, Video, Copy, MessageSquare, AlertTriangle, Phone } from "lucide-react";
 import { ComplaintModal } from "@/components/Modals/ComplaintModal";
 import { getFotoSrc } from '@/lib/utils';
-import { linkGoogleAgenda } from "@/lib/googleAgendaLink"; // asaas-agenda
+import { linkGoogleAgenda } from "@/lib/googleAgendaLink"; // asaas-agenda (so ACRESCENTA: nada do arquivo original foi removido)
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.meudivaonline.com";
 
@@ -66,6 +66,66 @@ export function CalendarPatient({ events, onEventClick, onSlotClick, onCancel, o
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null);
   const [selectedTherapistName, setSelectedTherapistName] = useState("");
   const [selectedSessionDate, setSelectedSessionDate] = useState("");
+
+  // ─── Google Calendar ──────────────────────────────────────────────────────
+  const [gcalStatus, setGcalStatus] = useState<{ connected: boolean; email?: string } | null>(null);
+  const [gcalLoading, setGcalLoading] = useState(false);
+  const [gcalConnecting, setGcalConnecting] = useState(false);
+
+  useEffect(() => {
+    loadGcalStatus();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gcal") === "connected") {
+      showToast("Google Calendar conectado com sucesso! 🎉", "success");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const loadGcalStatus = async () => {
+    try {
+      const data = await apiCall({ url: "/api/google-calendar/status" });
+      setGcalStatus(data);
+    } catch {
+      setGcalStatus({ connected: false });
+    }
+  };
+
+  const handleGcalConnect = async () => {
+    setGcalConnecting(true);
+    try {
+      const data = await apiCall({ url: "/api/google-calendar/connect" });
+      if (data.auth_url) window.location.href = data.auth_url;
+    } catch {
+      showToast("Erro ao iniciar conexão com Google Calendar", "error");
+      setGcalConnecting(false);
+    }
+  };
+
+  const handleGcalDisconnect = async () => {
+    setGcalLoading(true);
+    try {
+      await apiCall({ url: "/api/google-calendar/disconnect", method: "POST" });
+      setGcalStatus({ connected: false });
+      showToast("Google Calendar desconectado", "success");
+    } catch {
+      showToast("Erro ao desconectar", "error");
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+
+  const handleGcalSyncAll = async () => {
+    setGcalLoading(true);
+    try {
+      const data = await apiCall({ url: "/api/google-calendar/sync-all", method: "POST" });
+      showToast(`${data.synced} sessões sincronizadas ✅`, "success");
+    } catch {
+      showToast("Erro ao sincronizar", "error");
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -224,6 +284,62 @@ export function CalendarPatient({ events, onEventClick, onSlotClick, onCancel, o
           {toast.message}
         </div>
       )}
+
+      {/* ─── Card Google Calendar ─────────────────────────────────────────── */}
+      <div className={`rounded-xl border p-4 flex items-center justify-between gap-4 transition-all mb-4 ${
+        gcalStatus?.connected
+          ? "bg-green-50 border-green-200"
+          : "bg-gradient-to-r from-[#2F80D3]/5 to-[#E03673]/5 border-[#2F80D3]/20"
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+            gcalStatus?.connected ? "bg-green-100" : "bg-white shadow-sm"
+          }`}>
+            <Calendar className={`w-5 h-5 ${gcalStatus?.connected ? "text-green-600" : "text-[#2F80D3]"}`} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              {gcalStatus?.connected ? "Google Calendar conectado ✓" : "Integrar com Google Calendar"}
+            </p>
+            <p className="text-xs text-gray-500">
+              {gcalStatus?.connected
+                ? `Sessões sincronizadas automaticamente${gcalStatus.email ? ` · ${gcalStatus.email}` : ""}`
+                : "Receba suas sessões confirmadas diretamente na sua agenda pessoal"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {gcalStatus?.connected ? (
+            <>
+              <button
+                onClick={handleGcalSyncAll}
+                disabled={gcalLoading}
+                className="px-3 py-1.5 text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {gcalLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                Sincronizar
+              </button>
+              <button
+                onClick={handleGcalDisconnect}
+                disabled={gcalLoading}
+                className="px-3 py-1.5 text-xs bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Desconectar
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleGcalConnect}
+              disabled={gcalConnecting}
+              className="px-4 py-2 text-sm bg-[#2F80D3] hover:bg-[#236bb3] text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 shadow-sm"
+            >
+              {gcalConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+              {gcalConnecting ? "Conectando..." : "Conectar agenda"}
+            </button>
+          )}
+        </div>
+      </div>
+      {/* ──────────────────────────────────────────────────────────────────── */}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
         <div className="h-auto">
