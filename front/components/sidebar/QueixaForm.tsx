@@ -1,4 +1,5 @@
 "use client";
+import { rotuloMotivo } from "@/lib/motivosPaciente"; // asaas-motivos
 
 import { useState, useEffect } from "react";
 import { Loader2, CheckCircle, Save, Target, Plus, Trash2, User, Calendar, Clock } from "lucide-react";
@@ -109,7 +110,7 @@ export function QueixaForm({ appointmentId, onSave, onError, onSuccess }: Queixa
           requireAuth: true
         });
         if (medicalRecord?.patient_reasons?.length > 0) {
-          setComplaint(medicalRecord.patient_reasons.join("\n\n"));
+          setComplaint(medicalRecord.patient_reasons.map(rotuloMotivo).join("\n\n"));
           setHasRecord(true);
         }
       } catch (err: any) {

@@ -229,7 +229,7 @@ export default function AdminSessionsPage() {
           <div className="bg-white rounded-xl p-12 text-center border border-gray-100"><Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Nenhuma sessão encontrada</p></div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-3 border-b text-sm text-gray-500">{filteredSessions.length} sessão{filteredSessions.length!==1?"ões":""}</div>
+            <div className="p-3 border-b text-sm text-gray-500">{filteredSessions.length} {filteredSessions.length!==1 ? "sessões" : "sessão"}</div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">

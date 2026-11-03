@@ -533,7 +533,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
                             {activeSectionTab === "history" && <History className="w-3.5 h-3.5 text-[#2F80D3]" />}
                             {activeSectionTab === "today" && <Calendar className="w-3.5 h-3.5 text-[#E03673]" />}
                             <span className={`text-sm font-medium ${activeSectionTab === "pending" ? "text-orange-700" : activeSectionTab === "history" ? "text-[#2F80D3]" : "text-gray-700"}`}>
-                              {currentSection.list.length} sessão{currentSection.list.length !== 1 ? "ões" : ""}
+                              {currentSection.list.length} {currentSection.list.length !== 1 ? "sessões" : "sessão"}
                             </span>
                           </div>
                           {selectedAppointment && currentSection.list.some(a => a.id === selectedAppointment.id) && (
@@ -604,7 +604,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
                     </label>
                     {todaysAppointments.length > 0 && (
                       <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        {todaysAppointments.length} sessão{todaysAppointments.length !== 1 ? "ões" : ""}
+                        {todaysAppointments.length} {todaysAppointments.length !== 1 ? "sessões" : "sessão"}
                       </span>
                     )}
                   </div>
@@ -676,7 +676,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
                     <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <p className="text-xs font-medium text-yellow-700 mb-2 flex items-center gap-1">
                         <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                        {pendingReviews.length} sessão{pendingReviews.length !== 1 ? "es" : ""} para avaliar
+                        {pendingReviews.length} {pendingReviews.length !== 1 ? "sessões" : "sessão"} para avaliar
                       </p>
                       {pendingReviews.slice(0, 2).map(apt => (
                         <button key={apt.id}

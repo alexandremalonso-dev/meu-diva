@@ -1,4 +1,5 @@
 "use client";
+import { rotuloMotivo } from "@/lib/motivosPaciente"; // asaas-motivos
 import { useState, useEffect, useRef } from "react";
 import { Loader2, User, Calendar, MapPin, CreditCard, Eye, History, FileText, Mic, MicOff, FileWarning, Edit3 } from "lucide-react";
 import { useApi } from "@/lib/useApi";
@@ -430,7 +431,7 @@ export function ProntuarioForm({ appointmentId, therapistUserId, readOnly = fals
           {patientComplaints.length > 0 && (
             <div className="p-3 bg-[#FCE4EC] rounded-lg border border-[#E03673]/30 mb-4">
               <h4 className="text-sm font-semibold text-[#E03673] mb-2">Queixas do paciente</h4>
-              {patientComplaints.map((c, i) => <div key={i} className="p-2 bg-white rounded-lg mb-1"><p className="text-sm text-gray-700">{c}</p></div>)}
+              {patientComplaints.map((c, i) => <div key={i} className="p-2 bg-white rounded-lg mb-1"><p className="text-sm text-gray-700">{rotuloMotivo(c)}</p></div>)}
             </div>
           )}
 

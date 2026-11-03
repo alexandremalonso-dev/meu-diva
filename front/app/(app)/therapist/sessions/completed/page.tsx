@@ -256,7 +256,7 @@ export default function TherapistCompletedSessionsPage() {
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-3 border-b text-sm text-gray-500">
-              {filtered.length} sessão{filtered.length !== 1 ? "ões" : ""}
+              {filtered.length} {filtered.length !== 1 ? "sessões" : "sessão"}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">

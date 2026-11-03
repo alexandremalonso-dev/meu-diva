@@ -227,7 +227,7 @@ export function CalendarAdmin({ appointments }: CalendarAdminProps) {
               <div className="flex gap-3 mt-3">
                 <div className="flex items-center gap-1.5 bg-white/70 rounded-lg px-3 py-1.5">
                   <Users className="w-4 h-4 text-[#E03673]" />
-                  <span className="text-sm font-semibold text-gray-800">{modalSlot.count} sessão{modalSlot.count !== 1 ? "ões" : ""}</span>
+                  <span className="text-sm font-semibold text-gray-800">{modalSlot.count} {modalSlot.count !== 1 ? "sessões" : "sessão"}</span>
                 </div>
                 {totalRevenue > 0 && (
                   <div className="flex items-center gap-1.5 bg-white/70 rounded-lg px-3 py-1.5">

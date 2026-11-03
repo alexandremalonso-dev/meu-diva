@@ -1,4 +1,5 @@
 "use client";
+import { rotuloMotivo } from "@/lib/motivosPaciente"; // asaas-motivos
 
 import { useState, useEffect } from "react";
 import { X, MessageSquare, Loader2, CheckCircle, AlertCircle, Target, Plus, Trash2 } from "lucide-react";
@@ -89,7 +90,7 @@ export function ComplaintModal({
       try {
         const medicalRecord = await api(`/api/appointments/${appointmentId}/medical-record`);
         if (medicalRecord?.patient_reasons && medicalRecord.patient_reasons.length > 0) {
-          setComplaint(medicalRecord.patient_reasons.join("\n\n"));
+          setComplaint(medicalRecord.patient_reasons.map(rotuloMotivo).join("\n\n"));
         }
       } catch (err) {
         console.log("Nenhuma queixa existente");

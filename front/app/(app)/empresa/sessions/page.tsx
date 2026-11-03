@@ -459,7 +459,7 @@ export default function EmpresaSessionsPage() {
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-3 border-b text-sm text-gray-500">
-              {filteredSessions.length} sessão{filteredSessions.length !== 1 ? "ões" : ""}
+              {filteredSessions.length} {filteredSessions.length !== 1 ? "sessões" : "sessão"}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">

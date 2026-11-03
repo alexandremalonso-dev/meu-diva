@@ -611,7 +611,7 @@ export default function TherapistInvoicesPage() {
                     </td>
                     <td className="p-3 text-center">
                       <span className="text-sm text-gray-600">
-                        {period.sessions_count} sessão{period.sessions_count !== 1 ? 'ões' : ''}
+                        {period.sessions_count} {period.sessions_count !== 1 ? "sessões" : "sessão"}
                       </span>
                     </td>
                     <td className="p-3 text-right">

@@ -644,7 +644,7 @@ export default function EmpresaFinancialReportPage() {
                     </td>
                     <td className="p-3">
                       <span className={`text-xs px-2 py-1 rounded-full ${getPlanoColor(colab.plano)}`}>
-                        {colab.plano_nome} ({colab.sessoes_inclusas} sessão{colab.sessoes_inclusas > 1 ? 'ões' : ''})
+                        {colab.plano_nome} ({colab.sessoes_inclusas} {colab.sessoes_inclusas > 1 ? "sessões" : "sessão"})
                       </span>
                     </td>
                     <td className="p-3 text-center">
