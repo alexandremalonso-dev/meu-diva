@@ -433,7 +433,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
     const fotoUrl = patient?.foto_url ? getFotoSrc(patient.foto_url) ?? "" : null;
 
     let bgColor = "#3b82f6";
-    let iconHtml = `<span class="text-xs font-bold">${patientName.charAt(0).toUpperCase()}</span>`;
+    let iconHtml = `<span class="text-[10px] font-bold">${patientName.charAt(0).toUpperCase()}</span>`;
 
     if (isPersonalEvent) {
       bgColor = "#9ca3af";
@@ -453,8 +453,8 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
 
     return {
       html: `
-        <div style="background-color: ${bgColor};" class="p-1 text-xs text-white rounded truncate cursor-pointer hover:opacity-90 flex items-center gap-1">
-          <div class="w-5 h-5 rounded-full overflow-hidden bg-white/30 flex-shrink-0 flex items-center justify-center">
+        <div style="background-color: ${bgColor};" class="h-full w-full px-1 text-xs text-white rounded-md overflow-hidden truncate cursor-pointer hover:opacity-90 flex items-center gap-1">
+          <div class="w-4 h-4 rounded-full overflow-hidden bg-white/30 flex-shrink-0 flex items-center justify-center">
             ${!isPersonalEvent && fotoUrl ? `<img src="${fotoUrl}" alt="${patientName}" class="w-full h-full object-cover" />` : iconHtml}
           </div>
           <span class="truncate">${patientName}</span>
@@ -464,6 +464,10 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
   };
 
   const calendarStyles = [
+    // asaas-cartao-agenda: o evento do FullCalendar (semana e dia) vira so uma caixa transparente e o cartao de dentro preenche 100% dela: sem moldura propria, sem borda, sem sombra, sem recuo
+    `.fc .fc-timegrid-event { border: 0 !important; box-shadow: none !important; background: transparent !important; }`,
+    `.fc .fc-timegrid-event .fc-event-main { padding: 0 !important; height: 100% !important; }`,
+    `.fc .fc-timegrid-event .fc-event-main > div { height: 100%; }`,
     `.fc .fc-button-primary { background-color: ${CORES.cinza} !important; border-color: ${CORES.cinzaBorda} !important; color: ${CORES.cinzaTexto} !important; transition: all 0.2s ease; box-shadow: none !important; }`,
     `.fc .fc-button-primary:hover { background-color: ${CORES.rosa} !important; border-color: ${CORES.rosa} !important; color: ${CORES.branco} !important; }`,
     `.fc .fc-button-primary.fc-button-active,
