@@ -89,7 +89,7 @@ declare global { interface Window { SpeechRecognition: any; webkitSpeechRecognit
 export function ProntuarioForm({ appointmentId, therapistUserId, readOnly = false, totalPendingCount, onSave, onError, onSuccess }: ProntuarioFormProps) {
   const { execute: apiCall } = useApi();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!appointmentId); // asaas-sem-sessao: so nasce carregando se HA sessao para carregar
   const [saving, setSaving] = useState(false);
   const [hasRecord, setHasRecord] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -132,7 +132,7 @@ export function ProntuarioForm({ appointmentId, therapistUserId, readOnly = fals
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isRecordingRef = useRef(false);
 
-  useEffect(() => { if (appointmentId) loadData(); }, [appointmentId]);
+  useEffect(() => { if (appointmentId) loadData(); else setLoading(false); }, [appointmentId]); // asaas-sem-sessao
   useEffect(() => { if (readOnly && isCompleted) setInternalTab("historico"); }, [readOnly, isCompleted]);
 
   // ✅ Envia um chunk de áudio para o backend (Groq Whisper)
@@ -353,6 +353,10 @@ export function ProntuarioForm({ appointmentId, therapistUserId, readOnly = fals
   // Usa totalPendingCount (do SidebarRight) se disponível, senão usa o local
   const pendingTabCount = totalPendingCount !== undefined ? totalPendingCount : pendingSessions.length;
 
+  // asaas-sem-sessao: sem sessao selecionada nao ha o que carregar (antes o circulo girava para sempre)
+  if (!appointmentId && !selectedPendingId) {
+    return <div className="text-center py-8 px-4 text-sm text-gray-400">Selecione uma sessão em Hoje, Pendentes ou Histórico para abrir o prontuário.</div>;
+  }
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-[#E03673] animate-spin" /></div>;
 
   return (
