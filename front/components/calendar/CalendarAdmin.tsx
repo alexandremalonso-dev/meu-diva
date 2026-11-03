@@ -189,8 +189,8 @@ export function CalendarAdmin({ appointments }: CalendarAdminProps) {
           eventClick={handleEventClick}
           eventContent={(info) => ({
             html: `
-              <div style="background-color:${info.event.backgroundColor};" class="p-1 text-xs text-white rounded truncate cursor-pointer hover:opacity-90 flex items-center gap-1">
-                <div class="w-5 h-5 rounded-full overflow-hidden bg-white/30 flex-shrink-0 flex items-center justify-center">
+              <div style="background-color:${info.event.backgroundColor};" class="h-full w-full px-1 text-xs leading-none text-white rounded-md overflow-hidden truncate cursor-pointer hover:opacity-90 flex items-center gap-1">
+                <div class="h-full max-h-4 aspect-square rounded-full overflow-hidden bg-white/30 flex-shrink-0 flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </div>
                 <span class="truncate">${info.event.title}</span>
@@ -292,6 +292,10 @@ export function CalendarAdmin({ appointments }: CalendarAdminProps) {
 
       {/* Estilos idênticos ao CalendarTherapist */}
       <style>{`
+        /* asaas-cartao-agenda: o evento do FullCalendar (semana e dia) vira so uma caixa transparente e o cartao de dentro preenche 100% dela: sem moldura propria, sem borda, sem sombra, sem recuo */
+        .fc .fc-timegrid-event { border: 0 !important; box-shadow: none !important; background: transparent !important; }
+        .fc .fc-timegrid-event .fc-event-main { padding: 0 !important; height: 100% !important; }
+        .fc .fc-timegrid-event .fc-event-main > div { height: 100%; }
         .fc .fc-button-primary { background-color: ${CORES.cinza} !important; border-color: ${CORES.cinzaBorda} !important; color: ${CORES.cinzaTexto} !important; transition: all 0.2s ease; }
         .fc .fc-button-primary:hover { background-color: ${CORES.rosa} !important; border-color: ${CORES.rosa} !important; color: ${CORES.branco} !important; }
         .fc .fc-button-active { background-color: ${CORES.rosa} !important; border-color: ${CORES.rosa} !important; color: ${CORES.branco} !important; }
