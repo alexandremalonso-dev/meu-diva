@@ -54,14 +54,6 @@ export function useStats(appointments: Appointment[], totalAvailability: number 
     // 🔥 Calcular slots disponíveis = totalAvailability - occupiedSlots
     const availableSlots = Math.max(0, totalAvailability - occupiedSlots);
     
-    console.log("📊 useStats calculado:", {
-      totalAvailability,
-      occupiedSlots,
-      availableSlots,
-      upcoming,
-      completed,
-      cancelled
-    });
     
     return {
       upcoming,

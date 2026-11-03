@@ -102,16 +102,6 @@ export function useStats(appointments: Appointment[], totalAvailability: number 
     yearStats.totalAvailability = availableSlots;
     allStats.totalAvailability = availableSlots;
     
-    console.log("📊 [ADMIN] useStats calculado:", {
-      totalAvailability,
-      occupiedSlots,
-      availableSlots,
-      upcoming,
-      week: weekStats,
-      month: monthStats,
-      year: yearStats,
-      all: allStats
-    });
     
     return {
       week: weekStats,
