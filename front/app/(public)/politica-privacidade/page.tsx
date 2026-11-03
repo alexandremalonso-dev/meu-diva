@@ -47,7 +47,7 @@ function PoliticaPrivacidadeContent() {
               <Shield className="w-10 h-10" />
               <h1 className="text-3xl font-bold">Política de Privacidade</h1>
             </div>
-            <p className="text-white/80 mt-2">Última atualização: 27 de março de 2026</p>
+            <p className="text-white/80 mt-2">Última atualização: 3 de novembro de 2026</p>
           </div>
         </div>
 
@@ -117,12 +117,50 @@ function PoliticaPrivacidadeContent() {
               <p className="text-gray-600 leading-relaxed mb-3">Seus dados podem ser compartilhados com:</p>
               <ul className="list-disc list-inside text-gray-600 space-y-1 ml-4">
                 <li>Terapeutas (para pacientes) e pacientes (para terapeutas), conforme necessário para a prestação dos serviços</li>
-                <li>Provedores de serviços de pagamento (Stripe, bancos)</li>
+                <li>Provedores de serviços de pagamento (Asaas, Stripe e instituições financeiras)</li>
                 <li>Autoridades judiciais ou regulatórias, quando exigido por lei</li>
               </ul>
               <p className="text-gray-600 leading-relaxed mt-3">
                 Nunca compartilhamos seus dados com terceiros para fins de marketing sem seu consentimento explícito.
               </p>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">5.1 Uso de dados do Google Agenda (terapeutas)</h2>
+              <div className="space-y-3">
+                <p className="text-gray-600 leading-relaxed">
+                  A integração com o Google Agenda é opcional e só pode ser ativada pelo terapeuta, na página Agenda. Ao conectar,
+                  o Meu Divã solicita permissão (escopo https://www.googleapis.com/auth/calendar.events) para criar, alterar e
+                  excluir os eventos das sessões agendadas na plataforma, na agenda principal do terapeuta. Cada evento contém a
+                  data e o horário da sessão, o nome do paciente, o nome do terapeuta e o link da videochamada.
+                </p>
+                <p className="text-gray-600 leading-relaxed">
+                  <strong>O que não fazemos:</strong> não lemos, copiamos nem armazenamos os outros eventos ou informações da sua
+                  agenda. Guardamos apenas as credenciais de acesso necessárias para manter a sincronização e, quando o Google
+                  informa, o e-mail da conta conectada. O evento inclui somente os dados indicados acima, para reduzir a exposição
+                  de informações dos pacientes, e a ativação da sincronização é uma escolha do terapeuta.
+                </p>
+                <p className="text-gray-600 leading-relaxed">
+                  Seus dados não são vendidos, não são usados para publicidade nem para treinar modelos de inteligência
+                  artificial e não são compartilhados com terceiros, salvo exigência legal. Pessoas da nossa equipe só acessam
+                  esses dados com o seu consentimento, para suporte ou segurança, ou para cumprir a lei.
+                </p>
+                <p className="text-gray-600 leading-relaxed">
+                  <strong>Desconexão e exclusão:</strong> o terapeuta pode desconectar a qualquer momento em Agenda → Google
+                  Calendar, o que apaga as credenciais guardadas pelo Meu Divã. Os eventos já criados permanecem na agenda do
+                  Google e podem ser removidos pelo próprio terapeuta. Também é possível revogar o acesso em{" "}
+                  <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-[#E03673] hover:underline">myaccount.google.com/permissions</a>.
+                </p>
+                <p className="text-gray-600 leading-relaxed">
+                  O uso e a transferência, para qualquer outro app, de informações recebidas das APIs do Google seguirão a{" "}
+                  <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" className="text-[#E03673] hover:underline">Política de Dados do Usuário dos Serviços de API do Google</a>
+                  , incluindo os requisitos de Uso Limitado.
+                </p>
+                <p className="text-sm italic text-gray-500">
+                  Meu Divã’s use and transfer to any other app of information received from Google APIs will adhere to Google API
+                  Services User Data Policy, including the Limited Use requirements.
+                </p>
+              </div>
             </div>
 
             <div>

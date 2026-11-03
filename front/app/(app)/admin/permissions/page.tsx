@@ -102,7 +102,7 @@ const PLAN_FEATURES: PlanFeature[] = [
   { id: "ai_microphone", name: "Microfone com IA", description: "Transcrição e rascunho de prontuário com IA", available_in: ["premium"], is_active: false },
   { id: "video_call", name: "Videochamada", description: "Sessões por videochamada", available_in: ["essencial", "profissional", "premium"], is_active: true },
   { id: "digital_prontuary", name: "Prontuário Digital", description: "Registro de prontuários", available_in: ["essencial", "profissional", "premium"], is_active: true },
-  { id: "calendar_sync", name: "Sincronização com Google Calendar", description: "Sync bidirecional", available_in: ["profissional", "premium"], is_active: false },
+  { id: "calendar_sync", name: "Sincronização com Google Calendar", description: "Envia as sessões para o Google Calendar do terapeuta", available_in: ["profissional", "premium"], is_active: false },
 ];
 
 const ROLES = [
