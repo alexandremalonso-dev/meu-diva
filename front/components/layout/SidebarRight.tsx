@@ -188,6 +188,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
   const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
   const [historyAppointments, setHistoryAppointments] = useState<Appointment[]>([]);
   const [pendingAppointments, setPendingAppointments] = useState<Appointment[]>([]);
+  const gravadosRef = useRef<Set<number>>(new Set()); // asaas-pendentes: sessoes que ja tem prontuario (nao precisam ser consultadas de novo)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [activeSectionTab, setActiveSectionTab] = useState<SectionTab>("today");
@@ -213,6 +214,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
     try {
       const appointments = await apiCall({ url: "/api/appointments/me/details", requireAuth: true }) as Appointment[];
       const today = new Date(); today.setHours(0, 0, 0, 0);
+      const JANELA_PENDENTES_DIAS = 30; // asaas-pendentes: concluidas dos ultimos 30 dias sem prontuario entram em Pendentes
 
       if (userRole === "therapist" || userRole === "admin") {
         const todays = appointments
@@ -244,25 +246,30 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
             if (!apt.starts_at) return false;
             const d = new Date(apt.starts_at);
             d.setHours(0, 0, 0, 0);
-            return d.getTime() < today.getTime() && apt.status === "confirmed";
+            const passadaConfirmada = d.getTime() < today.getTime() && apt.status === "confirmed";
+            const concluidaRecente = apt.status === "completed" && d.getTime() <= today.getTime() && d.getTime() >= today.getTime() - JANELA_PENDENTES_DIAS * 86400000;
+            return passadaConfirmada || concluidaRecente;
           })
           .sort((a: Appointment, b: Appointment) => {
             if (!a.starts_at || !b.starts_at) return 0;
             return new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime();
           });
 
-        const pendingWithNoRecord: Appointment[] = [];
-        for (const apt of potentialPending) {
+        // asaas-pendentes: concluida (ou passada e ainda confirmada) SEM prontuario entra em Pendentes; as consultas vao em paralelo e quem ja tem prontuario nao e consultado de novo
+        const verificadas = await Promise.all(potentialPending.map(async (apt: Appointment) => {
+          if (gravadosRef.current.has(apt.id)) return false;
           try {
             const record = await apiCall({ url: `/api/appointments/${apt.id}/medical-record`, requireAuth: true, silent: true });
-            if (!record || !record.id) pendingWithNoRecord.push(apt);
+            if (record && record.id) { gravadosRef.current.add(apt.id); return false; }
+            return true;
           } catch {
-            pendingWithNoRecord.push(apt);
+            return true;
           }
-        }
+        }));
+        const pendingWithNoRecord: Appointment[] = potentialPending.filter((_: Appointment, i: number) => verificadas[i]);
 
         setTodaysAppointments(todays);
-        setHistoryAppointments(history);
+        setHistoryAppointments(history.filter((a: Appointment) => !pendingWithNoRecord.some((p: Appointment) => p.id === a.id))); // asaas-pendentes: a pendente fica so em Pendentes
         setPendingAppointments(pendingWithNoRecord);
 
         if (todays.length > 0) {
