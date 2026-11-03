@@ -233,8 +233,8 @@ export default function MobileTerapeutaPage() {
               <div style={{ display: "flex", gap: 1 }}>
                 {[1,2,3,4,5].map(s => <Star key={s} size={12} style={{ fill: s <= Math.floor(rating) ? "#FBBF24" : "transparent", color: "#FBBF24" }} />)}
               </div>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{reviewsCount} aval.</span>
-              <span style={{ fontSize: 11, color: COLORS.ciano }}>• {terapeuta.total_sessions || 0} sessões</span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{reviewsCount === 1 ? "1 avaliação" : `${reviewsCount} avaliações`}</span>
+              <span style={{ fontSize: 11, color: COLORS.ciano }}>• {(terapeuta.total_sessions || 0) === 1 ? "1 sessão" : `${terapeuta.total_sessions || 0} sessões`}</span>
             </div>
             {terapeuta.accepts_corporate_sessions && (
               <span style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, backgroundColor: "rgba(255,255,255,0.2)", color: "white", padding: "3px 8px", borderRadius: 10 }}>
@@ -450,11 +450,11 @@ export default function MobileTerapeutaPage() {
         )}
 
         {/* AVALIAÇÕES */}
-        {avaliacoes.length > 0 && (
+        {avaliacoes.some((a: any) => a.comment) && ( /* asaas-avaliacoes */
           <div style={{ backgroundColor: "white", borderRadius: 14, padding: 16, marginBottom: 12, border: `1px solid ${COLORS.grayBorder}` }}>
             <SectionTitle icon={Star} title={`Avaliações (${reviewsCount})`} />
-            {avaliacoes.slice(0, 5).map((aval: any, i: number) => (
-              <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < Math.min(avaliacoes.length, 5) - 1 ? `1px solid ${COLORS.grayBorder}` : "none" }}>
+            {avaliacoes.filter((a: any) => a.comment).slice(0, 5).map((aval: any, i: number) => (
+              <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < Math.min(avaliacoes.filter((a: any) => a.comment).length, 5) - 1 ? `1px solid ${COLORS.grayBorder}` : "none" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 500, color: COLORS.dark }}>{aval.patient_name || "Paciente"}</span>
                   <div style={{ display: "flex", gap: 1 }}>

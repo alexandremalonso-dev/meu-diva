@@ -58,6 +58,7 @@ def create_review(
     )
     
     db.add(review)
+    db.flush()  # asaas-avaliacoes: sem isso, com o autoflush desligado, a avaliacao NOVA nao entra na conta abaixo e a nota/contagem do perfil nao atualizam
     
     # 6. Atualizar rating médio do terapeuta
     therapist_profile = db.query(TherapistProfile).filter(
@@ -97,28 +98,22 @@ def get_therapist_reviews(
     """
     print(f"\n📋 Buscando avaliações do terapeuta: {therapist_user_id}")
     
-    # 🔥 JOIN com User para pegar o nome do paciente
-    results = db.query(
-        Review,
-        User.full_name.label("patient_name")
-    ).join(
-        User, User.id == Review.patient_user_id
-    ).filter(
+    # asaas-avaliacoes: rota PUBLICA: nao devolve o nome do paciente (privacidade). A tela nunca mostrou o nome; o campo fica com um texto neutro so para nao quebrar quem le "patient".
+    results = db.query(Review).filter(
         Review.therapist_user_id == therapist_user_id
     ).order_by(
         Review.created_at.desc()
     ).offset(offset).limit(limit).all()
-    
-    # 🔥 Montar resposta com patient_name
+
     reviews = []
-    for review, patient_name in results:
+    for review in results:
         reviews.append({
             "id": review.id,
             "rating": review.rating,
             "comment": review.comment,
             "created_at": review.created_at,
             "patient": {
-                "full_name": patient_name or "Paciente"
+                "full_name": "Paciente"
             }
         })
     

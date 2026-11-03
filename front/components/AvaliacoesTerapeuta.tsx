@@ -32,15 +32,9 @@ export function AvaliacoesTerapeuta({ avaliacoes, loading, mediaRating, totalRev
     );
   }
 
-  if (avaliacoes.length === 0) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm p-8 text-center border border-gray-100">
-        <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Ainda sem avaliações</h3>
-        <p className="text-gray-500 text-sm">Seja o primeiro paciente a avaliar este profissional!</p>
-      </div>
-    );
-  }
+  // asaas-avaliacoes: o cartão só aparece quando há comentário ESCRITO; as estrelas e a nota ficam no cabeçalho do perfil
+  const comentadas = avaliacoes.filter((avaliacao) => avaliacao.comment);
+  if (comentadas.length === 0) return null;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
@@ -69,7 +63,7 @@ export function AvaliacoesTerapeuta({ avaliacoes, loading, mediaRating, totalRev
 
       {/* Lista de avaliações */}
       <div className="divide-y divide-gray-100">
-        {avaliacoes.filter(avaliacao => avaliacao.comment).map((avaliacao) => (
+        {comentadas.map((avaliacao) => (
           <div key={avaliacao.id} className="p-5 hover:bg-gray-50 transition-colors">
             <div className="flex items-center gap-3 mb-2">
               <div className="flex gap-0.5">

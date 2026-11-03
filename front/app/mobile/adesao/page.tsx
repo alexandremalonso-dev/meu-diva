@@ -141,11 +141,6 @@ export default function MobileAdesaoPage() {
                 Comissão por sessão: <strong style={{ color: b.accent }}>{b.commission}</strong>
               </div>
 
-              {!!garantiaDias && (
-                <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#065F46", marginBottom: 12 }}>
-                  Garantia de {garantiaDias} dias — seu dinheiro de volta sem perguntas até {garantiaDias} dias após a compra.
-                </div>
-              )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16, color: "rgba(255,255,255,0.85)" }}>
                 {b.features.map((f, i) => (
@@ -164,6 +159,12 @@ export default function MobileAdesaoPage() {
           );
         })}
       </div>
+
+      {!!garantiaDias && (
+        <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 12, padding: "12px 14px", fontSize: 13, color: "#065F46", lineHeight: 1.5, marginBottom: 20, textAlign: "center" }}>
+          Garantia de {garantiaDias} dias — seu dinheiro de volta sem perguntas até {garantiaDias} dias após a compra.
+        </div>
+      )}
 
       {/* Fazer depois / help */}
       <div style={{ textAlign: "center" }}>
