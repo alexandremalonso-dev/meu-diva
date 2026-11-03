@@ -81,6 +81,25 @@ export default function TherapistSchedulePage() {
   useEffect(() => {
     loadAllAppointments();
   }, []);
+  // asaas-agenda-viva: a Agenda se atualiza sozinha quando algo muda (aviso do painel direito, que consulta o servidor a cada 30 s). Busca SILENCIOSA: se falhar, nao mostra erro e mantem o que ja esta na tela.
+  useEffect(() => {
+    let vivo = true;
+    const atualizar = async () => {
+      try {
+        const data = await api("/api/appointments/me/details");
+        if (!vivo) return;
+        setAllAppointments(data.filter((apt: Appointment) => apt.therapist_user_id === user?.id));
+      } catch {
+      }
+    };
+    window.addEventListener("appointmentUpdated", atualizar);
+    window.addEventListener("appointmentRescheduled", atualizar);
+    return () => {
+      vivo = false;
+      window.removeEventListener("appointmentUpdated", atualizar);
+      window.removeEventListener("appointmentRescheduled", atualizar);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     applyFilters();

@@ -38,6 +38,16 @@ export default function PatientSchedulePage() {
   useEffect(() => {
     loadAppointments();
   }, [user]);
+  // asaas-agenda-viva: a Agenda se atualiza sozinha quando algo muda (aviso do painel direito, que consulta o servidor a cada 30 s). O carregador nao liga o circulo nem mostra erro na tela.
+  useEffect(() => {
+    const atualizar = () => { loadAppointments(); };
+    window.addEventListener("appointmentUpdated", atualizar);
+    window.addEventListener("appointmentRescheduled", atualizar);
+    return () => {
+      window.removeEventListener("appointmentUpdated", atualizar);
+      window.removeEventListener("appointmentRescheduled", atualizar);
+    };
+  }, [user]);
 
   const loadAppointments = async () => {
     if (!user?.id) return;
