@@ -219,6 +219,9 @@ async def _upsert_calendar_event(
     }
     if meet_url:
         event_body["location"] = meet_url
+    _cor_evento = os.environ.get("GOOGLE_CALENDAR_EVENT_COLOR_ID", "4")  # asaas-cor-calendario: 4 = Flamingo (o rosa mais proximo da marca; a API so aceita as cores 1 a 11). Vazio = cor da agenda
+    if _cor_evento in [str(_i) for _i in range(1, 12)]:
+        event_body["colorId"] = _cor_evento
 
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
