@@ -21,8 +21,8 @@ from app.models.patient_profile import PatientProfile
 router = APIRouter(prefix="/google-calendar", tags=["google-calendar"])
 
 # ── Credenciais OAuth (do client_secret JSON enviado) ──────────────────────
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CALENDAR_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CALENDAR_CLIENT_SECRET")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")  # asaas-google-credenciais: o MESMO cliente do login com Google (o cliente dedicado do calendario foi desativado)
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 
 # 🔥 CORRIGIDO: Usa BACKEND_URL do environment
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -37,6 +37,56 @@ SCOPES = "https://www.googleapis.com/auth/calendar.events"
 # Validação para garantir que as chaves existem
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
     print("⚠️ Google Calendar: credenciais não configuradas")
+
+# =============================================================
+# asaas-google-seguranca: STATE do OAuth aleatorio, assinado, com validade e de USO UNICO.
+# Antes o state era so o numero do usuario e o callback nao conferia quem era: qualquer um ligava a PROPRIA agenda ao perfil de um terapeuta.
+# =============================================================
+def _segredo_state() -> bytes:
+    seg = os.environ.get("SESSION_SECRET") or os.environ.get("JWT_SECRET")
+    if not seg:
+        raise HTTPException(status_code=503, detail="Integração indisponível no momento.")
+    return seg.encode()
+
+
+def _assinar_state(corpo: str) -> str:
+    import hashlib, hmac
+    return hmac.new(_segredo_state(), corpo.encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def _gerar_state(user_id: int, db: Session) -> str:
+    import secrets, time
+    from sqlalchemy import text
+    corpo = f"{int(user_id)}.{int(time.time()):x}.{secrets.token_urlsafe(9)}"
+    state = f"gc.{corpo}.{_assinar_state(corpo)}"
+    db.execute(text("DELETE FROM oauth_states WHERE state LIKE 'gc.%' AND created_at < now() - interval '1 day'"))
+    db.execute(text("INSERT INTO oauth_states (state, created_at) VALUES (:s, now())"), {"s": state})
+    db.commit()
+    return state
+
+
+def _validar_state(state: str, db: Session) -> int:
+    import hmac, time
+    from sqlalchemy import text
+    partes = (state or "").split(".")
+    invalido = HTTPException(status_code=400, detail="State inválido ou expirado")
+    if len(partes) != 5 or partes[0] != "gc" or not partes[1].isdigit():
+        raise invalido
+    corpo = ".".join(partes[1:4])
+    if not hmac.compare_digest(partes[4], _assinar_state(corpo)):
+        raise invalido
+    try:
+        criado = int(partes[2], 16)
+    except ValueError:
+        raise invalido
+    if not (0 <= time.time() - criado <= 900):
+        raise invalido
+    usado = db.execute(text("DELETE FROM oauth_states WHERE state = :s RETURNING 1"), {"s": state}).first()
+    db.commit()
+    if not usado:
+        raise invalido
+    return int(partes[1])
+
 
 # ==========================
 # HELPERS
@@ -89,7 +139,13 @@ async def _refresh_access_token(refresh_token: str) -> str:
             }
         )
         if res.status_code != 200:
-            raise HTTPException(status_code=401, detail="Refresh token inválido")
+            try:
+                erro_google = (res.json() or {}).get("error", "")
+            except Exception:
+                erro_google = ""
+            if erro_google in ("invalid_grant", "invalid_client", "unauthorized_client", "disabled_client"):
+                raise HTTPException(status_code=401, detail="Refresh token inválido")  # recusa DEFINITIVA: a conexao nao vale mais
+            raise HTTPException(status_code=503, detail="Google indisponível agora")  # erro temporario: nao desconecta ninguem
         return res.json()["access_token"]
 
 
@@ -106,7 +162,15 @@ async def _get_valid_access_token(profile: TherapistProfile, db: Session) -> str
     now_ts = datetime.now(timezone.utc).timestamp()
 
     if now_ts >= expires_at - 60:
-        new_access = await _refresh_access_token(token_data["refresh_token"])
+        try:
+            new_access = await _refresh_access_token(token_data["refresh_token"])
+        except HTTPException as e:
+            if e.status_code == 401:  # asaas-google-seguranca: o Google recusou a renovacao: a tela deve pedir para RECONECTAR (nao mostrar "Conectado")
+                token_data["erro"] = "reconectar"
+                profile.google_calendar_enabled = False
+                profile.google_calendar_token = token_data
+                db.commit()
+            raise
         import httpx
         async with httpx.AsyncClient() as client:
             info = await client.get(
@@ -269,15 +333,17 @@ def get_calendar_status(
     return {
         "connected": connected,
         "email": token_data.get("email"),
+        "precisa_reconectar": bool(token_data.get("erro") == "reconectar"),
     }
 
 
 @router.get("/connect")
 def connect_calendar(
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.therapist]))
 ):
     """Inicia o fluxo OAuth — redireciona para o Google."""
-    state = str(current_user.id)
+    state = _gerar_state(current_user.id, db)  # asaas-google-seguranca
     auth_url = _get_google_auth_url(state)
     return {"auth_url": auth_url}
 
@@ -289,10 +355,7 @@ async def oauth_callback(
     db: Session = Depends(get_db)
 ):
     """Recebe o callback do Google, troca o code por tokens e salva."""
-    try:
-        user_id = int(state)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="State inválido")
+    user_id = _validar_state(state, db)  # asaas-google-seguranca: o state precisa ser o que NOS geramos (assinado, recente e de uso unico)
 
     tokens = await _exchange_code_for_tokens(code)
 

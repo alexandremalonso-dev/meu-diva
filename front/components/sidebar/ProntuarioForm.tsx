@@ -34,7 +34,7 @@ const rescheduleReasons = ["PROBLEMAS_VIDEOCHAMADA", "CONFLITO_AGENDA", "OUTROS"
 const patientReasonOptions = [
   { id: "ansiedade", label: "Ansiedade" }, { id: "depressao", label: "Depressão" },
   { id: "estresse", label: "Estresse" }, { id: "relacionamento", label: "Relacionamentos" },
-  { id: "autoestima", label: "Autoestima" }, { id: "carreira", label: "Carreira" },
+  { id: "autoestima", label: "Autoestima" }, { id: "autoconhecimento", label: "Autoconhecimento" }, { id: "carreira", label: "Carreira" },
   { id: "luto", label: "Luto" }, { id: "trauma", label: "Trauma" },
   { id: "burnout", label: "Burnout" }, { id: "panico", label: "Pânico" },
   { id: "fobias", label: "Fobias" }, { id: "toc", label: "TOC" },

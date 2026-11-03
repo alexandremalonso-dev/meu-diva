@@ -79,6 +79,7 @@ const patientReasonOptions = [
   { id: "estresse", label: "Estresse" },
   { id: "relacionamento", label: "Relacionamentos" },
   { id: "autoestima", label: "Autoestima" },
+  { id: "autoconhecimento", label: "Autoconhecimento" },
   { id: "carreira", label: "Carreira" },
   { id: "luto", label: "Luto" },
   { id: "trauma", label: "Trauma" },
