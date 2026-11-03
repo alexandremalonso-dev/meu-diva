@@ -728,6 +728,23 @@ def list_my_appointments_with_details(
 # ==========================
 # ADMIN: LISTAR TODOS OS APPOINTMENTS
 # ==========================
+# asaas-pulso: assinatura barata do estado das sessoes do usuario (so o que ELE enxerga). O painel pergunta isto a cada 30 s e so recarrega tudo quando a assinatura muda.
+@router.get("/me/pulse")
+def my_appointments_pulse(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.patient, UserRole.therapist, UserRole.admin])),
+):
+    query = select(Appointment).where(
+        or_(Appointment.patient_user_id == current_user.id, Appointment.therapist_user_id == current_user.id)
+    )
+    rows = db.execute(query).scalars().all()
+    if current_user.role == UserRole.therapist:
+        from app.services.pacientes_terapeuta import visiveis_para_terapeuta
+        rows = visiveis_para_terapeuta(db, rows, current_user.id)
+    from app.services.pulse import assinatura_sessoes
+    return assinatura_sessoes(rows)
+
+
 @router.get("/admin/all")
 def admin_list_all_appointments(
     db: Session = Depends(get_db),
