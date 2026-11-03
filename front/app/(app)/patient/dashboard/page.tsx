@@ -491,7 +491,7 @@ export default function PatientDashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_0.4fr_0.6fr] gap-3">
 
           {/* Coluna A: Calendário */}
-          <div className="min-h-0 lg:col-start-1">
+          <div className="min-h-0 min-w-0 lg:col-start-1">
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="w-5 h-5 text-[#E03673]" />
@@ -508,7 +508,7 @@ export default function PatientDashboardPage() {
           </div>
 
           {/* Coluna B: Stats empilhados + carrossel Convites/Disponibilidades */}
-          <div className="flex flex-col gap-2 min-h-0 lg:col-start-2 lg:-mt-16">
+          <div className="flex flex-col gap-2 min-h-0 min-w-0 lg:col-start-2 lg:-mt-16">
             <ColumnLabel label="Sessões" icon={TrendingUp} gradient="from-[#E03673] to-[#E03673]/80" />
             {[
               { icon: "calendar", value: stats.upcoming, label: "Próximas sessões", filter: "upcoming" },
@@ -523,7 +523,7 @@ export default function PatientDashboardPage() {
           </div>
 
           {/* Coluna C: Próximas sessões + Agendamento Rápido */}
-          <div className="flex flex-col gap-3 min-h-0 lg:col-start-3 lg:-mt-16">
+          <div className="flex flex-col gap-3 min-h-0 min-w-0 lg:col-start-3 lg:-mt-16">
             <ColumnLabel label="Ações" icon={Zap} gradient="from-[#2F80D3] to-[#2F80D3]/80" />
             {upcomingSessions.length > 0 && (
               <div className="bg-white rounded-lg shadow p-4">
