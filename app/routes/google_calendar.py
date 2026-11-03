@@ -32,7 +32,7 @@ REDIRECT_URI = os.environ.get(
 )
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
-SCOPES = "https://www.googleapis.com/auth/calendar.events"
+SCOPES = "openid email https://www.googleapis.com/auth/calendar.events"  # asaas-agenda: openid+email (nao sensiveis) so para mostrar QUAL conta do Google esta conectada
 
 # Validação para garantir que as chaves existem
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
@@ -239,8 +239,24 @@ async def _upsert_calendar_event(
                 json=event_body,
             )
 
+    if res.status_code in (404, 410) and calendar_event_id:
+        # asaas-agenda: o evento foi apagado na agenda do Google: cria de novo em vez de desistir para sempre
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(
+                "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                headers=headers,
+                json=event_body,
+            )
+
     if res.status_code in (200, 201):
+        appointment._gcal_ok = True
         return res.json().get("id")
+    try:
+        _err = (res.json() or {}).get("error") or {}
+        _motivo = (_err.get("errors") or [{}])[0].get("reason") or _err.get("message") or ""
+    except Exception:
+        _motivo = ""
+    appointment._gcal_erro = f"o Google respondeu {res.status_code} ({str(_motivo)[:80]})"
     print(f"⚠️ Google Calendar erro {res.status_code}: {res.text[:200]}")
     return None
 
@@ -281,6 +297,8 @@ async def sync_appointment_to_calendar(
             select(PatientProfile).where(PatientProfile.user_id == appointment.patient_user_id)
         ).scalar_one_or_none()
         patient_name = (patient_profile.full_name if patient_profile else f"Paciente #{appointment.patient_user_id}")
+        if not os.environ.get("GOOGLE_CALENDAR_NOME_COMPLETO"):  # asaas-agenda: o evento vai para o celular e a tela bloqueada do terapeuta: so o PRIMEIRO nome do paciente
+            patient_name = ((patient_name or "Paciente").split() or ["Paciente"])[0]
 
         therapist_name = profile.full_name or "Terapeuta"
         meet_url = appointment.video_call_url
@@ -306,6 +324,7 @@ async def sync_appointment_to_calendar(
 
     except Exception as e:
         print(f"⚠️ GCal sync ignorado (não crítico): {e}")
+        appointment._gcal_erro = str(getattr(e, "detail", e))[:200]  # asaas-agenda: guarda o motivo para o botao Sincronizar mostrar
 
 
 # ==========================
@@ -442,9 +461,18 @@ async def sync_all_appointments(
         )
     ).scalars().all()
 
+    total = len(appointments)  # asaas-agenda
     synced = 0
+    falhas = 0
+    motivo = None
     for apt in appointments:
+        apt._gcal_ok = False
+        apt._gcal_erro = None
         await sync_appointment_to_calendar(apt, "upsert", db)
-        synced += 1
+        if getattr(apt, "_gcal_ok", False):
+            synced += 1
+        else:
+            falhas += 1
+            motivo = motivo or getattr(apt, "_gcal_erro", None) or "o calendário não está conectado ou o Google não confirmou"
 
-    return {"success": True, "synced": synced, "message": f"{synced} sessões sincronizadas"}
+    return {"success": falhas == 0, "synced": synced, "total": total, "falhas": falhas, "motivo": motivo, "message": f"{synced} de {total} sessões sincronizadas"}

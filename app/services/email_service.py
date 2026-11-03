@@ -124,6 +124,19 @@ class EmailService:
         patient_name = appointment.patient.full_name if appointment.patient else "Paciente"
         
         duration = int((appointment.ends_at - appointment.starts_at).total_seconds() / 60)
+
+        # asaas-agenda: botao "Adicionar ao Google Agenda" no e-mail do PACIENTE (nao exige conexao). Se falhar, o e-mail sai igual, sem o botao.
+        gcal_link_html = ""
+        try:
+            import html as _html
+            from app.core.agenda_links import link_google_agenda
+            _link = link_google_agenda(
+                appointment.starts_at, appointment.ends_at, f"Sessão com {therapist_name}",
+                f"Sessão de terapia online no Meu Divã.\nTerapeuta: {therapist_name}" + (f"\nLink da sessão: {meet_url}" if meet_url else ""), meet_url,
+            )
+            gcal_link_html = '<p style="text-align:center;margin:4px 0 0;"><a href="' + _html.escape(_link, quote=True) + '" style="background:#E03673;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;">Adicionar ao Google Agenda</a></p>'
+        except Exception:
+            gcal_link_html = ""
         
         # HTML para o paciente
         patient_html = f"""
@@ -161,6 +174,8 @@ class EmailService:
                         {f'<p><strong>Link da sessão:</strong> <a href="{meet_url}">{meet_url}</a></p>' if meet_url else ''}
                     </div>
                     
+                    {gcal_link_html}
+
                     <div class="tips">
                         <h3>🎯 Dicas para sua sessão:</h3>
                         <ul>

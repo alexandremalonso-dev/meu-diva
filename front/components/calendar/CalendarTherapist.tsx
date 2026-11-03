@@ -181,7 +181,11 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
     setGcalLoading(true);
     try {
       const data = await apiCall({ url: "/api/google-calendar/sync-all", method: "POST" });
-      showToast(`${data.synced} sessões sincronizadas ✅`, "success");
+      // asaas-agenda: o botao agora diz a VERDADE (conta so o que o Google confirmou e mostra o motivo)
+      if ((data.total ?? 0) === 0) showToast("Nenhuma sessão futura para sincronizar", "success");
+      else if (data.synced === data.total) showToast(`${data.synced} sessão(ões) sincronizada(s) na sua agenda ✅`, "success");
+      else if (data.synced > 0) showToast(`${data.synced} de ${data.total} sincronizadas. As outras falharam: ${data.motivo || "o Google recusou"}`, "error");
+      else showToast(`Nenhuma sessão foi sincronizada: ${data.motivo || "o Google recusou"}`, "error");
     } catch { showToast("Erro ao sincronizar", "error"); }
     finally { setGcalLoading(false); }
   };
@@ -562,7 +566,7 @@ export function CalendarTherapist({ events, onEventClick, onSlotClick, onCancel,
                 <p className="text-xs text-gray-500">
                   {gcalStatus?.connected
                     ? `Sessões sincronizadas automaticamente${gcalStatus.email ? ` · ${gcalStatus.email}` : ""}`
-                    : "Receba suas sessões confirmadas diretamente na sua agenda pessoal"}
+                    : (gcalStatus as any)?.precisa_reconectar ? "A conexão com o Google expirou ou foi recusada. Reconecte para voltar a sincronizar." : "Receba suas sessões confirmadas diretamente na sua agenda pessoal"}
                 </p>
               </div>
             </div>
