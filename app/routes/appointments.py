@@ -745,6 +745,16 @@ def my_appointments_pulse(
     return assinatura_sessoes(rows)
 
 
+# asaas-pulso-admin: assinatura da PLATAFORMA (sessoes, usuarios, pagamentos, disponibilidade, assinaturas) so para o admin: o painel do admin pergunta isto a cada 30 s e so recarrega quando muda.
+@router.get("/admin/pulse")
+def admin_pulse(
+    db: Session = Depends(get_db),
+    current_user: User = Security(require_roles([UserRole.admin])),
+):
+    from app.services.pulse import assinatura_plataforma
+    return assinatura_plataforma(db)
+
+
 @router.get("/admin/all")
 def admin_list_all_appointments(
     db: Session = Depends(get_db),
