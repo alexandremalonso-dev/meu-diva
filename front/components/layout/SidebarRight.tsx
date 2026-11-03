@@ -209,8 +209,9 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
     return new Date(d).toLocaleDateString("pt-BR");
   };
 
-  const loadAppointments = async () => {
-    setLoading(true);
+  const loadAppointments = async (silent?: boolean) => {
+    const silencioso = silent === true; // asaas-pulso: atualizacao silenciosa (nao troca de aba, nao escolhe sessao, nao mostra o circulo)
+    if (!silencioso) setLoading(true);
     try {
       const appointments = await apiCall({ url: "/api/appointments/me/details", requireAuth: true }) as Appointment[];
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -272,7 +273,9 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
         setHistoryAppointments(history.filter((a: Appointment) => !pendingWithNoRecord.some((p: Appointment) => p.id === a.id))); // asaas-pendentes: a pendente fica so em Pendentes
         setPendingAppointments(pendingWithNoRecord);
 
-        if (todays.length > 0) {
+        if (silencioso) {
+          // asaas-pulso: atualizacao silenciosa: so atualiza as listas
+        } else if (todays.length > 0) {
           setActiveSectionTab("today");
           setSelectedAppointment(todays[0]);
           openProntuario(todays[0].id, false);
@@ -297,7 +300,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
             return new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime();
           });
         setTodaysAppointments(todays);
-        if (todays.length > 0 && !selectedAppointmentId) {
+        if (silencioso) { /* asaas-pulso: atualizacao silenciosa */ } else if (todays.length > 0 && !selectedAppointmentId) {
           setSelectedAppointment(todays[0]);
           openQueixa(todays[0].id);
         } else if (todays.length > 0 && !selectedAppointment) {
@@ -344,6 +347,59 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
       window.removeEventListener('appointmentStatusChanged', handleAppointmentUpdate);
       window.removeEventListener('appointmentConfirmed', handleAppointmentUpdate);
       window.removeEventListener('appointmentCancelled', handleAppointmentUpdate);
+    };
+  }, [userRole]);
+  // asaas-pulso: um aviso de outra tela (a agenda, os cartoes do painel) atualiza este painel em modo SILENCIOSO: sem trocar de aba, sem escolher outra sessao e sem o circulo.
+  useEffect(() => {
+    const silencioso = () => { loadAppointments(true); };
+    window.addEventListener('appointmentUpdated', silencioso);
+    window.addEventListener('appointmentRescheduled', silencioso);
+    return () => {
+      window.removeEventListener('appointmentUpdated', silencioso);
+      window.removeEventListener('appointmentRescheduled', silencioso);
+    };
+  }, [userRole]);
+
+  // asaas-pulso: ATUALIZACAO AUTOMATICA. A cada 30 s (so com a aba visivel) e ao voltar para a aba, pergunta ao servidor uma "assinatura" do estado das sessoes.
+  // So quando a assinatura MUDA avisa as telas (appointmentUpdated: o painel principal e a agenda ja escutam). Avisos da propria tela apenas renovam a referencia, sem avisar de novo.
+  useEffect(() => {
+    if (!userRole) return;
+    let parado = false;
+    let emVoo = false;
+    let ultima: string | null = null;
+    let ultimaConsulta = 0;
+    const checar = async (forcar: boolean, soReferencia: boolean) => {
+      if (parado || emVoo || document.visibilityState !== "visible") return;
+      if (!forcar && Date.now() - ultimaConsulta < 10000) return;
+      emVoo = true;
+      ultimaConsulta = Date.now();
+      try {
+        const p = await apiCall({ url: "/api/appointments/me/pulse", requireAuth: true, silent: true });
+        if (!parado && p && typeof p.signature === "string") {
+          const mudou = ultima !== null && p.signature !== ultima;
+          ultima = p.signature;
+          if (mudou && !soReferencia) window.dispatchEvent(new CustomEvent("appointmentUpdated", { detail: { origem: "pulso" } }));
+        }
+      } catch {
+      } finally {
+        emVoo = false;
+      }
+    };
+    const aoVoltar = () => { checar(false, false); };
+    const aoAvisoDaTela = (e: Event) => { if ((e as CustomEvent).detail?.origem !== "pulso") checar(true, true); };
+    const timer = setInterval(() => { checar(false, false); }, 30000);
+    document.addEventListener("visibilitychange", aoVoltar);
+    window.addEventListener("focus", aoVoltar);
+    window.addEventListener("online", aoVoltar);
+    window.addEventListener("appointmentUpdated", aoAvisoDaTela);
+    checar(true, true);
+    return () => {
+      parado = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", aoVoltar);
+      window.removeEventListener("focus", aoVoltar);
+      window.removeEventListener("online", aoVoltar);
+      window.removeEventListener("appointmentUpdated", aoAvisoDaTela);
     };
   }, [userRole]);
 
