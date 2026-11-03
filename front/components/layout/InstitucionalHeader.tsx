@@ -58,7 +58,7 @@ export function InstitucionalHeader() {
             </Link>
 
             <Link
-              href="/para-voce"
+              href="https://meudivaonline.com/para-voce"
               className="px-4 py-2 rounded-lg text-base font-semibold transition-all"
               style={{ color: "#2F80D3" }}
               onMouseEnter={e => { (e.target as HTMLElement).style.background = "#E03673"; (e.target as HTMLElement).style.color = "white"; }}
@@ -68,7 +68,7 @@ export function InstitucionalHeader() {
             </Link>
 
             <Link
-              href="/para-terapeutas"
+              href="https://meudivaonline.com/para-terapeutas"
               className="px-4 py-2 rounded-lg text-base font-semibold transition-all"
               style={{ color: "#2F80D3" }}
               onMouseEnter={e => { (e.target as HTMLElement).style.background = "#E03673"; (e.target as HTMLElement).style.color = "white"; }}
@@ -84,7 +84,7 @@ export function InstitucionalHeader() {
               onMouseLeave={() => setDropdownAberto(false)}
             >
               <Link
-                href="/para-empresas"
+                href="https://meudivaonline.com/para-empresas"
                 className="flex items-center gap-1 px-4 py-2 rounded-lg text-base font-semibold transition-all"
                 style={{ color: dropdownAberto ? "white" : "#2F80D3", background: dropdownAberto ? "#E03673" : "transparent" }}
               >
@@ -96,19 +96,19 @@ export function InstitucionalHeader() {
                   className="absolute top-full left-0 rounded-xl shadow-xl py-2"
                   style={{ background: "white", minWidth: "180px", zIndex: 99999, border: "1px solid #eef2f9", marginTop: "8px" }}
                 >
-                  <Link href="/para-empresas" className="block px-4 py-3 text-sm font-medium transition-all hover:bg-red-50" style={{ color: "#1a1a2e" }}
+                  <Link href="https://meudivaonline.com/para-empresas" className="block px-4 py-3 text-sm font-medium transition-all hover:bg-red-50" style={{ color: "#1a1a2e" }}
                     onMouseEnter={e => { (e.target as HTMLElement).style.background = "#fce7ef"; (e.target as HTMLElement).style.color = "#E03673"; }}
                     onMouseLeave={e => { (e.target as HTMLElement).style.background = "transparent"; (e.target as HTMLElement).style.color = "#1a1a2e"; }}
                   >
                     Visão geral
                   </Link>
-                  <Link href="/cases" className="block px-4 py-3 text-sm font-medium transition-all" style={{ color: "#1a1a2e" }}
+                  <Link href="https://meudivaonline.com/cases" className="block px-4 py-3 text-sm font-medium transition-all" style={{ color: "#1a1a2e" }}
                     onMouseEnter={e => { (e.target as HTMLElement).style.background = "#fce7ef"; (e.target as HTMLElement).style.color = "#E03673"; }}
                     onMouseLeave={e => { (e.target as HTMLElement).style.background = "transparent"; (e.target as HTMLElement).style.color = "#1a1a2e"; }}
                   >
                     Cases
                   </Link>
-                  <Link href="/nr1-guia" className="block px-4 py-3 text-sm font-medium transition-all" style={{ color: "#1a1a2e" }}
+                  <Link href="https://meudivaonline.com/nr1-guia" className="block px-4 py-3 text-sm font-medium transition-all" style={{ color: "#1a1a2e" }}
                     onMouseEnter={e => { (e.target as HTMLElement).style.background = "#fce7ef"; (e.target as HTMLElement).style.color = "#E03673"; }}
                     onMouseLeave={e => { (e.target as HTMLElement).style.background = "transparent"; (e.target as HTMLElement).style.color = "#1a1a2e"; }}
                   >
@@ -156,11 +156,11 @@ export function InstitucionalHeader() {
         <div className="lg:hidden px-4 pb-4 flex flex-col gap-1" style={{ backgroundColor: "#ffffff", borderTop: "1px solid #eef2f9" }}>
           {[
             { label: "Início", href: "/" },
-            { label: "Para você", href: "/para-voce" },
-            { label: "Para terapeutas", href: "/para-terapeutas" },
-            { label: "Para empresas", href: "/para-empresas" },
-            { label: "Cases", href: "/cases" },
-            { label: "NR-1 Guia", href: "/nr1-guia" },
+            { label: "Para você", href: "https://meudivaonline.com/para-voce" },
+            { label: "Para terapeutas", href: "https://meudivaonline.com/para-terapeutas" },
+            { label: "Para empresas", href: "https://meudivaonline.com/para-empresas" },
+            { label: "Cases", href: "https://meudivaonline.com/cases" },
+            { label: "NR-1 Guia", href: "https://meudivaonline.com/nr1-guia" },
           ].map(link => (
             <Link
               key={link.href}

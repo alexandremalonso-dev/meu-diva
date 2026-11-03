@@ -266,7 +266,7 @@ export function PublicHeader({ showBackButton = false, backTo = "/", title, onCh
                 <Link href="/auth/login" className="px-4 py-2 text-sm font-medium rounded-lg transition-colors" style={{ color: "#2F80D3", border: "1px solid #2F80D3" }}>
                   Entrar
                 </Link>
-                <Link href="/auth/register" className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90" style={{ backgroundColor: "#E03673" }}>
+                <Link href="/auth/signup" className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90" style={{ backgroundColor: "#E03673" }}>
                   Cadastrar
                 </Link>
               </div>

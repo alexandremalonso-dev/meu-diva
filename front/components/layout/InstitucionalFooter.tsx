@@ -52,7 +52,7 @@ export function InstitucionalFooter() {
         <div>
           <h3 style={{ color: "white", fontWeight: 700, fontSize: "0.85rem", marginBottom: "16px", textTransform: "uppercase", letterSpacing: "0.07em", opacity: 0.7 }}>Para você</h3>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
-            <li><Link href="/para-voce" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Como funciona</Link></li>
+            <li><Link href="https://meudivaonline.com/para-voce" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Como funciona</Link></li>
             <li><Link href="/busca" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Encontrar terapeuta</Link></li>
             <li><Link href="/planos" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Planos e preços</Link></li>
             <li><Link href="https://app.meudivaonline.com/sobre" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Sobre nós</Link></li>
@@ -65,9 +65,9 @@ export function InstitucionalFooter() {
         <div>
           <h3 style={{ color: "white", fontWeight: 700, fontSize: "0.85rem", marginBottom: "16px", textTransform: "uppercase", letterSpacing: "0.07em", opacity: 0.7 }}>Para terapeutas</h3>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
-            <li><Link href="/para-terapeutas" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Como funciona</Link></li>
-            <li><Link href="/para-terapeutas#planos" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Planos</Link></li>
-            <li><Link href="/auth/register" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Cadastrar-se</Link></li>
+            <li><Link href="https://meudivaonline.com/para-terapeutas" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Como funciona</Link></li>
+            <li><Link href="https://meudivaonline.com/para-terapeutas#planos" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Planos</Link></li>
+            <li><Link href="/auth/signup" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Cadastrar-se</Link></li>
             <li><Link href="/auth/login" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Entrar</Link></li>
           </ul>
         </div>
@@ -76,10 +76,10 @@ export function InstitucionalFooter() {
         <div>
           <h3 style={{ color: "white", fontWeight: 700, fontSize: "0.85rem", marginBottom: "16px", textTransform: "uppercase", letterSpacing: "0.07em", opacity: 0.7 }}>Para empresas</h3>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
-            <li><Link href="/para-empresas" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Visão geral</Link></li>
-            <li><Link href="/cases" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Cases de sucesso</Link></li>
-            <li><Link href="/nr1-guia" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Guia NR-1</Link></li>
-            <li><Link href="/para-empresas#falar-especialista" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Falar com especialista</Link></li>
+            <li><Link href="https://meudivaonline.com/para-empresas" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Visão geral</Link></li>
+            <li><Link href="https://meudivaonline.com/cases" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Cases de sucesso</Link></li>
+            <li><Link href="https://meudivaonline.com/nr1-guia" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Guia NR-1</Link></li>
+            <li><Link href="https://meudivaonline.com/para-empresas#falar-especialista" style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: "0.875rem" }}>Falar com especialista</Link></li>
           </ul>
         </div>
 
