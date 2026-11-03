@@ -35,7 +35,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
   const { execute: apiCall } = useApi();
   const {
     selectedAppointmentId, openProntuario, openQueixa,
-    isReadOnly, closeSidebar, activeTab, setActiveTab,
+    isReadOnly, activeTab, setActiveTab,
     isMinimized, setIsMinimized,
   } = useSidebar();
 
@@ -509,9 +509,6 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
               </button>
             )}
           </div>
-          <button onClick={closeSidebar} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md">
-            <X className="w-5 h-5" />
-          </button>
         </div>
       </div>
 
