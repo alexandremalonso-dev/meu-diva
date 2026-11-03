@@ -232,7 +232,7 @@ export function SidebarRight({ isOpen, onClose, userRole }: SidebarRightProps) {
             if (!apt.starts_at) return false;
             const d = new Date(apt.starts_at);
             d.setHours(0, 0, 0, 0);
-            return d.getTime() < today.getTime() && apt.status === "completed";
+            return d.getTime() <= today.getTime() && apt.status === "completed"; // asaas-historico: inclui as concluidas de HOJE (antes so entravam na meia-noite e sumiam de todas as abas)
           })
           .sort((a: Appointment, b: Appointment) => {
             if (!a.starts_at || !b.starts_at) return 0;
