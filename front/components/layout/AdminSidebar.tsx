@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  X, ChevronRight, ChevronLeft, MessageSquare,
+  ChevronRight, ChevronLeft, MessageSquare,
   User, Search, Loader2, ArrowLeft, UserPlus,
   Activity, CreditCard, Users, Wifi, WifiOff, Headphones
 } from "lucide-react";
@@ -622,9 +622,6 @@ export function AdminSidebar({ isOpen, onClose, openOnChat, onChatOpened, onUnre
               Chat
             </button>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md">
-            <X className="w-5 h-5" />
-          </button>
         </div>
       </div>
 
