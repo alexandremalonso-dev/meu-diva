@@ -40,7 +40,7 @@ interface QueixaFormProps {
 export function QueixaForm({ appointmentId, onSave, onError, onSuccess }: QueixaFormProps) {
   const { execute: apiCall } = useApi();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!appointmentId); // asaas-sem-sessao: so nasce carregando se HA sessao para carregar
   const [saving, setSaving] = useState(false);
   const [complaint, setComplaint] = useState("");
   const [goals, setGoals] = useState<string[]>([]);
@@ -63,7 +63,7 @@ export function QueixaForm({ appointmentId, onSave, onError, onSuccess }: Queixa
   });
 
   useEffect(() => {
-    if (appointmentId) loadData();
+    if (appointmentId) loadData(); else setLoading(false); // asaas-sem-sessao
   }, [appointmentId]);
 
   const loadData = async () => {
@@ -175,6 +175,10 @@ export function QueixaForm({ appointmentId, onSave, onError, onSuccess }: Queixa
   const getGoalLabel = (goalId: string) => availableGoals.find(g => g.id === goalId)?.label || goalId;
   const availableGoalsToAdd = availableGoals.filter(goal => !goals.includes(goal.id));
 
+  // asaas-sem-sessao: sem sessao selecionada nao ha o que carregar (antes o circulo girava para sempre)
+  if (!appointmentId) {
+    return <div className="text-center py-8 px-4 text-sm text-gray-400">Nenhuma sessão selecionada. Escolha uma sessão para registrar a sua queixa.</div>;
+  }
   if (loading) {
     return (
       <div className="flex justify-center py-8">
